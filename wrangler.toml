@@ -1,0 +1,16 @@
+name = "mahjong-club"
+main = "src/worker.js"
+compatibility_date = "2026-11-06"
+
+[durable_objects]
+bindings = [
+  { name = "ROOMS", class_name = "MahjongRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MahjongRoom"]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
