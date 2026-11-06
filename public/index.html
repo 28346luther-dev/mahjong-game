@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mahjong Club</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+  <header><div class="mark">麻</div><div><h1>Mahjong Club</h1><p>Private tables · Hong Kong-style rules</p></div><span class="online">● LIVE ROOMS</span></header>
+  <main>
+    <section id="home" class="panel home">
+      <div class="eyebrow">YOUR PRIVATE MAHJONG TABLE</div><h2>Gather four friends.<br><em>Let the tiles fall.</em></h2>
+      <p class="muted">Create a private room and share its six-character code. No account required.</p>
+      <label>Your display name<input id="name" maxlength="20" placeholder="e.g. Charlie" value=""></label>
+      <div class="actions"><button id="create" class="primary">Create a room</button><div class="join"><input id="joinCode" maxlength="6" placeholder="ROOM CODE"><button id="join" class="secondary">Join</button></div></div>
+      <p id="homeError" class="error"></p>
+      <div class="rules"><b>Included:</b> draw · discard · Pong · Chow · Kong · Mahjong<br><small>Four-player Hong Kong-style foundation. Scoring and house-rule options are planned next.</small></div>
+    </section>
+    <section id="room" class="hidden">
+      <div class="roombar panel"><div><small>YOUR ROOM CODE</small><strong id="roomCode">------</strong></div><button id="copy" class="secondary">Copy invite code</button><button id="leave" class="ghost">Leave</button></div>
+      <div class="table panel">
+        <div class="tabletop">
+          <div class="wall"><span id="wallCount">Wall: --</span></div>
+          <div id="seats" class="seats"></div>
+          <div class="status"><b id="statusTitle">Waiting for players</b><span id="statusText">Share your code to invite friends.</span></div>
+          <div id="discards" class="discards"></div>
+        </div>
+        <div id="melds" class="melds"></div>
+        <div class="handarea">
+          <div class="handhead"><b>Your tiles</b><span id="turnLabel"></span></div>
+          <div id="hand" class="hand"></div>
+          <div id="controls" class="controls"></div>
+        </div>
+      </div>
+      <p id="roomError" class="error"></p>
+    </section>
+  </main>
+  <footer>Mahjong Club · A friendly table for your group</footer>
+</div>
+<script src="/app.js"></script>
+</body></html>
