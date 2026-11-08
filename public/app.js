@@ -6,7 +6,7 @@ async function post(path,data){const r=await fetch(path,{method:"POST",headers:{
 function showError(id,msg){$(id).textContent=msg||"";}
 function connect(code,id){roomCode=code;playerId=id;$("home").classList.add("hidden");$("room").classList.remove("hidden");$("roomCode").textContent=code;
  const scheme=location.protocol==="https:"?"wss:":"ws:";ws=new WebSocket(`${scheme}//${location.host}/ws?code=${code}&player=${id}`);
- ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==="state"){state=m.state;render();}if(m.type==="error")showError("roomError",m.message);};
+ ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==="state"){state=m.state;selected=state.players[state.myIndex]?.hand?.some(t=>t.key===selected)?selected:null;render();}if(m.type==="error")showError("roomError",m.message);};
  ws.onclose=()=>showError("roomError","Connection closed. Refresh to reconnect if needed.");}
 function send(action,extra={}){if(ws&&ws.readyState===1)ws.send(JSON.stringify({action,...extra}));}
 $("create").onclick=async()=>{try{showError("homeError","");const r=await post("/api/create",{name:$("name").value||"Player 1"});connect(r.code,r.playerId);}catch(e){showError("homeError",e.message);}};
@@ -19,11 +19,12 @@ function render(){
  $("wallCount").textContent=`Wall: ${state.wallCount}`;
  $("statusTitle").textContent=state.phase==="lobby"?"Waiting for players":state.phase==="finished"?"Hand complete":state.phase==="claim"?"Claim window":"Game in progress";
  $("statusText").textContent=state.message;
- $("seats").innerHTML=state.players.map((p,i)=>`<div class="seat ${state.turn===i&&state.phase==='playing'?'active':''}"><b>${esc(p.name)}${i===state.dealer?" ★":""}</b><span>${p.seat} · ${p.handCount} tiles${p.ready?" · Ready":""}</span></div>`).join("");
- $("discards").innerHTML=state.players.flatMap(p=>p.discards).map(t=>`<span class="tile discard-tile" title="${esc(t.name)}">${tileLabel(t)}</span>`).join("")||'<span class="empty">Discards appear here</span>';
- $("melds").innerHTML=state.players.map(p=>p.melds.map(m=>`<span class="meld">${esc(p.name)} · ${m.type.toUpperCase()}: ${m.tiles.map(t=>tileLabel(t)).join(" ")}</span>`).join("")).join("");
+ $("seats").innerHTML=MahjongVisuals.seats(state);
+ $("wallTiles").innerHTML=MahjongVisuals.walls(state);
+ $("discards").innerHTML=MahjongVisuals.discards(state);
+ $("melds").innerHTML=MahjongVisuals.melds(state);
  const me=state.players[state.myIndex],hand=me?.hand||[];
- $("hand").innerHTML=hand.map(t=>`<button class="tile ${selected===t.key?'selected':''}" data-key="${t.key}" title="${t.name}">${tileLabel(t)}<small>${t.name}</small></button>`).join("");
+ $("hand").innerHTML=hand.map(t=>`<button class="tile ${selected===t.key?'selected':''}" data-key="${t.key}" title="${t.name}">${MahjongVisuals.face(t)}</button>`).join("");
  $("hand").querySelectorAll("button").forEach(b=>b.onclick=()=>{selected=selected===b.dataset.key?null:b.dataset.key;render();});
  const controls=$("controls");controls.innerHTML="";
  const add=(label,action,cls="secondary",extra={})=>{const b=document.createElement("button");b.className=cls;b.textContent=label;b.onclick=()=>send(action,extra);controls.appendChild(b);};
