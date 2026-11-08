@@ -4,12 +4,17 @@ compatibility_date = "2025-09-01"
 
 [durable_objects]
 bindings = [
-  { name = "ROOMS", class_name = "MahjongRoom" }
+  { name = "ROOMS", class_name = "MahjongRoom" },
+  { name = "AUTH", class_name = "AuthStore" }
 ]
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["MahjongRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["AuthStore"]
 
 [assets]
 directory = "./public"
