@@ -20,7 +20,7 @@
       <div class="roombar panel"><div><small>YOUR ROOM CODE</small><strong id="roomCode">------</strong></div><button id="copy" class="secondary">Copy invite code</button><button id="leave" class="ghost">Leave</button></div>
       <div class="table panel">
         <div class="tabletop">
-          <div class="wall"><span id="wallCount">Wall: --</span></div>
+          <div class="wall-counter"><span id="wallCount">Wall: --</span></div><div id="wallTiles" class="wall-tiles" aria-label="Remaining tile walls"></div>
           <div id="seats" class="seats"></div>
           <div class="status"><b id="statusTitle">Waiting for players</b><span id="statusText">Share your code to invite friends.</span></div>
           <div id="discards" class="discards"></div>
@@ -37,5 +37,6 @@
   </main>
   <footer>Mahjong Club · A friendly table for your group</footer>
 </div>
+<script src="/table-visuals.js"></script>
 <script src="/app.js"></script>
 </body></html>
