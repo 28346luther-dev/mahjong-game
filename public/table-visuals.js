@@ -73,12 +73,26 @@
   function position(index,myIndex) {
     return ["bottom","right","top","left"][((index-myIndex+4)%4)];
   }
+  function portrait(name,index) {
+    const skins=["#e4b18b","#c88b6c","#efd0a9","#b77754"];
+    const clothes=["#365d77","#9b4e55","#816344","#39765b"];
+    const skin=skins[index%4],shirt=clothes[index%4];
+    return '<svg viewBox="0 0 64 64" class="portrait" aria-hidden="true">'+
+      '<circle cx="32" cy="32" r="31" fill="#efe0bd"/>'+
+      '<path d="M6 65Q10 45 32 44Q54 45 58 65" fill="'+shirt+'"/>'+
+      '<path d="M24 43L32 54 40 43" fill="#f9e6c4"/>'+
+      '<path d="M20 26Q18 8 33 9Q51 10 45 29L42 38Q34 48 25 39Z" fill="'+skin+'"/>'+
+      '<path d="M20 28Q12 10 27 7Q45 0 50 17Q51 27 44 30L44 19Q30 25 21 20Z" fill="#302b29"/>'+
+      '<path d="M26 30h3M36 30h3" stroke="#44342c" stroke-width="2.3" stroke-linecap="round"/>'+
+      '<path d="M30 38Q33 40 37 37" fill="none" stroke="#985b50" stroke-width="1.7" stroke-linecap="round"/>'+
+      '</svg>';
+  }
   function seats(s) {
     return s.players.map((p,i)=>{
       const pos=position(i,s.myIndex),initial=escapeText((p.name||"P").trim().slice(0,1).toUpperCase());
       const active=s.turn===i&&["playing","claim"].includes(s.phase);
       return '<div class="seat seat-'+pos+(active?' active':'')+'">'+
-        '<div class="avatar">'+initial+'</div><div class="seat-info"><b>'+escapeText(p.name)+(i===s.myIndex?' <span class="you">YOU</span>':'')+
+        '<div class="avatar">'+portrait(p.name,i)+'</div><div class="seat-info"><b>'+escapeText(p.name)+(i===s.myIndex?' <span class="you">YOU</span>':'')+
         (i===s.dealer?' <span class="dealer">★</span>':'')+'</b><span>'+p.seat+' · '+p.handCount+' tiles'+(p.ready?' · Ready':'')+'</span></div>'+
         (active?'<span class="turn-dot" aria-label="Current turn"></span>':'')+'</div>';
     }).join("");
