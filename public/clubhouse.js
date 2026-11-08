@@ -86,7 +86,7 @@
     ellipse(sign.x,sign.y,58,17,o.open?"#10372ff2":"#26333cf2");
     ctx.strokeStyle="#e2bd72";ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(sign.x,sign.y,58,17,0,0,Math.PI*2);ctx.stroke();
     label(o.title.toUpperCase(),sign.x,sign.y, false);
-    return {x:sign.x-58,y:sign.y-23,w:116,h:55};
+    return {x:sign.x-70,y:sign.y-32,w:140,h:112};
   }
   function slots(o){
     const machines=[-0.60,0,0.60];
