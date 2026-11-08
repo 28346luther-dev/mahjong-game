@@ -155,11 +155,12 @@ function frame(){
 }
 function look(dx,dy){state.yaw-=dx*.0026;state.pitch=clamp(state.pitch-dy*.0026,-1.25,1.25);}
 function interactRay(){
- if(!raycaster)return;
+ if(!raycaster)return false;
  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);
  const hit=raycaster.intersectObjects(clickables,false)[0];
- if(hit&&hit.distance<4)interact(hit.object.userData.station);
- else interact(state.near);
+ if(hit&&hit.distance<4){interact(hit.object.userData.station);return true;}
+ if(state.near){interact(state.near);return true;}
+ return false;
 }
 window.addEventListener("keydown",e=>{
  if(!state.active||["INPUT","TEXTAREA"].includes(document.activeElement?.tagName))return;
@@ -173,9 +174,8 @@ document.addEventListener("pointerlockchange",()=>state.locked=document.pointerL
 document.addEventListener("mousemove",e=>{if(state.active&&state.locked)look(e.movementX,e.movementY);});
 canvas.addEventListener("click",()=>{
  if(!state.active)return;
- if(state.locked)interactRay();
- else if(!("ontouchstart" in window)&&canvas.requestPointerLock)canvas.requestPointerLock();
- else interactRay();
+ if(interactRay())return;
+ if(!state.locked&&!('ontouchstart' in window)&&canvas.requestPointerLock)canvas.requestPointerLock();
 });
 let touch=null;
 canvas.addEventListener("touchstart",e=>{if(e.touches.length===1)touch={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
