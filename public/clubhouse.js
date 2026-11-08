@@ -158,7 +158,7 @@
   function activate(id){
     if(id==="mahjong"){window.MahjongClubhouse?.enterMahjong();return;}
     const o=objects.find(x=>x.id===id);
-    $("clubToast").textContent=(o?.title||"This game")+" is coming soon. Mahjong is playable now.";
+    $("clubToast").querySelector("span").textContent=(o?.title||"This game")+" is coming soon. Mahjong is playable now.";
     $("clubToast").classList.remove("hidden");
   }
   canvas.addEventListener("click",e=>{
@@ -191,7 +191,9 @@
       if(!$("room").classList.contains("hidden")){
         if(!confirm("Leave this Mahjong room and return to the clubhouse?"))return;
         try{window.MahjongClubhouse.disconnect?.();}catch{}
-        location.href="/";return;
+        $("room").classList.add("hidden"); $("home").classList.add("hidden");
+        section.classList.remove("hidden"); $("clubReturn").classList.add("hidden");
+        enabled=true;last=0;history.replaceState({},"",location.pathname);return;
       }
       $("home").classList.add("hidden");section.classList.remove("hidden");
       $("clubReturn").classList.add("hidden");enabled=true;last=0;
