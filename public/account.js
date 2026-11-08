@@ -6,6 +6,15 @@
   const message=$("authMessage");
   const submit=$("authSubmit");
   let mode="login";
+  async function readApiJson(response){
+    const contentType=response.headers.get("content-type")||"";
+    if(!contentType.toLowerCase().includes("application/json")){
+      throw Error("The login service returned a website page instead of JSON. Deploy the latest Cloudflare Worker (including wrangler.toml), then refresh this page.");
+    }
+    const data=await response.json();
+    if(!response.ok)throw Error(data.error||"The login service could not complete your request.");
+    return data;
+  }
   function showAuth(){
     auth.classList.remove("hidden");
     $("clubhouse").classList.add("hidden");
@@ -37,8 +46,7 @@
       const response=await fetch("/api/auth/"+mode,{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({
         email:$("authEmail").value.trim(),password:$("authPassword").value
       })});
-      const data=await response.json();
-      if(!response.ok)throw Error(data.error||"Unable to sign in.");
+      const data=await readApiJson(response);
       $("authPassword").value="";
       showSignedIn(data);
     }catch(err){message.textContent=err.message;}finally{submit.disabled=false;}
@@ -50,7 +58,10 @@
   };
   window.GamesAccount={showAuth,showSignedIn};
   showAuth();
-  fetch("/api/auth/me",{credentials:"same-origin"}).then(r=>r.ok?r.json():null).then(data=>{
+  fetch("/api/auth/me",{credentials:"same-origin"}).then(async response=>{
+    if(response.status===401)return null;
+    return readApiJson(response);
+  }).then(data=>{
     if(data)showSignedIn(data);else showAuth();
-  }).catch(()=>{showAuth();message.textContent="Unable to check session. You can try signing in.";});
+  }).catch(err=>{showAuth();message.textContent=err.message||"Unable to check login status.";});
 })();
