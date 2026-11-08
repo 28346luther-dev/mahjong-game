@@ -103,6 +103,15 @@ function publicState(s,viewer) {
 export default {
   async fetch(request,env) {
     const url=new URL(request.url);
+    if(url.pathname==="/api/health"){
+      return Response.json({
+        ok:true,
+        service:"mahjong-game",
+        version:"auth-worker-first-2026-11-09",
+        authentication:"enabled",
+        bindings:{auth:!!env.AUTH,rooms:!!env.ROOMS,assets:!!env.ASSETS}
+      },{headers:{"cache-control":"no-store"}});
+    }
     const authStub=env.AUTH.get(env.AUTH.idFromName("global-accounts"));
     const cookies=request.headers.get("cookie")||"";
     const sessionMatch=cookies.match(new RegExp("(?:^|;\\s*)"+sessionCookieName+"=([a-f0-9]{64})(?:;|$)"));
