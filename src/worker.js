@@ -1,3 +1,6 @@
+import {AuthStore,sessionCookieName,emptySessionCookie} from "./auth.js";
+export {AuthStore};
+
 const TILE_NAMES = [
   ...Array.from({length:9},(_,i)=>({id:`c${i+1}`,name:`${i+1} Characters`,short:`${i+1}萬`,suit:"characters",rank:i+1})),
   ...Array.from({length:9},(_,i)=>({id:`b${i+1}`,name:`${i+1} Bamboo`,short:`${i+1}索`,suit:"bamboo",rank:i+1})),
@@ -100,7 +103,40 @@ function publicState(s,viewer) {
 export default {
   async fetch(request,env) {
     const url=new URL(request.url);
+    const authStub=env.AUTH.get(env.AUTH.idFromName("global-accounts"));
+    const cookies=request.headers.get("cookie")||"";
+    const sessionMatch=cookies.match(new RegExp("(?:^|;\\s*)"+sessionCookieName+"=([a-f0-9]{64})(?:;|$)"));
+    const token=sessionMatch?.[1]||"";
+    const isSecure=url.protocol==="https:";
+    const authenticate=async()=>{
+      if(!token)return null;
+      const res=await authStub.fetch("https://auth/me",{method:"POST",body:JSON.stringify({token})});
+      return res.ok?await res.json():null;
+    };
+    if(url.pathname.startsWith("/api/auth/")){
+      if(url.pathname==="/api/auth/me"){
+        const me=await authenticate();
+        return me?Response.json(me,{headers:{"cache-control":"no-store"}}):Response.json({error:"Not signed in"},{status:401,headers:{"cache-control":"no-store"}});
+      }
+      if(url.pathname==="/api/auth/logout"&&request.method==="POST"){
+        if(token)await authStub.fetch("https://auth/logout",{method:"POST",body:JSON.stringify({token})});
+        return Response.json({ok:true},{headers:{"set-cookie":emptySessionCookie,"cache-control":"no-store"}});
+      }
+      if((url.pathname==="/api/auth/login"||url.pathname==="/api/auth/register")&&request.method==="POST"){
+        if((request.headers.get("content-type")||"").split(";")[0].trim()!=="application/json")
+          return Response.json({error:"Expected JSON"},{status:415});
+        if(Number(request.headers.get("content-length")||"0")>8192)return Response.json({error:"Request too large"},{status:413});
+        const origin=request.headers.get("origin");
+        if(origin&&origin!==url.origin)return Response.json({error:"Invalid request origin"},{status:403});
+        let body;try{body=await request.json();}catch{return Response.json({error:"Invalid JSON"},{status:400});}
+        const action=url.pathname.endsWith("/register")?"register":"login";
+        return authStub.fetch("https://auth/"+action,{method:"POST",body:JSON.stringify({email:body.email,password:body.password,secure:isSecure})});
+      }
+      return new Response("Not found",{status:404});
+    }
     if(url.pathname.startsWith("/api/")){
+      const viewer=await authenticate();
+      if(!viewer)return Response.json({error:"Please sign in first"},{status:401});
       if(url.pathname==="/api/create"&&request.method==="POST"){
         const body=await request.json(),roomCode=code(),stub=env.ROOMS.get(env.ROOMS.idFromName(roomCode));
         const res=await stub.fetch("https://room/init",{method:"POST",body:JSON.stringify({name:String(body.name||"Player 1").slice(0,20)})});
@@ -114,6 +150,7 @@ export default {
       return new Response("Not found",{status:404});
     }
     if(url.pathname==="/ws"){
+      if(!await authenticate())return new Response("Authentication required",{status:401});
       const roomCode=(url.searchParams.get("code")||"").toUpperCase(),playerId=url.searchParams.get("player");
       if(!roomCode||!playerId)return new Response("Missing room or player",{status:400});
       return env.ROOMS.get(env.ROOMS.idFromName(roomCode)).fetch(new Request(`https://room/ws?player=${encodeURIComponent(playerId)}`,request));

@@ -2,21 +2,41 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css">
+<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css">
 </head>
 <body>
 <div class="app">
   <header><div class="mark">麻</div><div><h1>Mahjong Club</h1><p>Private tables · Hong Kong-style rules</p></div><span class="online">● LIVE ROOMS</span></header>
   <main>
-    <section id="clubhouse" class="clubhouse">
+    <section id="authScreen" class="auth-screen panel">
+      <div class="eyebrow">YOUR PRIVATE VIRTUAL CLUB</div>
+      <h2 id="authTitle">Welcome back</h2>
+      <p>Sign in with your email and password to enter the 3D games lounge.</p>
+      <form id="authForm">
+        <label>Email address<input id="authEmail" name="email" type="email" maxlength="254" autocomplete="email" placeholder="you@example.com" required></label>
+        <label>Password<input id="authPassword" name="password" type="password" minlength="10" maxlength="128" autocomplete="current-password" placeholder="At least 10 characters" required></label>
+        <button id="authSubmit" class="primary" type="submit">Sign in</button>
+      </form>
+      <p id="authMessage" class="error" role="alert"></p>
+      <button id="authSwitch" class="auth-switch" type="button">New here? Create an account</button>
+      <p class="auth-note">Account registration does not yet verify email addresses. Use a unique password.</p>
+    </section>
+    <div id="accountBar" class="account-bar hidden"><span>Signed in: <b id="accountEmail"></b></span><button id="logout" class="ghost" type="button">Log out</button></div>
+    <section id="clubhouse" class="clubhouse hidden">
       <div class="club-head">
         <div><div class="eyebrow">WELCOME TO YOUR VIRTUAL CLUB</div><h2>THE GAMES CLUB</h2>
-          <p>Walk around with WASD or the arrow keys. Click the Mahjong table to play.</p></div>
+          <p>Explore a real first-person 3D clubhouse. Walk to the Mahjong table and press E to play.</p></div>
         <button id="enterMahjong" class="primary">Play Mahjong <span aria-hidden="true">→</span></button>
       </div>
       <div class="club-stage">
-        <canvas id="clubhouseCanvas" width="1100" height="670" aria-label="Isometric games clubhouse with Mahjong, poker, blackjack, and slot machines"></canvas>
-        <div class="club-legend"><span>✦ Move: WASD / arrow keys</span><span>☝ Click floor to walk</span><span>🀄 Click Mahjong table to enter</span></div>
+        <canvas id="clubhouseCanvas" width="1100" height="670" aria-label="First-person 3D clubhouse with Mahjong, poker, blackjack and slot machines"></canvas>
+        <div class="club-crosshair" aria-hidden="true">+</div>
+        <div id="clubPrompt" class="club-prompt">WASD to walk · Mouse to look · E to interact</div>
+        <div class="club-touch">
+          <div class="club-dpad"><button data-move="w" aria-label="Forward">▲</button><div><button data-move="a" aria-label="Left">◀</button><button data-move="s" aria-label="Backward">▼</button><button data-move="d" aria-label="Right">▶</button></div></div>
+          <button id="clubInteract" aria-label="Interact with nearby game">Interact</button>
+        </div>
+        <div class="club-legend"><span>Move: WASD / arrow keys</span><span>Look: click scene, move mouse · Esc releases</span><span>Interact: E near Mahjong table</span></div>
         <div id="clubToast" class="club-toast hidden" role="status"><span></span><button id="clubToastClose" aria-label="Close message">×</button></div>
       </div>
       <div class="club-footer">
@@ -26,7 +46,7 @@
       </div>
     </section>
     <button id="clubReturn" class="club-return hidden" type="button">← Back to clubhouse</button>
-    <section id="home" class="hidden panel home" class="panel home">
+    <section id="home" class="hidden panel home">
       <div class="eyebrow">YOUR PRIVATE MAHJONG TABLE</div><h2>Gather four friends.<br><em>Let the tiles fall.</em></h2>
       <p class="muted">Create a private room and share its six-character code. No account required.</p>
       <label>Your display name<input id="name" maxlength="20" placeholder="e.g. Charlie" value=""></label>
@@ -57,5 +77,6 @@
 </div>
 <script src="/table-visuals.js"></script>
 <script src="/app.js"></script>
-<script src="/clubhouse.js"></script>
+<script src="/account.js"></script>
+<script type="module" src="/clubhouse.js"></script>
 </body></html>

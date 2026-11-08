@@ -1,208 +1,220 @@
-/* Isometric games-clubhouse prototype. A local, walkable lobby that enters the
-   existing Cloudflare multiplayer Mahjong rooms; it does not claim shared
-   avatar presence or real-money slot gameplay. */
-(() => {
-  const canvas=document.getElementById("clubhouseCanvas");
-  const section=document.getElementById("clubhouse");
-  if(!canvas||!section)return;
-  const ctx=canvas.getContext("2d");
-  const $=id=>document.getElementById(id);
-  const world={w:1100,h:670};
-  const avatar={x:5.5,y:7.4,tx:5.5,ty:7.4,dir:1};
-  const W=12,H=10;
-  const objects=[
-    {id:"mahjong",type:"table",title:"Mahjong",desc:"Enter a live Mahjong room",x:3.3,y:3.1,open:true,icon:"麻"},
-    {id:"poker",type:"table",title:"Poker",desc:"Coming soon",x:8.5,y:3.2,open:false,icon:"♠"},
-    {id:"blackjack",type:"table",title:"Blackjack",desc:"Coming soon",x:8.4,y:7.0,open:false,icon:"21"},
-    {id:"slots",type:"slots",title:"Slot machines",desc:"Decorative machines — games coming soon",x:2.1,y:7.5,open:false,icon:"7"}
-  ];
-  const keys=new Set();
-  let raf=null,last=0,enabled=true,pointTarget=null,objectHit=[],motion=0;
-  const colors={felt:"#16573f",gold:"#e0b977",outline:"#102923"};
-  function iso(x,y,z=0){return {x:550+(x-y)*35,y:170+(x+y)*19-z*24};}
-  function line(points,fill,stroke=null,width=1){
-    ctx.beginPath();
-    points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
-    ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}
-    if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.stroke();}
+/* First-person 3D social clubhouse. Real WebGL geometry, not isometric canvas. */
+const root=document.getElementById("clubhouse"),canvas=document.getElementById("clubhouseCanvas");
+const $=id=>document.getElementById(id);
+let THREE=null;
+try{THREE=await import("https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js");}
+catch(err){console.error(err);$("clubToast").classList.remove("hidden");$("clubToast").querySelector("span").textContent="3D engine couldn't load. Refresh with an internet connection.";}
+const stations=[
+  {id:"mahjong",label:"MAHJONG",x:-5.7,z:-2.9,colour:0x176c50,enabled:true},
+  {id:"poker",label:"POKER",x:5.6,z:-3.1,colour:0x2c5975,enabled:false},
+  {id:"blackjack",label:"BLACKJACK",x:5.6,z:4.7,colour:0x74415c,enabled:false},
+  {id:"slots",label:"SLOT MACHINES",x:-8.2,z:5,colour:0x9b3658,enabled:false}
+];
+const pressed=new Set(),state={active:false,yaw:0,pitch:0,near:null,locked:false};
+let scene,camera,renderer,clock,raycaster;const clickables=[];
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+function mat(c,metalness=0,roughness=.7){return new THREE.MeshStandardMaterial({color:c,metalness,roughness});}
+function box(w,h,d,m,x,y,z,parent=scene){
+ const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;
+}
+function cylinder(r,height,m,x,y,z,parent=scene){
+ const mesh=new THREE.Mesh(new THREE.CylinderGeometry(r,r,height,24),m);
+ mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;
+}
+function signTexture(title,subtitle){
+ const c=document.createElement("canvas");c.width=512;c.height=220;const g=c.getContext("2d");
+ g.fillStyle="#183b33";g.fillRect(0,0,512,220);g.strokeStyle="#d1ad66";g.lineWidth=10;g.strokeRect(9,9,494,202);
+ g.strokeStyle="#fff0c2";g.lineWidth=2;g.strokeRect(21,21,470,178);g.textAlign="center";
+ g.font="bold 48px Georgia";g.fillStyle="#f6dc99";g.fillText(title,256,99);
+ g.font="bold 23px sans-serif";g.fillStyle="#eee4ce";g.fillText(subtitle,256,158);
+ const texture=new THREE.CanvasTexture(c);texture.colorSpace=THREE.SRGBColorSpace;return texture;
+}
+function sign(title,subtitle,x,y,z,w=3){
+ const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,w*220/512),new THREE.MeshBasicMaterial({map:signTexture(title,subtitle),side:THREE.DoubleSide}));
+ mesh.position.set(x,y,z);scene.add(mesh);return mesh;
+}
+function register(group,station){group.traverse(m=>{if(m.isMesh){m.userData.station=station;clickables.push(m);}});}
+function buildWorld(){
+ scene=new THREE.Scene();scene.background=new THREE.Color(0x10262b);scene.fog=new THREE.FogExp2(0x10262b,.016);
+ camera=new THREE.PerspectiveCamera(72,1,.1,90);camera.position.set(0,1.7,8.7);
+ renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:"high-performance"});
+ renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
+ renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.shadowMap.enabled=true;
+ clock=new THREE.Clock();raycaster=new THREE.Raycaster();
+ const felt=mat(0x165743),wall=mat(0x24483e),gold=mat(0xc49a53,.7,.3),timber=mat(0x523b2b,.12,.6);
+ box(25,.28,23,felt,0,-.16,0);box(25,7,.5,wall,0,3.5,-11.75);
+ box(.5,7,23,wall,-12.45,3.5,0);box(.5,7,23,wall,12.45,3.5,0);
+ box(25,.25,23,mat(0x1b2f2d),0,7.05,0);
+ for(let i=-12;i<=12;i++){
+  box(.018,.005,23,mat(0x28765a),i,.002,0);
+  if(i<=11)box(25,.005,.018,mat(0x28765a),0,.002,i);
+ }
+ for(const z of [-11.43,11.43])box(25,.12,.12,gold,0,1.3,z);
+ for(const x of [-12.19,12.19])box(.12,.12,23,gold,x,1.3,0);
+ for(let x=-10;x<=10;x+=5){box(.55,6,.55,timber,x,3,-11.4);box(.72,.14,.72,gold,x,5.8,-11.4);}
+ for(const z of [-8,0,8])for(const x of [-12.2,12.2])box(.48,6,.48,timber,x,3,z);
+ scene.add(new THREE.HemisphereLight(0xeaf3ff,0x34422d,1.2));
+ const sun=new THREE.DirectionalLight(0xffe7bd,1.7);sun.position.set(0,9,3);scene.add(sun);
+ for(const [x,z] of [[-6,-4],[6,-4],[0,5],[0,-9]]){
+  cylinder(.7,.16,gold,x,5.6,z);
+  const lamp=new THREE.PointLight(0xffd08b,23,9,2);lamp.position.set(x,5.4,z);scene.add(lamp);
+ }
+ sign("THE GAMES CLUB","MAHJONG · POKER · BLACKJACK",0,4.25,-11.46,7);
+ for(const [x,z] of [[-11,8],[11,8],[-11,-9],[11,-9]]){
+   cylinder(.32,1.2,timber,x,.65,z);
+   const leaves=new THREE.Mesh(new THREE.SphereGeometry(.65,10,8),mat(0x3a845a));leaves.position.set(x,1.55,z);scene.add(leaves);
+ }
+ stations.forEach(st=>st.id==="slots"?slots(st):table(st));
+}
+function table(st){
+ const g=new THREE.Group();g.position.set(st.x,0,st.z);scene.add(g);
+ const wood=mat(0x523621),gold=mat(0xd9b774,.7,.35),cloth=mat(st.colour),chair=mat(0x3d443f);
+ box(2.35,.2,1.65,wood,0,.97,0,g);
+ box(2.26,.07,1.58,gold,0,1.1,0,g);
+ box(2.1,.04,1.43,cloth,0,1.15,0,g);
+ for(const x of [-.88,.88])for(const z of [-.58,.58])cylinder(.12,.9,wood,x,.5,z,g);
+ for(const [x,z] of [[-1.65,0],[1.65,0],[0,-1.17],[0,1.17]]){
+  box(.55,.13,.55,chair,x,.51,z,g);cylinder(.11,.47,wood,x,.24,z,g);
+ }
+ if(st.id==="mahjong"){
+  for(let i=0;i<12;i++){
+   const x=-.8+(i%6)*.32,z=-.34+Math.floor(i/6)*.7;
+   box(.23,.13,.25,mat(0x17704f),x,1.26,z,g);
+   box(.19,.02,.21,mat(0xf1e7d5),x,1.34,z,g);
   }
-  function ellipse(x,y,rx,ry,color){ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();}
-  function box(x,y,w,h,height,top,front,right){
-    const a=iso(x,y,height),b=iso(x+w,y,height),c=iso(x+w,y+h,height),d=iso(x,y+h,height);
-    const a0=iso(x,y),b0=iso(x+w,y),c0=iso(x+w,y+h),d0=iso(x,y+h);
-    line([d,c,c0,d0],front,"#16332c",1);
-    line([b,c,c0,b0],right,"#173e34",1);
-    line([a,b,c,d],top,"#dfbe79",1.5);
-    return [a,b,c,d];
+ }else{
+  for(let i=0;i<4;i++)box(.19,.01,.29,mat(0xf9eacf),-.45+i*.3,1.19,-.1,g);
+ }
+ const banner=new THREE.Mesh(new THREE.PlaneGeometry(2.7,1.13),new THREE.MeshBasicMaterial({map:signTexture(st.label,st.enabled?"PRESS E TO PLAY":"COMING SOON"),side:THREE.DoubleSide}));
+ banner.position.set(0,2.5,-1);g.add(banner);register(g,st);
+}
+function slots(st){
+ const g=new THREE.Group();g.position.set(st.x,0,st.z);scene.add(g);
+ const red=mat(0x762d4e,.45,.4),gold=mat(0xe5bd71,.75,.25),screen=mat(0xf1e5bd);
+ for(let i=0;i<3;i++){
+  const x=(i-1)*.78;
+  box(.67,1.75,.62,red,x,.89,0,g);
+  box(.7,.21,.68,gold,x,1.82,0,g);
+  box(.56,.82,.045,screen,x,1.18,.34,g);
+  const icon=new THREE.Mesh(new THREE.PlaneGeometry(.55,.42),new THREE.MeshBasicMaterial({map:signTexture(i===1?"★":"777","")}));
+  icon.position.set(x,1.28,.37);g.add(icon);
+ }
+ const banner=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1.08),new THREE.MeshBasicMaterial({map:signTexture("SLOTS","COMING SOON"),side:THREE.DoubleSide}));
+ banner.position.set(0,2.6,0);g.add(banner);register(g,st);
+}
+function toast(msg){$("clubToast").querySelector("span").textContent=msg;$("clubToast").classList.remove("hidden");}
+function interact(st){
+ if(!st)return;
+ if(st.id==="mahjong")window.MahjongClubhouse.enterMahjong();
+ else toast(st.label+" is coming soon. Mahjong is playable now.");
+}
+function nearest(){
+ let selected=null,distance=2.9;
+ for(const st of stations){
+  const d=Math.hypot(camera.position.x-st.x,camera.position.z-st.z);
+  if(d<distance){distance=d;selected=st;}
+ }
+ state.near=selected;
+ $("clubPrompt").textContent=selected?"Press E · "+selected.label+(selected.enabled?" — Enter game":" — Coming soon"):"WASD to walk · Mouse to look · E to interact";
+ $("clubPrompt").classList.toggle("near",!!selected);
+}
+function move(dt){
+ if(!state.active)return;
+ const dx=Number(pressed.has("d")||pressed.has("arrowright"))-Number(pressed.has("a")||pressed.has("arrowleft"));
+ const dz=Number(pressed.has("w")||pressed.has("arrowup"))-Number(pressed.has("s")||pressed.has("arrowdown"));
+ const length=Math.hypot(dx,dz);
+ if(length){
+  const speed=(pressed.has("shift")?6:3.6)*dt/length;
+  const nx=camera.position.x+Math.cos(state.yaw)*dx*speed-Math.sin(state.yaw)*dz*speed;
+  const nz=camera.position.z-Math.sin(state.yaw)*dx*speed-Math.cos(state.yaw)*dz*speed;
+  function valid(x,z){
+   if(Math.abs(x)>11.6||Math.abs(z)>10.65)return false;
+   for(const s of stations){
+    if(s.id==="slots"?Math.abs(x-s.x)<1.5&&Math.abs(z-s.z)<1.0:Math.abs(x-s.x)<1.4&&Math.abs(z-s.z)<1.15)return false;
+   }return true;
   }
-  function label(text,x,y,main=true){
-    ctx.textAlign="center";ctx.textBaseline="middle";
-    ctx.font=main?'700 17px system-ui':'600 12px system-ui';
-    ctx.fillStyle=main?"#fff2cd":"#dedcc8";
-    ctx.shadowColor="#092d25";ctx.shadowBlur=8;ctx.fillText(text,x,y);
-    ctx.shadowBlur=0;
+  if(valid(nx,camera.position.z))camera.position.x=nx;
+  if(valid(camera.position.x,nz))camera.position.z=nz;
+ }
+ camera.rotation.order="YXZ";camera.rotation.y=state.yaw;camera.rotation.x=state.pitch;
+ nearest();
+}
+function resize(){
+ if(!renderer)return;
+ const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight);
+ const pixelRatio=renderer.getPixelRatio();
+ if(canvas.width!==Math.round(w*pixelRatio)||canvas.height!==Math.round(h*pixelRatio)){
+  renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
+ }
+}
+function frame(){
+ requestAnimationFrame(frame);
+ const dt=Math.min(.05,clock?.getDelta()||.016);
+ if(!renderer||!state.active)return;
+ resize();move(dt);renderer.render(scene,camera);
+}
+function look(dx,dy){state.yaw-=dx*.0026;state.pitch=clamp(state.pitch-dy*.0026,-1.25,1.25);}
+function interactRay(){
+ if(!raycaster)return false;
+ raycaster.setFromCamera(new THREE.Vector2(0,0),camera);
+ const hit=raycaster.intersectObjects(clickables,false)[0];
+ if(hit&&hit.distance<4){interact(hit.object.userData.station);return true;}
+ if(state.near){interact(state.near);return true;}
+ return false;
+}
+window.addEventListener("keydown",e=>{
+ if(!state.active||["INPUT","TEXTAREA"].includes(document.activeElement?.tagName))return;
+ const k=e.key.toLowerCase();
+ if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","shift"].includes(k)){e.preventDefault();pressed.add(k);}
+ if(k==="e"&&!e.repeat){e.preventDefault();interact(state.near);}
+});
+window.addEventListener("keyup",e=>pressed.delete(e.key.toLowerCase()));
+window.addEventListener("blur",()=>pressed.clear());
+document.addEventListener("pointerlockchange",()=>state.locked=document.pointerLockElement===canvas);
+document.addEventListener("mousemove",e=>{if(state.active&&state.locked)look(e.movementX,e.movementY);});
+canvas.addEventListener("click",()=>{
+ if(!state.active)return;
+ if(interactRay())return;
+ if(!state.locked&&!('ontouchstart' in window)&&canvas.requestPointerLock)canvas.requestPointerLock();
+});
+let touch=null;
+canvas.addEventListener("touchstart",e=>{if(e.touches.length===1)touch={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
+canvas.addEventListener("touchmove",e=>{if(!state.active||!touch||e.touches.length!==1)return;const p=e.touches[0];look(p.clientX-touch.x,p.clientY-touch.y);touch={x:p.clientX,y:p.clientY};e.preventDefault();},{passive:false});
+canvas.addEventListener("touchend",()=>touch=null);
+document.querySelectorAll("[data-move]").forEach(b=>{
+ const key=b.dataset.move;
+ b.addEventListener("pointerdown",e=>{e.preventDefault();pressed.add(key);b.setPointerCapture?.(e.pointerId);});
+ const up=()=>pressed.delete(key);
+ b.addEventListener("pointerup",up);b.addEventListener("pointercancel",up);b.addEventListener("lostpointercapture",up);
+});
+$("clubInteract").onclick=()=>interact(state.near);
+$("enterMahjong").onclick=()=>window.MahjongClubhouse.enterMahjong();
+$("clubToastClose").onclick=()=>$("clubToast").classList.add("hidden");
+$("clubReturn").onclick=()=>window.MahjongClubhouse.returnToLobby();
+window.MahjongClubhouse={
+ showLobby(){
+  if(!$("authScreen").classList.contains("hidden"))return;
+  $("home").classList.add("hidden");$("room").classList.add("hidden");root.classList.remove("hidden");
+  $("clubReturn").classList.add("hidden");state.active=true;
+ },
+ enterMahjong(){
+  state.active=false;pressed.clear();
+  if(document.pointerLockElement===canvas)document.exitPointerLock();
+  root.classList.add("hidden");$("home").classList.remove("hidden");
+  $("room").classList.add("hidden");$("clubReturn").classList.remove("hidden");
+ },
+ returnToLobby(){
+  if(!$("room").classList.contains("hidden")){
+   if(!confirm("Leave this Mahjong room and return to the clubhouse?"))return;
+   window.MahjongClubhouse.disconnect?.();
   }
-  function drawFloor(){
-    ctx.fillStyle="#111c20";ctx.fillRect(0,0,world.w,world.h);
-    const grd=ctx.createRadialGradient(550,390,70,550,390,540);
-    grd.addColorStop(0,"#314b42");grd.addColorStop(1,"#101b1d");
-    ctx.fillStyle=grd;ctx.fillRect(0,0,world.w,world.h);
-    const a=iso(0,0),b=iso(W,0),c=iso(W,H),d=iso(0,H);
-    line([a,b,c,d],"#074d40","#d9b06c",10);
-    line([iso(.15,.15),iso(W-.15,.15),iso(W-.15,H-.15),iso(.15,H-.15)],"#12644e","#e1c07a",3);
-    for(let i=1;i<W;i++){
-      const p=iso(i,0),q=iso(i,H);
-      ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.strokeStyle="#cbe0b21b";ctx.stroke();
-    }
-    for(let i=1;i<H;i++){
-      const p=iso(0,i),q=iso(W,i);
-      ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.strokeStyle="#cbe0b21b";ctx.stroke();
-    }
-    for(const p of [[1,1],[11,1],[1,9],[11,9]]){
-      const a=iso(...p,0.1);
-      ellipse(a.x,a.y,8,4,"#eac377");
-    }
-    // 3D back walls, art lamps, and pillars.
-    box(0,-.38,W,.38,3.5,"#5a654d","#3a5045","#32463e");
-    box(-.38,0,.38,H,3.5,"#526e58","#2e5546","#2b4e40");
-    for(const x of [1.0,5.7,10.6]){
-      const p=iso(x,-.39,2.65);
-      ellipse(p.x,p.y,10,16,"#f4c66a");ellipse(p.x,p.y,19,25,"#eab45b22");
-    }
-  }
-  function table(o){
-    const {x,y}=o;
-    const shade=o.id==="mahjong"?"#187554":o.id==="poker"?"#245777":"#853d45";
-    box(x-.93,y-.67,1.86,1.34,.52,"#65482c","#3f3025","#493322");
-    const pts=box(x-.86,y-.64,1.72,1.25,.68,shade,"#694e35","#5c4632");
-    line(pts,null,"#e4c17b",3);
-    const p=iso(x,y,.7);
-    ellipse(p.x,p.y,24,10,"#13372e66");
-    label(o.icon,p.x,p.y-3);
-    for(const [dx,dy] of [[-.62,-.7],[.6,-.7],[-.78,.35],[.77,.35]]){
-      box(x+dx-.14,y+dy-.12,.28,.24,.32,"#bfa16e","#64503a","#68503a");
-    }
-    const sign=iso(x,y-.85,1.65);
-    ellipse(sign.x,sign.y,58,17,o.open?"#10372ff2":"#26333cf2");
-    ctx.strokeStyle="#e2bd72";ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(sign.x,sign.y,58,17,0,0,Math.PI*2);ctx.stroke();
-    label(o.title.toUpperCase(),sign.x,sign.y, false);
-    return {x:sign.x-70,y:sign.y-32,w:140,h:112};
-  }
-  function slots(o){
-    const machines=[-0.60,0,0.60];
-    let first;
-    for(let i=0;i<3;i++){
-      const x=o.x+machines[i],y=o.y+(i%2)*.08;
-      box(x-.2,y-.27,.4,.54,1.45,"#c9ad6d","#712c43","#752e46");
-      const p=iso(x,y,1.17);
-      ctx.fillStyle="#fbe9b1";ctx.fillRect(p.x-11,p.y-19,22,28);
-      ctx.fillStyle="#ba3c4d";ctx.font="bold 16px system-ui";ctx.textAlign="center";ctx.fillText(["7","★","7"][i],p.x,p.y+1);
-      ellipse(p.x,p.y-22,16,4,"#ffda71");
-      if(!first) first={x:p.x-40,y:p.y-52};
-    }
-    const p=iso(o.x,o.y-.55,1.9);
-    label("SLOTS",p.x,p.y,false);
-    return {x:first.x,y:first.y,w:115,h:108};
-  }
-  function player(x,y,isMe=false){
-    const p=iso(x,y);
-    ellipse(p.x,p.y,20,8,"#051e17a8");
-    const body=iso(x,y,.5);
-    ctx.beginPath();ctx.moveTo(body.x-12,body.y+8);ctx.lineTo(body.x-10,body.y-12);ctx.quadraticCurveTo(body.x,body.y-25,body.x+11,body.y-12);ctx.lineTo(body.x+13,body.y+8);ctx.closePath();
-    ctx.fillStyle=isMe?"#f1bd65":"#b48add";ctx.fill();
-    ellipse(body.x,body.y-21,11,12,"#e9ba97");
-    ctx.beginPath();ctx.arc(body.x,body.y-26,10,Math.PI,Math.PI*2);ctx.fillStyle="#322c2a";ctx.fill();
-    if(isMe){const n=iso(x,y,1.65);ellipse(n.x,n.y,21,11,"#fff0bb");label("YOU",n.x,n.y,false);}
-  }
-  function update(dt){
-    if(!enabled)return;
-    const active=document.activeElement?.tagName;
-    if(active==="INPUT"||active==="TEXTAREA")return;
-    let vx=0,vy=0;
-    if(keys.has("w")||keys.has("arrowup"))vy--;
-    if(keys.has("s")||keys.has("arrowdown"))vy++;
-    if(keys.has("a")||keys.has("arrowleft"))vx--;
-    if(keys.has("d")||keys.has("arrowright"))vx++;
-    if(vx||vy){pointTarget=null;const len=Math.hypot(vx,vy);vx/=len;vy/=len;avatar.tx+=vx*dt*.0034;avatar.ty+=vy*dt*.0034;}
-    if(pointTarget){avatar.tx=pointTarget.x;avatar.ty=pointTarget.y;}
-    avatar.tx=Math.max(.8,Math.min(W-.8,avatar.tx));
-    avatar.ty=Math.max(.8,Math.min(H-.8,avatar.ty));
-    const d=Math.hypot(avatar.tx-avatar.x,avatar.ty-avatar.y);
-    if(d<.07){pointTarget=null;avatar.x=avatar.tx;avatar.y=avatar.ty;}
-    else{const step=Math.min(1,dt*.007);avatar.x+=(avatar.tx-avatar.x)*step;avatar.y+=(avatar.ty-avatar.y)*step;}
-    if(pointTarget&&pointTarget.object&&d<1.2){const id=pointTarget.object;pointTarget=null;activate(id);}
-  }
-  function frame(t){
-    if(!section.classList.contains("hidden")){
-      const dt=Math.min(40,last?t-last:16);last=t;motion+=dt;update(dt);draw();
-    }else last=t;
-    raf=requestAnimationFrame(frame);
-  }
-  function draw(){
-    const width=canvas.clientWidth,height=canvas.clientHeight;
-    const dpr=Math.min(2,window.devicePixelRatio||1);
-    if(canvas.width!==Math.round(width*dpr)||canvas.height!==Math.round(height*dpr)){canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);}
-    ctx.setTransform(canvas.width/world.w,0,0,canvas.height/world.h,0,0);
-    ctx.clearRect(0,0,world.w,world.h);
-    drawFloor();objectHit=[];
-    const drawables=[...objects.map(o=>({depth:o.x+o.y,kind:"object",o})),{depth:avatar.x+avatar.y,kind:"avatar"}].sort((a,b)=>a.depth-b.depth);
-    for(const item of drawables){
-      if(item.kind==="avatar")player(avatar.x,avatar.y,true);
-      else{const box=item.o.type==="slots"?slots(item.o):table(item.o);objectHit.push({...box,o:item.o});}
-    }
-    const grd=ctx.createLinearGradient(0,0,0,world.h);grd.addColorStop(0,"#0000");grd.addColorStop(1,"#030a0999");
-    ctx.fillStyle=grd;ctx.fillRect(0,540,world.w,130);
-  }
-  function screenPos(e){const rect=canvas.getBoundingClientRect();return {x:(e.clientX-rect.left)*world.w/rect.width,y:(e.clientY-rect.top)*world.h/rect.height};}
-  function unproject(x,y){const a=(x-550)/35,b=(y-170)/19;return {x:(a+b)/2,y:(b-a)/2};}
-  function activate(id){
-    if(id==="mahjong"){window.MahjongClubhouse?.enterMahjong();return;}
-    const o=objects.find(x=>x.id===id);
-    $("clubToast").querySelector("span").textContent=(o?.title||"This game")+" is coming soon. Mahjong is playable now.";
-    $("clubToast").classList.remove("hidden");
-  }
-  canvas.addEventListener("click",e=>{
-    const p=screenPos(e);
-    const hit=[...objectHit].reverse().find(h=>p.x>=h.x-8&&p.x<=h.x+h.w+8&&p.y>=h.y-10&&p.y<=h.y+h.h+14);
-    if(hit){if(hit.o.id==="mahjong"){activate("mahjong");return;}activate(hit.o.id);return;}
-    const floor=unproject(p.x,p.y);
-    if(floor.x>=0&&floor.x<=W&&floor.y>=0&&floor.y<=H)pointTarget={x:floor.x,y:floor.y};
-  });
-  window.addEventListener("keydown",e=>{
-    const key=e.key.toLowerCase();
-    if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"].includes(key)&&section.classList.contains("hidden")===false){
-      if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA")return;
-      e.preventDefault();keys.add(key);
-    }
-  });
-  window.addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));
-  window.addEventListener("blur",()=>keys.clear());
-  $("enterMahjong").addEventListener("click",()=>activate("mahjong"));
-  $("clubToastClose").addEventListener("click",()=>$("clubToast").classList.add("hidden"));
-  $("clubReturn").addEventListener("click",()=>window.MahjongClubhouse?.returnToLobby());
-  window.MahjongClubhouse={
-    enterMahjong(){
-      section.classList.add("hidden"); $("home").classList.remove("hidden"); $("room").classList.add("hidden");
-      $("clubReturn").classList.remove("hidden");enabled=false;keys.clear();
-      history.replaceState({}, "",location.pathname);
-    },
-    returnToLobby(){
-      // Never silently abandon an active live multiplayer session.
-      if(!$("room").classList.contains("hidden")){
-        if(!confirm("Leave this Mahjong room and return to the clubhouse?"))return;
-        try{window.MahjongClubhouse.disconnect?.();}catch{}
-        $("room").classList.add("hidden"); $("home").classList.add("hidden");
-        section.classList.remove("hidden"); $("clubReturn").classList.add("hidden");
-        enabled=true;last=0;history.replaceState({},"",location.pathname);return;
-      }
-      $("home").classList.add("hidden");section.classList.remove("hidden");
-      $("clubReturn").classList.add("hidden");enabled=true;last=0;
-    },
-    disconnect:null
-  };
-  if(new URLSearchParams(location.search).get("room")){
-    window.MahjongClubhouse.enterMahjong();
-    $("joinCode").value=new URLSearchParams(location.search).get("room").toUpperCase();
-  }else{$("home").classList.add("hidden");$("clubReturn").classList.add("hidden");}
-  if(!raf)raf=requestAnimationFrame(frame);
-})();
+  $("room").classList.add("hidden");$("home").classList.add("hidden");
+  history.replaceState({},"",location.pathname);window.MahjongClubhouse.showLobby();
+ },
+ disconnect:null
+};
+if(THREE){try{buildWorld();frame();}catch(err){console.error(err);toast("Could not initialise 3D on this device.");}}
+if($("authScreen").classList.contains("hidden")){
+ if(new URLSearchParams(location.search).get("room"))window.MahjongClubhouse.enterMahjong();
+ else window.MahjongClubhouse.showLobby();
+}
