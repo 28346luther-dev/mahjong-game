@@ -59,7 +59,13 @@
     }
     return '<svg class="tile-art" viewBox="0 0 70 98" aria-hidden="true" focusable="false">'+inner+'</svg>';
   }
-  function face(t) {return '<span class="tile-face">'+artwork(t)+'</span>';}
+  function face(t) {
+    const label=["characters","bamboo","dots"].includes(t.suit)?String(t.rank):
+      t.suit==="wind"?({w1:"E",w2:"S",w3:"W",w4:"N"}[t.id]||"W"):
+      ({z1:"R",z2:"G",z3:"W"}[t.id]||"D");
+    const suit={characters:"chars",bamboo:"bamboo",dots:"dots",wind:"wind",dragon:"dragon"}[t.suit]||"";
+    return '<span class="tile-face" data-label="'+escapeText(label)+'" data-suit="'+suit+'">'+artwork(t)+'</span>';
+  }
   function tile(t,cls="") {
     return '<span class="tile '+cls+'" title="'+escapeText(t.name||"Mahjong tile")+'">'+face(t)+'</span>';
   }
