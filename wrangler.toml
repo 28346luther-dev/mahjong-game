@@ -1,4 +1,4 @@
-name = "mahjong-club"
+name = "mahjong-game"
 main = "src/worker.js"
 compatibility_date = "2025-09-01"
 
