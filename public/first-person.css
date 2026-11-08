@@ -1,0 +1,47 @@
+/* First-person WebGL clubhouse and email/password landing page. */
+.auth-screen{max-width:490px;margin:7vh auto 10vh;padding:40px;background:linear-gradient(145deg,#21372f,#121e20);border:1px solid #9f815165;box-shadow:0 30px 70px #0008}
+.auth-screen h2{font:700 38px Georgia,serif;color:#f0d79b;margin:13px 0}
+.auth-screen>p{font-size:14px;color:#d4d9cf;line-height:1.5}
+.auth-screen form{display:grid;gap:17px;margin-top:24px}
+.auth-screen label{color:#f3e7ce;font-size:12px;font-weight:700}
+.auth-screen input{margin-top:8px;width:100%;font-size:15px;padding:14px;background:#0d1c1b}
+.auth-screen input:focus{outline:2px solid #e6c785}
+.auth-screen .primary{width:100%;padding:14px;font-size:15px}
+.auth-screen .primary:disabled{opacity:.6}
+.auth-switch{border:0;background:transparent;color:#e4c27f;text-decoration:underline;cursor:pointer;font-size:13px;padding:8px 0}
+.auth-note{border-top:1px solid #b5965e44;padding-top:14px;font-size:11px!important;color:#9faca0!important}
+.account-bar{display:flex;align-items:center;justify-content:flex-end;gap:14px;font-size:12px;color:#f1ddba;margin:0 2px 5px}
+.account-bar b{color:#fff3ce}
+.account-bar button{font-size:12px;padding:7px 10px}
+.clubhouse{max-width:none}
+.club-head{padding:10px 12px 12px}
+.club-head h2{font-size:clamp(29px,3.2vw,41px);margin:4px 0}
+.club-head p{font-size:13px}
+.club-stage{position:relative;border:7px ridge #b58a53;border-radius:19px;overflow:hidden;background:#132326}
+.club-stage canvas{display:block;width:100%;height:min(71vh,800px);min-height:475px;aspect-ratio:auto;cursor:crosshair;touch-action:none}
+.club-crosshair{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);color:#f9e5b8;text-shadow:0 0 5px #000;font-size:24px;font-weight:300;pointer-events:none}
+.club-prompt{position:absolute;bottom:66px;left:50%;transform:translateX(-50%);padding:10px 17px;background:#0b2723cf;color:#f8e7c9;border:1px solid #e2bd7b70;border-radius:99px;font-size:13px;white-space:nowrap;pointer-events:none;box-shadow:0 5px 18px #0005}
+.club-prompt.near{background:#f7dfaa;color:#392c1e;font-weight:800}
+.club-touch{display:none}
+.club-footer{padding:12px 8px}
+.club-toast{z-index:6;bottom:118px}
+@media(pointer:coarse){
+ .club-touch{display:flex;position:absolute;bottom:80px;left:17px;right:17px;align-items:end;justify-content:space-between;pointer-events:none}
+ .club-touch button{pointer-events:auto;border:1px solid #e4c48c80;background:#152b28e3;color:#f9e6bd;border-radius:12px;padding:13px 16px;font-size:16px;touch-action:none;user-select:none}
+ .club-dpad{display:grid;justify-items:center;gap:4px}
+ .club-dpad>div{display:flex;gap:4px}
+ #clubInteract{background:#e1bf81;color:#1d382e;font-size:14px;font-weight:800;padding:16px}
+ .club-prompt{bottom:24px;font-size:11px;max-width:92%;white-space:normal;text-align:center}
+ .club-stage canvas{min-height:470px}
+}
+@media(max-width:700px){
+ .auth-screen{margin:5vh 10px;padding:26px 22px}
+ .auth-screen h2{font-size:32px}
+ .club-stage canvas{height:64vh;min-height:450px}
+ .club-head{padding:5px 7px 13px}
+ .club-head .primary{width:100%}
+ .club-crosshair{top:45%}
+ .club-legend{font-size:10px;gap:7px}
+ .account-bar{justify-content:space-between;overflow:hidden}
+ .account-bar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
