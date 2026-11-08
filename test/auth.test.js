@@ -23,7 +23,7 @@ test("register, login, check session and logout using hashed passwords",async()=
   assert.equal(JSON.stringify([...store.data.values()]).includes("long-secret-password"),false);
   const session=await auth.fetch(request("me",{token}));
   assert.equal((await session.json()).email,"player@example.com");
-  assert.equal((await auth.fetch(request("login",{email:"player@example.com",password:"wrong-password"}))).status,400);
+  assert.equal((await auth.fetch(request("login",{email:"player@example.com",password:"wrong-password"}))).status,401);
   assert.equal((await auth.fetch(request("login",{email:"player@example.com",password:"wrong-password123"}))).status,401);
   assert.equal((await auth.fetch(request("register",{email:"player@example.com",password:"long-secret-password"}))).status,409);
   assert.equal((await auth.fetch(request("logout",{token}))).status,200);
