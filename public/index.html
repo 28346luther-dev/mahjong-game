@@ -2,13 +2,31 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css">
+<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css">
 </head>
 <body>
 <div class="app">
   <header><div class="mark">麻</div><div><h1>Mahjong Club</h1><p>Private tables · Hong Kong-style rules</p></div><span class="online">● LIVE ROOMS</span></header>
   <main>
-    <section id="home" class="panel home">
+    <section id="clubhouse" class="clubhouse">
+      <div class="club-head">
+        <div><div class="eyebrow">WELCOME TO YOUR VIRTUAL CLUB</div><h2>THE GAMES CLUB</h2>
+          <p>Walk around with WASD or the arrow keys. Click the Mahjong table to play.</p></div>
+        <button id="enterMahjong" class="primary">Play Mahjong <span aria-hidden="true">→</span></button>
+      </div>
+      <div class="club-stage">
+        <canvas id="clubhouseCanvas" width="1100" height="670" aria-label="Isometric games clubhouse with Mahjong, poker, blackjack, and slot machines"></canvas>
+        <div class="club-legend"><span>✦ Move: WASD / arrow keys</span><span>☝ Click floor to walk</span><span>🀄 Click Mahjong table to enter</span></div>
+        <div id="clubToast" class="club-toast hidden" role="status"><span></span><button id="clubToastClose" aria-label="Close message">×</button></div>
+      </div>
+      <div class="club-footer">
+        <span><strong>🀄 Mahjong</strong> <em>PLAYABLE NOW</em></span>
+        <span>♠ Poker · Blackjack <em>COMING SOON</em></span>
+        <span>🎰 Slots <em>COMING SOON</em></span>
+      </div>
+    </section>
+    <button id="clubReturn" class="club-return hidden" type="button">← Back to clubhouse</button>
+    <section id="home" class="hidden panel home" class="panel home">
       <div class="eyebrow">YOUR PRIVATE MAHJONG TABLE</div><h2>Gather four friends.<br><em>Let the tiles fall.</em></h2>
       <p class="muted">Create a private room and share its six-character code. No account required.</p>
       <label>Your display name<input id="name" maxlength="20" placeholder="e.g. Charlie" value=""></label>
@@ -39,4 +57,5 @@
 </div>
 <script src="/table-visuals.js"></script>
 <script src="/app.js"></script>
+<script src="/clubhouse.js"></script>
 </body></html>

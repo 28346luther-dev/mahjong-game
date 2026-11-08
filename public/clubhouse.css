@@ -1,0 +1,25 @@
+
+/* Isometric Games Clubhouse */
+.clubhouse{max-width:1360px;margin:auto;color:#fff0d1}
+.club-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:19px 23px 13px}
+.club-head h2{font:700 clamp(29px,4.5vw,47px)/1.1 Georgia,serif;letter-spacing:2px;margin:6px 0 6px;color:#efd5a4}
+.club-head p{color:#c1d1c6;font-size:13px;line-height:1.5;margin:0}
+.club-head .primary{white-space:nowrap;font-size:14px;padding:14px 24px;box-shadow:0 8px 22px #0005}
+.club-stage{position:relative;border:10px ridge #ad8452;overflow:hidden;border-radius:30px;background:#111c20;box-shadow:0 25px 70px #0009,inset 0 0 0 2px #efdbac}
+.club-stage canvas{display:block;width:100%;height:auto;aspect-ratio:1100/670;cursor:crosshair;touch-action:manipulation;background:#102520}
+.club-legend{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:12px 22px;background:#0e2522ee;color:#d5e0d1;font-size:12px;border-top:1px solid #b99a6270;letter-spacing:.1px}
+.club-toast{position:absolute;bottom:65px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;width:max-content;max-width:88%;background:#f6e9c9;color:#49351e;padding:12px 16px;border-radius:13px;border:1px solid #b69356;box-shadow:0 12px 35px #0007;font-size:13px;font-weight:700}
+.club-toast button{background:transparent;border:0;color:#6c4528;font-size:20px;cursor:pointer}
+.club-footer{display:flex;justify-content:center;gap:25px;flex-wrap:wrap;padding:17px;font-size:13px;color:#e4d7b3}
+.club-footer strong{color:#f4dfaa}.club-footer em{font-style:normal;font-size:9px;font-weight:900;letter-spacing:.7px;color:#a6dcb3;background:#184632;padding:5px 8px;border-radius:99px;margin-left:4px}
+.club-footer span:not(:first-child) em{color:#ddcd9e;background:#534629}
+.club-return{display:block;margin:0 0 10px 0;background:#2e5142;color:#fff3d9;border:1px solid #d1b276;padding:10px 15px;border-radius:11px;cursor:pointer;font-weight:700}
+.club-return:hover{filter:brightness(1.16)}
+@media(max-width:750px){
+  .club-head{padding:8px 5px 12px;align-items:flex-start;flex-direction:column;gap:14px}
+  .club-head h2{font-size:30px}.club-head .primary{width:100%}
+  .club-stage{border-width:5px;border-radius:16px}
+  .club-stage canvas{min-height:320px;object-fit:cover}
+  .club-legend{padding:10px 12px;gap:7px;font-size:10px}
+  .club-footer{gap:9px;font-size:11px;padding:13px 3px}
+}
