@@ -107,3 +107,16 @@ footer{color:#c8b99b}
  .tile-face{padding-top:13px}.tile-face:before{font-size:10px}.tile-face:after{display:none}
  .handhead b{font-size:16px}
 }
+/* Illustrated, individual player portraits replace placeholder circles. */
+.seat{padding-left:53px}
+.seat:before{display:none}
+.seat .avatar{position:absolute;left:-25px;top:50%;transform:translateY(-50%);display:flex;align-items:center;justify-content:center;overflow:hidden;width:70px;height:70px;border-radius:50%;border:4px solid #fce8b7;background:#e5cfa3;box-shadow:0 8px 22px #0008}
+.seat .avatar .portrait{display:block;width:100%;height:100%}
+.seat-top .avatar{left:50%;top:-46px;transform:translateX(-50%)}
+.seat-top{padding:18px 16px 8px;text-align:center;min-width:160px}
+.seat-top .seat-info{width:100%}
+.seat-bottom .avatar{left:50%;top:-43px;transform:translateX(-50%)}
+.seat-bottom{padding:20px 16px 8px;text-align:center}
+.seat.active .avatar{border-color:#ffcc70;box-shadow:0 0 0 5px #e95a39,0 8px 22px #0008}
+@media(max-width:900px){.seat{padding-left:38px}.seat .avatar{width:48px;height:48px;left:-17px;border-width:3px}.seat-top .avatar,.seat-bottom .avatar{left:50%;top:-34px}.seat-top,.seat-bottom{padding:18px 8px 7px}}
+@media(max-width:600px){.seat{padding-left:27px}.seat .avatar{width:36px;height:36px;left:-13px}.seat-top .avatar,.seat-bottom .avatar{left:50%;top:-27px}.seat-top,.seat-bottom{padding:12px 6px 5px}}
