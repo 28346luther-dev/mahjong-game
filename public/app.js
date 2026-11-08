@@ -7,13 +7,18 @@ function showError(id,msg){$(id).textContent=msg||"";}
 function connect(code,id){roomCode=code;playerId=id;$("home").classList.add("hidden");$("room").classList.remove("hidden");$("roomCode").textContent=code;
  const scheme=location.protocol==="https:"?"wss:":"ws:";ws=new WebSocket(`${scheme}//${location.host}/ws?code=${code}&player=${id}`);
  ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==="state"){state=m.state;selected=state.players[state.myIndex]?.hand?.some(t=>t.key===selected)?selected:null;render();}if(m.type==="error")showError("roomError",m.message);};
- ws.onclose=()=>showError("roomError","Connection closed. Refresh to reconnect if needed.");}
+ ws.onclose=()=>showError("roomError","Connection closed. Refresh to reconnect if needed.");
+ if(window.MahjongClubhouse)window.MahjongClubhouse.disconnect=()=>{
+   if(ws){ws.close();ws=null;}state=null;selected=null;playerId=null;roomCode=null;
+   showError("roomError","");
+ };
+}
 function send(action,extra={}){if(ws&&ws.readyState===1)ws.send(JSON.stringify({action,...extra}));}
 $("create").onclick=async()=>{try{showError("homeError","");const r=await post("/api/create",{name:$("name").value||"Player 1"});connect(r.code,r.playerId);}catch(e){showError("homeError",e.message);}};
 $("join").onclick=async()=>{try{showError("homeError","");const code=$("joinCode").value.toUpperCase();const r=await post("/api/join",{code,name:$("name").value||"Player"});connect(code,r.playerId);}catch(e){showError("homeError",e.message);}};
 $("joinCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
 $("copy").onclick=async()=>{await navigator.clipboard.writeText(`${location.origin}?room=${roomCode}`);$("copy").textContent="Copied!";setTimeout(()=>$("copy").textContent="Copy invite code",1400);};
-$("leave").onclick=()=>{if(ws)ws.close();location.href="/";};
+$("leave").onclick=()=>{if(window.MahjongClubhouse){window.MahjongClubhouse.returnToLobby();}else{if(ws)ws.close();location.href="/";}};
 function render(){
  if(!state)return;
  $("wallCount").textContent=`Wall: ${state.wallCount}`;
