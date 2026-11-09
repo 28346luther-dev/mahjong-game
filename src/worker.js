@@ -139,7 +139,22 @@ export default {
         if(origin&&origin!==url.origin)return Response.json({error:"Invalid request origin"},{status:403});
         let body;try{body=await request.json();}catch{return Response.json({error:"Invalid JSON"},{status:400});}
         const action=url.pathname.endsWith("/register")?"register":"login";
-        return authStub.fetch("https://auth/"+action,{method:"POST",body:JSON.stringify({email:body.email,password:body.password,secure:isSecure})});
+        const requestId=crypto.randomUUID();
+        try{
+          const response=await authStub.fetch("https://auth/"+action,{
+            method:"POST",body:JSON.stringify({email:body.email,password:body.password,secure:isSecure})
+          });
+          const contentType=response.headers.get("content-type")||"";
+          if(!contentType.toLowerCase().includes("application/json")){
+            console.error("Auth Durable Object returned unexpected content-type",action,response.status,requestId);
+            return Response.json({error:"Account service returned an unexpected response. Please try again.",code:"AUTH_UPSTREAM_FORMAT",requestId},{status:502,headers:{"cache-control":"no-store"}});
+          }
+          return response;
+        }catch(error){
+          // Don't log credentials or other request payloads.
+          console.error("Auth Durable Object error",action,requestId,error?.name,error?.message);
+          return Response.json({error:"The account service could not complete your request. Please report the reference code.",code:"AUTH_BACKEND_FAILURE",requestId},{status:503,headers:{"cache-control":"no-store"}});
+        }
       }
       return new Response("Not found",{status:404});
     }
