@@ -1,11 +1,12 @@
 /* Immersive first-person games club: separate rooms, live social avatars and furnished lounges. */
 import {createClubSocial} from "./club-social.js";
+import {sideSkirtingSegments,chairFacing,couchSeatPlan,barSeatPlan,gameSeatPlan,nearestInteraction,blockedBy} from "./club-layout.js";
 const $=id=>document.getElementById(id);
 const root=$("clubhouse"),canvas=$("clubhouseCanvas"),pressed=new Set();
 let THREE=null;
 try{THREE=await import("https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js");}
 catch(err){console.error(err);$("clubToast").classList.remove("hidden");$("clubToast").querySelector("span").textContent="The 3D engine could not load. Check your connection and refresh.";}
-const state={active:false,yaw:0,pitch:0,near:null,locked:false,seated:null};
+const state={active:false,yaw:0,pitch:0,near:null,locked:false,seated:null,seatReturn:null};
 const stations=[
  {id:"mahjong",label:"MAHJONG TABLE",x:-17,z:-11,r:3,enabled:true},
  {id:"poker",label:"POKER TABLE",x:17,z:-11,r:3,enabled:false},
@@ -17,8 +18,8 @@ const stations=[
  {id:"sofa-left",label:"LOUNGE SEATING",x:-5.3,z:6,r:3},
  {id:"sofa-right",label:"LOUNGE SEATING",x:5.3,z:6,r:3}
 ];
-let scene,camera,renderer,clock,raycaster,social=null,audioCtx=null,musicTimer=null,musicGain=null,lastPresence=0;
-const clickables=[],obstacles=[];
+let scene,camera,renderer,clock,raycaster,social=null,lastPresence=0;
+const clickables=[],obstacles=[],seatAnchors=[];
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const mat=(c,metalness=0,roughness=.73)=>new THREE.MeshStandardMaterial({color:c,metalness,roughness});
 const palette={wall:0x213b37,trim:0xb68c55,dark:0x251e1e,wood:0x62412e,green:0x14513e,cream:0xf1dbad,leather:0x3e594a};
@@ -88,15 +89,23 @@ function picture(title,x,z,angle=0){
  q.font="bold 30px Georgia";q.textAlign="center";q.fillStyle="#f9dda1";q.fillText(title,150,151);
  plane(2.18,1.35,new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(canvas)}),0,0,.075,0,g);
 }
-function couch(x,z,rotation=0,colour=0x405c50){
+function couch(x,z,rotation=0,colour=0x405c50,id="sofa"){
  const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=rotation;scene.add(g);
- const leather=mat(colour,0,.9),wood=mat(palette.wood);
- box(2.9,.48,1.0,leather,0,.62,0,g);
- box(2.9,.86,.28,leather,0,1.18,-.42,g);
- for(const sx of [-1.31,1.31])box(.28,.7,1.08,leather,sx,.96,0,g);
- for(const sx of [-.9,0,.9])box(.78,.18,.83,mat(0x527264),sx,.91,.05,g);
- for(const sx of [-1.1,1.1])for(const zz of [-.34,.34])box(.12,.3,.12,wood,sx,.21,zz,g);
- // The interaction zone offers sitting without forcing collision around furniture.
+ const leather=mat(colour,0,.86),wood=mat(palette.wood),piping=mat(0xc29a67,.65,.3);
+ // A padded three-seat Chesterfield-style couch, front facing local +Z.
+ box(3.15,.48,1.12,leather,0,.6,0,g);
+ box(3.2,.94,.29,leather,0,1.18,-.48,g);
+ for(const sx of [-1.42,1.42]){
+  box(.32,.72,1.22,leather,sx,.99,.01,g);
+  sphere(.2,leather,sx,1.34,.37,g);
+ }
+ for(const sx of [-.96,0,.96]){
+  box(.87,.2,.88,mat(0x5e7b6d),sx,.91,.1,g);
+  box(.78,.03,.026,piping,sx,1.0,.53,g);
+  box(.7,.32,.2,mat(0x416a59),sx,1.23,-.28,g);
+ }
+ for(const sx of [-1.15,1.15])for(const zz of [-.33,.35])box(.12,.29,.12,wood,sx,.20,zz,g);
+ seatAnchors.push(...couchSeatPlan(x,z,rotation,id));
  return g;
 }
 function coffee(x,z){
@@ -106,11 +115,15 @@ function coffee(x,z){
  cylinder(.13,.08,mat(0xead6ad),x,.59,z);
 }
 function lounge(x,z,flipped=false){
- carpet(x,z,7.6,6.1,0x24473e);
- couch(x,z+1.6,0,0x4a6556);
- couch(x,z-1.5,Math.PI,0x456052);
+ carpet(x,z,7.7,6.3,0x24473e);
+ // Both sofas face the coffee table, not the wall.
+ couch(x,z+1.65,Math.PI,0x4a6556,(flipped?"right":"left")+"-north");
+ couch(x,z-1.65,0,0x456052,(flipped?"right":"left")+"-south");
  coffee(x,z);
- for(const shift of [-3.5,3.5])cylinder(.24,.56,mat(0x5c4030),x+shift,.34,z);
+ for(const shift of [-3.45,3.45]){
+  cylinder(.24,.56,mat(0x5c4030),x+shift,.34,z);
+  sphere(.24,mat(0xdab67a),x+shift,.73,z);
+ }
 }
 function shelf(x,z){
  const wood=mat(0x4f3529);
@@ -122,15 +135,21 @@ function shelf(x,z){
 }
 function bar(){
  carpet(5.8,-6,7,5.5,0x263b35);
- const wood=mat(0x69432f,.08,.47),stone=mat(0xd3b994,.27,.3),brass=mat(0xc9a366,.7,.25);
+ const wood=mat(0x69432f,.08,.47),stone=mat(0xbfa48a,.2,.38),brass=mat(0xc9a366,.7,.25);
  box(5.5,1.13,1.1,wood,5.5,.58,-7.35,scene,true);
  box(5.9,.17,1.35,stone,5.5,1.23,-7.35);
- for(let x=3.6;x<=7.4;x+=1.25){
-  cylinder(.33,.13,mat(0x3d3029),x,.75,-5.7);
-  cylinder(.065,.69,brass,x,.35,-5.7);
+ for(const seat of barSeatPlan()){
+  const g=new THREE.Group();g.position.set(seat.x,0,seat.z);g.rotation.y=seat.yaw;scene.add(g);
+  cylinder(.38,.17,mat(0x334f43),0,.77,0,g);
+  cylinder(.07,.68,brass,0,.39,0,g);
+  cylinder(.27,.055,brass,0,.18,0,g);
+  // Stool back is behind the user's sitting position, opposite the bar.
+  box(.7,.53,.13,mat(0x334f43),0,1.10,-.34,g);
+  for(const side of [-.28,.28])box(.07,.38,.08,brass,side,.98,-.28,g);
+  seatAnchors.push(seat);
  }
  shelf(5.5,-9.05);
- sign("THE CLUB BAR","LOUNGE · CHAT · RELAX",5.5,4,-9.48,4.3);
+ sign("THE CLUB BAR","PULL UP A STOOL · CHAT",5.5,4,-9.48,4.3);
 }
 function stage(){
  carpet(0,-14,12,9,0x472b32);
@@ -168,12 +187,18 @@ function gameTable(st){
  box(3.12,.07,2.07,gold,0,1.11,0,g);
  box(2.95,.055,1.91,felt,0,1.17,0,g);
  for(const x of [-1.25,1.25])for(const z of [-.78,.78])cylinder(.15,.85,wood,x,.54,z,g);
- const chairs=[[-2.22,0],[2.22,0],[0,-1.75],[0,1.75]];
+ const chairs=[[-2.18,0],[2.18,0],[0,-1.74],[0,1.74]];
  for(const [x,z] of chairs){
-  cylinder(.34,.19,leather,x,.54,z,g);
-  cylinder(.09,.49,wood,x,.26,z,g);
-  box(.64,.69,.15,leather,x,.93,z+(z<0?-.25:.25),g);
+  const chair=new THREE.Group();chair.position.set(x,0,z);
+  chair.rotation.y=chairFacing(x,z);g.add(chair);
+  cylinder(.34,.18,leather,0,.61,0,chair);
+  cylinder(.10,.55,wood,0,.31,0,chair);
+  cylinder(.29,.06,gold,0,.15,0,chair);
+  // Backrest local -Z faces away from table, seat local +Z faces the centre.
+  box(.64,.66,.15,leather,0,.99,-.29,chair);
+  box(.56,.1,.06,gold,0,1.27,-.24,chair);
  }
+ seatAnchors.push(...gameSeatPlan(st));
  if(st.id==="mahjong"){
   for(let i=0;i<20;i++){
    const x=-1.1+(i%10)*.24,z=-.4+Math.floor(i/10)*.7;
