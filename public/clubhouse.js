@@ -210,19 +210,75 @@ function gameTable(st){
  }
  sign(st.id.toUpperCase(),st.enabled?"PRESS E TO PLAY":"COMING SOON",st.x,3.7,st.z-3.25,4.8);
 }
-function slotMachines(){
- const red=mat(0x7d3550,.35,.4),gold=mat(0xe4bc79,.8,.3);
- for(let i=0;i<4;i++){
-  const x=13.4+i*2.1;
-  box(1.45,2.5,1.1,red,x,1.3,4.2,scene,true);
-  box(1.5,.21,1.2,gold,x,2.6,4.2);
-  sign("777","★   ★   ★",x,1.74,4.78,1.25);
-  cylinder(.17,.5,gold,x+.55,1.4,4.9);
+function slotFaceTexture(i){
+ const canvas=document.createElement("canvas");canvas.width=512;canvas.height=512;
+ const p=canvas.getContext("2d");
+ p.fillStyle="#10191b";p.fillRect(0,0,512,512);
+ p.fillStyle="#2e1930";p.fillRect(16,16,480,480);
+ p.fillStyle="#f5d18c";p.font="bold 32px Georgia";p.textAlign="center";
+ p.fillText(["LUCKY SEVENS","GOLDEN DRAGON","MIDNIGHT JACKPOT","FORTUNE CLUB"][i],256,65);
+ p.fillStyle="#080f15";p.fillRect(35,97,442,225);
+ for(let k=0;k<3;k++){
+  const x=54+k*140;
+  const shade=p.createLinearGradient(0,120,0,298);
+  shade.addColorStop(0,"#fff0c8");shade.addColorStop(.5,"#fbf8e9");shade.addColorStop(1,"#d6c295");
+  p.fillStyle=shade;p.fillRect(x,113,126,186);
+  p.fillStyle=["#a73542","#c08d30","#186b5a"][(k+i)%3];
+  p.font="bold 110px Georgia";p.fillText(["7","★","♠","7"][(i+k)%4],x+63,250);
  }
- sign("SLOT MACHINES","COMING SOON",17.3,4.2,2.2,5);
+ p.strokeStyle="#e1b56a";p.lineWidth=8;p.strokeRect(29,91,454,240);
+ p.fillStyle="#c6a066";p.font="bold 26px sans-serif";p.fillText("★  ★  JACKPOT  ★  ★",256,385);
+ p.fillStyle="#354d42";p.fillRect(30,411,452,55);
+ for(let k=0;k<5;k++){p.beginPath();p.arc(93+k*82,439,18,0,Math.PI*2);p.fillStyle=["#d39a4a","#669a84","#b7797c"][k%3];p.fill();}
+ const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=renderer?.capabilities?.getMaxAnisotropy?.()||1;return tex;
 }
+function slotMachines(){
+ // A deliberately dark, opaque decorated back wall fixes the bright untextured-looking surface.
+ const wallMat=new THREE.MeshBasicMaterial({color:0x152a27});
+ box(11.4,5.65,.22,wallMat,17.2,2.82,3.15,scene,true);
+ const wood=mat(0x39292c,.18,.62),burgundy=mat(0x672b40,.38,.38);
+ const brass=mat(0xe0b86d,.75,.24),glass=mat(0x141f25,.28,.2);
+ for(let i=0;i<4;i++){
+  const x=13.65+i*2.27,z=4.48;
+  const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+  // Angled casino cabinet: footplate, lower facia, screen, top canopy, controls.
+  box(1.56,.23,1.12,wood,0,.15,0,g);
+  box(1.42,1.52,.93,burgundy,0,1.0,-.09,g);
+  box(1.58,.1,1.12,brass,0,1.76,0,g);
+  box(1.52,1.12,.24,wood,0,2.37,-.24,g);
+  box(1.48,.14,.78,brass,0,2.94,-.14,g);
+  box(1.39,1.55,.11,glass,0,1.60,.47,g);
+  box(1.3,1.47,.045,brass,0,1.65,.535,g);
+  const screen=new THREE.Mesh(
+   new THREE.PlaneGeometry(1.22,1.37),
+   new THREE.MeshBasicMaterial({map:slotFaceTexture(i),toneMapped:false})
+  );
+  screen.position.set(0,1.65,.57);g.add(screen);
+  // Projecting button console, lighted buttons and coin tray.
+  const buttonTop=box(1.47,.16,.68,wood,0,.84,.73,g);
+  buttonTop.rotation.x=-.16;
+  for(let k=0;k<4;k++)sphere(.095,mat([0xc9a862,0x87a8a7,0xbb667c,0xb4b4bf][k],.45,.3),-.49+k*.33,.96,.85,g);
+  box(.88,.14,.08,mat(0x101719),0,.43,.56,g);
+  box(1.47,.07,.18,brass,0,.35,.51,g);
+  for(const side of [-.72,.72]){
+   box(.095,2.3,.12,brass,side,1.76,.36,g);
+   sphere(.12,brass,side,2.94,.4,g);
+  }
+  // Individual top marquee instead of large blank rectangular blocks.
+  const marquee=new THREE.Mesh(new THREE.PlaneGeometry(1.46,.44),
+    new THREE.MeshBasicMaterial({map:labelTexture(["LUCKY 7","DRAGON","JACKPOT","FORTUNE"][i],"SLOTS"),side:THREE.DoubleSide}));
+  marquee.position.set(0,2.67,.505);g.add(marquee);
+  // Floor plan collision only, so the foreground walkway stays clear.
+  obstacles.push({x,z,w:1.5,d:1.16});
+ }
+ // Feature wall with individual sconces and a framed welcome panel.
+ box(10.8,.15,.18,brass,17.2,5.28,3.31);
+ sign("THE SLOT LOUNGE","FOUR CLASSIC CABINETS · COMING SOON",17.3,4.38,3.43,7.4);
+ for(const x of [12.6,21.6])pointLight(x,3.3,5.8,0xdd9db4,7,4);
+}
+
 function buildRooms(){
- const wall=mat(palette.wall),gold=mat(palette.trim,.62,.37),wood=mat(palette.wood);
+ const wall=mat(0x203831,.04,.92),gold=mat(palette.trim,.52,.42),wood=mat(palette.wood);
  // One continuous building, with open walking doorways into four distinct furnished rooms.
  box(46,.27,37,mat(0x55402e),0,-.14,0);
  box(46,.22,37,mat(0x142923),0,6.26,0);
@@ -240,8 +296,13 @@ function buildRooms(){
  }
  for(let z=-18;z<=18;z+=2.2)box(46,.006,.025,mat(0x795540),0,.009,z);
  // Decorative baseboard and crossbeams.
- for(const x of [-22.8,-10.18,10.18,22.8])box(.11,.2,36.6,gold,x,.5,0);
- for(const z of [-18.27,18.27])box(45.5,.2,.1,gold,0,.5,z);
+ // Skirting sits tight against actual wall segments; do not span door openings.
+ for(const x of [-22.8,22.8])box(.11,.16,36.6,gold,x,.12,0);
+ for(const x of [-10.18,10.18])for(const segment of sideSkirtingSegments()){
+  box(.075,.16,segment.length,gold,x,.12,segment.center);
+ }
+ for(const z of [-18.27,18.27])box(45.5,.16,.1,gold,0,.12,z);
+ for(const z of [1.25])for(const x of [-16.5,16.5])box(12.8,.14,.06,gold,x,.12,z);
  for(const x of [-8.5,8.5]){
   box(.42,5.7,.42,wood,x,2.85,-17.8);
   box(.62,.16,.62,gold,x,5.5,-17.8);
@@ -370,7 +431,7 @@ function buildWorld(){
  camera=new THREE.PerspectiveCamera(73,1,.1,115);camera.position.set(0,1.7,12.3);
  renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:"high-performance"});
  renderer.outputColorSpace=THREE.SRGBColorSpace;
- renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.37;
+ renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.17;
  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.7));renderer.shadowMap.enabled=true;
  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
  clock=new THREE.Clock();raycaster=new THREE.Raycaster();buildRooms();
