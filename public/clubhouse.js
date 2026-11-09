@@ -18,7 +18,7 @@ const stations=[
  {id:"sofa-left",label:"LOUNGE SEATING",x:-5.3,z:6,r:3},
  {id:"sofa-right",label:"LOUNGE SEATING",x:5.3,z:6,r:3}
 ];
-let scene,camera,renderer,clock,raycaster,social=null,lastPresence=0;
+let scene,camera,renderer,clock,raycaster,social=null,lastPresence=0,toastTimeout=null;
 const clickables=[],obstacles=[],seatAnchors=[];
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const mat=(c,metalness=0,roughness=.73)=>new THREE.MeshStandardMaterial({color:c,metalness,roughness});
@@ -331,6 +331,7 @@ function buildRooms(){
 }
 function showToast(message){
  const toast=$("clubToast");toast.querySelector("span").textContent=message;toast.classList.remove("hidden");
+ clearTimeout(toastTimeout);toastTimeout=setTimeout(()=>toast.classList.add("hidden"),4500);
 }
 function standUp(){
  if(!state.seated)return;
