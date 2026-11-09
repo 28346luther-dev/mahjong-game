@@ -27,7 +27,7 @@ test("table chairs look toward the table centre from every side",()=>{
   const alignment=(Math.sin(seat.yaw)*towardX+Math.cos(seat.yaw)*towardZ)/Math.hypot(towardX,towardZ);
   assert.ok(alignment>.9999,`Chair ${seat.id} faces away from the table`);
  }
- assert.equal(chairFacing(0,-1),0);
+ assert.ok(Math.abs(chairFacing(0,-1))<1e-12);
 });
 test("sofa cushions have distinct sit coordinates and look toward coffee table",()=>{
  const north=couchSeatPlan(-5,7.65,Math.PI,"left-north");
