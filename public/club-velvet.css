@@ -1,0 +1,33 @@
+/* The Games Club visual system — burgundy velvet / walnut / antique brass. */
+:root{--club-wine:#652c40;--club-gold:#dfb880;--club-ivory:#f7e4c3}
+.clubhouse{color:var(--club-ivory)}
+.club-head{padding:18px 22px;background:linear-gradient(105deg,#301f2f,#412839 54%,#251b29);border:1px solid #c39c6d80;border-bottom:none;border-radius:18px 18px 0 0}
+.club-head h2{color:#f1d5a9;font-family:Georgia,serif;font-weight:700;letter-spacing:.09em;text-shadow:0 2px 8px #0004}
+.club-head p{color:#dfcbbd}
+.club-head .primary{border:1px solid #fad9a7;background:linear-gradient(120deg,#e8ca97,#b88c59);color:#382432}
+.club-stage{border:7px solid #9b744c;border-top-color:#e4bf87;border-left-color:#d6ad75;border-radius:0 0 24px 24px;background:#2a1a2b;box-shadow:0 20px 75px #0009,inset 0 0 0 2px #edcd9b}
+.club-stage canvas{background:#2a1c2b}
+.club-hud span{background:#382234e5;color:#f6dcb5;border:1px solid #cba675b8;box-shadow:0 4px 16px #130b1090;letter-spacing:.08em}
+.club-prompt{background:#321e30ee;color:#f2d5aa;border:1px solid #cc9e69b5;box-shadow:0 6px 28px #0007}
+.club-prompt.near{background:#efd2a5;color:#382131}
+.club-crosshair{color:#edc999}
+.club-chat-toggle{background:linear-gradient(135deg,#f2d39f,#ba9062);border-color:#fff0d0;color:#3c2735}
+.club-social-panel{background:#2b1c2ceb;border-color:#bd946b;color:#f7d9b4}
+.club-social-panel>header{background:linear-gradient(90deg,#632f48,#42273b);border-color:#c59d74}
+.club-chat-line{background:#513047c9;color:#f9e7d4}
+.club-chat-line b{color:#f5d7a3}
+.club-chat-form input{background:#221824;border-color:#a77f67}
+.club-chat-form button{background:#dfbb8a}
+.club-mic{background:#764156}
+.club-mic[aria-pressed=true]{background:#a65354}
+.club-notice{background:linear-gradient(140deg,#572b44,#2c1e2d);border-color:#c4a071}
+.club-notice h3{color:#efd09d}
+.club-notice p{color:#f2dece}
+.club-toast{background:#f4dfbd;color:#41273a}
+.club-footer{background:linear-gradient(90deg,#2e202b,#3d2834,#2e202b);border-radius:0 0 14px 14px;color:#e8d1b4}
+.club-footer strong{color:#f3d5a7}
+.club-footer em{background:#64364a;color:#f4d8bd}
+.club-legend{background:#271d29ee;color:#f1d8be;border-color:#c09a705c}
+.club-touch button{background:#513348e9;border-color:#d2aa78ad;color:#f5dfbf}
+#clubInteract{background:#e3bb88;color:#322030}
+@media(max-width:700px){.club-head{padding:14px 12px}.club-stage{border-width:5px;border-radius:0 0 16px 16px}}
