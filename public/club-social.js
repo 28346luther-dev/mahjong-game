@@ -26,20 +26,36 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
   sprite.scale.set(2.6,.65,1);sprite.userData.texture=tex;return sprite;
  }
  function makeAvatar(p){
-  const g=new THREE.Group(),fabric=new THREE.MeshStandardMaterial({color:color(p.id),roughness:.82}),skin=new THREE.MeshStandardMaterial({color:0xd5a076});
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(.28,.83,4,8),fabric);body.position.y=1.08;g.add(body);
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.25,14,10),skin);head.position.y=1.89;g.add(head);
-  const hair=new THREE.Mesh(new THREE.SphereGeometry(.258,12,8,0,Math.PI*2,0,1.1),new THREE.MeshStandardMaterial({color:0x2a211c}));hair.position.y=1.95;g.add(hair);
-  const legMat=new THREE.MeshStandardMaterial({color:0x27313a});
-  for(const x of [-.13,.13]){
-   const leg=new THREE.Mesh(new THREE.BoxGeometry(.19,.7,.24),legMat);leg.position.set(x,.39,0);g.add(leg);
+  const g=new THREE.Group();
+  const sum=Array.from(p.id).reduce((n,c)=>n+c.charCodeAt(0),0);
+  const coats=[0x742940,0x923a52,0x552c48,0x9b5360,0x4b394c];
+  const coat=new THREE.MeshPhysicalMaterial({color:coats[sum%coats.length],roughness:.84,sheen:1,sheenColor:0xb85b6c});
+  const skin=new THREE.MeshStandardMaterial({color:0xc98a6f,roughness:.83});
+  const trim=new THREE.MeshStandardMaterial({color:0xd0b17c,metalness:.45,roughness:.45});
+  const trousers=new THREE.MeshStandardMaterial({color:0x2d2831,roughness:.85});
+  const hairMat=new THREE.MeshStandardMaterial({color:sum%3===0?0x654336:0x2d2429,roughness:.91});
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(.31,.72,7,14),coat);
+  body.position.y=1.20;body.scale.set(.95,1,0.78);g.add(body);
+  const collar=new THREE.Mesh(new THREE.TorusGeometry(.19,.038,8,18),trim);
+  collar.rotation.x=Math.PI/2;collar.position.y=1.73;g.add(collar);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.235,22,16),skin);head.position.y=1.93;g.add(head);
+  const hair=new THREE.Mesh(new THREE.SphereGeometry(.246,22,14,0,Math.PI*2,0,1.32),hairMat);
+  hair.position.y=2.013;g.add(hair);
+  for(const sx of [-1,1]){
+   const arm=new THREE.Mesh(new THREE.CapsuleGeometry(.106,.59,5,10),coat);
+   arm.position.set(sx*.39,1.26,0);arm.rotation.z=sx*.16;g.add(arm);
+   const hand=new THREE.Mesh(new THREE.SphereGeometry(.10,12,9),skin);
+   hand.position.set(sx*.46,.91,0);g.add(hand);
+   const leg=new THREE.Mesh(new THREE.CapsuleGeometry(.13,.48,5,10),trousers);
+   leg.position.set(sx*.16,.48,0);g.add(leg);
+   const shoe=new THREE.Mesh(new THREE.SphereGeometry(.16,10,10),trousers);
+   shoe.scale.set(1,.55,1.45);shoe.position.set(sx*.16,.10,.10);g.add(shoe);
   }
-  const tag=textSprite(p.name,"#153329");tag.position.y=2.58;tag.scale.set(1.65,.4,1);g.add(tag);
-  g.position.set(p.x,0,p.z);g.rotation.y=p.yaw||0;
-  scene.add(g);
+  const tag=textSprite(p.name,"#402539","#f5ddb5");
+  tag.position.y=2.67;tag.scale.set(1.7,.43,1);g.add(tag);
+  g.position.set(p.x,0,p.z);g.rotation.y=p.yaw||0;scene.add(g);
   const info={...p,group:g,tag,bubble:null,bubbleUntil:0,targetX:p.x,targetZ:p.z,targetYaw:p.yaw||0};
-  peers.set(p.id,info);
-  return info;
+  peers.set(p.id,info);return info;
  }
  function remove(id){
   const p=peers.get(id);if(!p)return;
