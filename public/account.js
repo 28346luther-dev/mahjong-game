@@ -9,10 +9,10 @@
   async function readApiJson(response){
     const contentType=response.headers.get("content-type")||"";
     if(!contentType.toLowerCase().includes("application/json")){
-      throw Error("The login service returned a website page instead of JSON. Deploy the latest Cloudflare Worker (including wrangler.toml), then refresh this page.");
+      throw Error("Account request failed (HTTP "+response.status+"). The server did not return JSON. Check the latest Cloudflare Worker logs for this attempt.");
     }
     const data=await response.json();
-    if(!response.ok)throw Error(data.error||"The login service could not complete your request.");
+    if(!response.ok)throw Error((data.error||"The login service could not complete your request.")+(data.requestId?" Reference: "+data.requestId:""));
     return data;
   }
   function showAuth(){
