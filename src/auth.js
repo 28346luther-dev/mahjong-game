@@ -6,10 +6,13 @@ const digest = async value => hex(await crypto.subtle.digest("SHA-256",encode.en
 const randomHex = size => hex(crypto.getRandomValues(new Uint8Array(size)));
 const cookieName="games_club_session";
 const maxAge=60*60*24*7;
+// Cloudflare workerd caps PBKDF2 operations at 100,000 iterations.
+// Store the iteration count per account to retain compatibility with existing hashes.
+const PBKDF2_ITERATIONS=100000;
 const emailRx=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-async function hashPassword(password,salt){
+async function hashPassword(password,salt,iterations=PBKDF2_ITERATIONS){
   const key=await crypto.subtle.importKey("raw",encode.encode(password),"PBKDF2",false,["deriveBits"]);
-  return hex(await crypto.subtle.deriveBits({name:"PBKDF2",salt:encode.encode(salt),iterations:210000,hash:"SHA-256"},key,256));
+  return hex(await crypto.subtle.deriveBits({name:"PBKDF2",salt:encode.encode(salt),iterations,hash:"SHA-256"},key,256));
 }
 function safeEqual(a,b){
   if(typeof a!=="string"||typeof b!=="string"||a.length!==b.length)return false;
@@ -42,10 +45,10 @@ export class AuthStore {
       if(action==="/register"){
         if(user)return json({error:"An account with that email already exists."},409);
         const salt=randomHex(16);
-        user={email,salt,hash:await hashPassword(password,salt),createdAt:now};
+        user={email,salt,iterations:PBKDF2_ITERATIONS,hash:await hashPassword(password,salt),createdAt:now};
         await this.ctx.storage.put(key,user);
       }else{
-        const matched=user&&safeEqual(user.hash,await hashPassword(password,user.salt));
+        const matched=user&&safeEqual(user.hash,await hashPassword(password,user.salt,user.iterations??210000));
         if(!matched){
           const recent=attempt.until>now?attempt.count:0;
           await this.ctx.storage.put(attemptKey,{count:recent+1,until:now+15*60*1000});
