@@ -1,5 +1,6 @@
 import {AuthStore,sessionCookieName,emptySessionCookie} from "./auth.js";
 export {AuthStore};
+export {ClubSocial} from "./club-social.js";
 
 const TILE_NAMES = [
   ...Array.from({length:9},(_,i)=>({id:`c${i+1}`,name:`${i+1} Characters`,short:`${i+1}萬`,suit:"characters",rank:i+1})),
@@ -182,6 +183,17 @@ export default {
         return env.ROOMS.get(env.ROOMS.idFromName(roomCode)).fetch("https://room/join",{method:"POST",body:JSON.stringify({name:String(body.name||"Player").slice(0,20)})});
       }
       return new Response("Not found",{status:404});
+    }
+    if(url.pathname==="/club/ws"){
+      if(request.headers.get("upgrade")?.toLowerCase()!=="websocket")
+        return Response.json({error:"WebSocket upgrade required"},{status:426});
+      const viewer=await authenticate();
+      if(!viewer)return Response.json({error:"Please sign in first"},{status:401});
+      const headers=new Headers(request.headers);
+      headers.set("x-club-user",viewer.email);
+      headers.set("x-club-name",viewer.email.split("@")[0].slice(0,25));
+      const lobby=env.CLUB.get(env.CLUB.idFromName("main-lobby"));
+      return lobby.fetch(new Request("https://club/ws",{method:"GET",headers}));
     }
     if(url.pathname==="/ws"){
       if(!await authenticate())return new Response("Authentication required",{status:401});

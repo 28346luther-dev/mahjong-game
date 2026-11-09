@@ -1,0 +1,35 @@
+/* Immersive social clubhouse overlay — responsive, accessible controls. */
+.club-stage{position:relative}
+.club-hud{position:absolute;top:15px;left:16px;right:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:2;pointer-events:none}
+.club-hud span{background:#102920e5;color:#f4ddb0;border:1px solid #bfa16c88;padding:7px 12px;border-radius:8px;font-weight:800;font-size:11px;letter-spacing:.07em}
+.club-hud button{pointer-events:auto;cursor:pointer;background:#e0c48c;color:#19362d;border:1px solid #f7dfa7;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:800}
+.club-chat-toggle{position:absolute;right:18px;bottom:70px;z-index:4;background:#e9c888;border:2px solid #f6dfab;border-radius:14px;padding:10px 20px;color:#183a32;font-weight:800;cursor:pointer;box-shadow:0 6px 25px #0009}
+.club-social-panel{position:absolute;z-index:5;right:15px;bottom:122px;width:min(350px,calc(100% - 30px));max-height:65%;display:none;flex-direction:column;border:1px solid #ba9e71;background:#132b29f2;box-shadow:0 15px 45px #000a;border-radius:15px;color:#f7e2b9;overflow:hidden;backdrop-filter:blur(12px)}
+.club-social-panel.open{display:flex}
+.club-social-panel>header{background:#285044;color:#f4daa2;font:700 16px Georgia,serif;padding:13px 15px;border-bottom:1px solid #b6996e6e;display:flex;flex-direction:column;gap:4px}
+.club-social-panel>header small{font:11px system-ui;color:#c4d1c5}
+.club-chat-history{overflow-y:auto;min-height:100px;max-height:270px;padding:12px;display:flex;flex-direction:column;gap:7px;font-size:13px;word-break:break-word}
+.club-chat-line{background:#264238b0;padding:8px 10px;border-radius:8px;color:#f2e8d8;line-height:1.4}
+.club-chat-line b{color:#f5cf86}
+.club-chat-system{font-size:11px;color:#a4c6ba;text-align:center;font-style:italic}
+.club-chat-form{display:flex;gap:5px;padding:9px;border-top:1px solid #b6996e5e}
+.club-chat-form input{flex:1;min-width:0;background:#081d1e;color:#fff;border:1px solid #6b927c;border-radius:9px;padding:11px;font-size:13px}
+.club-chat-form button,.club-mic{border:0;background:#e4c58e;border-radius:9px;color:#203b34;font-weight:800;padding:10px 13px;cursor:pointer}
+.club-mic{margin:0 10px;width:calc(100% - 20px);background:#53746b;color:#fff2d2}
+.club-mic[aria-pressed="true"]{background:#cf785a;color:#fff}
+.club-voice-note{font-size:10px;color:#acc7b7;line-height:1.3;padding:6px 12px 11px}
+.club-notice{z-index:6;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(145deg,#284a3d,#142c2a);border:8px ridge #bb955e;box-shadow:0 10px 60px #000d;color:#ffedc3;border-radius:12px;width:min(480px,90%);max-height:85%;overflow:auto;padding:26px 28px;text-align:left}
+.club-notice h3{font:700 29px Georgia,serif;color:#f5d898;text-align:center}
+.club-notice p{line-height:1.45;font-size:13px;color:#e2e7d7}
+.club-notice>button{position:absolute;right:8px;top:5px;background:transparent;border:0;color:#fae3ac;font-size:30px;cursor:pointer}
+.club-social-panel button:focus-visible,.club-notice button:focus-visible,.club-hud button:focus-visible,.club-chat-toggle:focus-visible{outline:3px solid #fff}
+@media(max-width:700px){
+ .club-hud{top:8px;left:8px;right:8px;gap:5px}
+ .club-hud span{font-size:9px;padding:6px}
+ .club-hud button{font-size:10px;padding:7px 9px}
+ .club-chat-toggle{right:8px;bottom:78px;padding:8px 12px}
+ .club-social-panel{right:6px;bottom:119px;width:min(330px,calc(100% - 12px));max-height:58%}
+ .club-chat-history{max-height:190px}
+ .club-notice{padding:19px 14px;border-width:5px}
+ .club-notice h3{font-size:22px}
+}
