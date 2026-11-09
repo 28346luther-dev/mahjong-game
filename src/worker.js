@@ -122,6 +122,16 @@ export default {
       const res=await authStub.fetch("https://auth/me",{method:"POST",body:JSON.stringify({token})});
       return res.ok?await res.json():null;
     };
+    if(url.pathname==="/api/auth/status"){
+      try{
+        const response=await authStub.fetch("https://auth/health",{method:"POST",body:"{}"});
+        if(!response.ok)return Response.json({ok:false,component:"account-storage",code:"AUTH_STORAGE_CHECK_FAILED"},{status:503,headers:{"cache-control":"no-store"}});
+        return Response.json({ok:true,component:"account-storage"},{headers:{"cache-control":"no-store"}});
+      }catch(error){
+        console.error("Auth storage health check failed",error?.name,error?.message);
+        return Response.json({ok:false,component:"account-storage",code:"AUTH_STORAGE_UNAVAILABLE"},{status:503,headers:{"cache-control":"no-store"}});
+      }
+    }
     if(url.pathname.startsWith("/api/auth/")){
       if(url.pathname==="/api/auth/me"){
         const me=await authenticate();
