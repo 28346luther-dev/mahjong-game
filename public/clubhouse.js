@@ -146,8 +146,8 @@ function stage(){
   box(1.12,2.1,1.1,mat(0x21272a),x,1.7,-12.2);
   cylinder(.4,.09,mat(0x343b3d),x,1.72,-11.63);
  }
- sign("THE GAMES CLUB","KARAOKE · SOCIAL LOUNGE",0,4.6,-19.62,8.2);
- sign("KARAOKE STAGE","ENABLE MIC TO JOIN THE ROOM",0,3.75,-17.62,4.2);
+ sign("THE GAMES CLUB","KARAOKE · SOCIAL LOUNGE",0,4.6,-18.23,8.2);
+ sign("KARAOKE STAGE","ENABLE MIC TO JOIN THE ROOM",0,3.75,-17.55,4.2);
 }
 function noticeboard(){
  const g=new THREE.Group();g.position.set(-8.45,2.6,-4.9);g.rotation.y=Math.PI/2;scene.add(g);
