@@ -19,6 +19,8 @@ test("register, login, check session and logout using hashed passwords",async()=
   assert.match(cookie,/SameSite=Lax/);
   const token=/games_club_session=([a-f0-9]{64})/.exec(cookie)[1];
   const keys=[...store.data.keys()];
+  const registeredAccount=[...store.data.entries()].find(([key])=>key.startsWith("account:"))[1];
+  assert.equal(registeredAccount.iterations,100000);
   assert.equal(keys.some(x=>x.includes("Player@example.com")),false);
   assert.equal(JSON.stringify([...store.data.values()]).includes("long-secret-password"),false);
   const session=await auth.fetch(request("me",{token}));
