@@ -26,6 +26,7 @@ export class AuthStore {
     const url=new URL(request.url),action=url.pathname;
     if(request.method!=="POST")return json({error:"Method not allowed"},405);
     let body={};try{body=await request.json();}catch{return json({error:"Invalid request"},400);}
+    if(action==="/health"){await this.ctx.storage.get("auth-health-check");return json({ok:true,storage:"reachable"});}
     const now=Date.now();
     const secure=body.secure!==false;
     if(action==="/register"||action==="/login"){
