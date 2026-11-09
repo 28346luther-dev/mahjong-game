@@ -332,35 +332,51 @@ function buildRooms(){
 function showToast(message){
  const toast=$("clubToast");toast.querySelector("span").textContent=message;toast.classList.remove("hidden");
 }
-function seat(st){
- if(state.seated){state.seated=null;showToast("You stood up.");return;}
- state.seated=st.id;
- camera.position.set(st.x,1.2,st.z+2.8);state.yaw=Math.PI;state.pitch=-.08;
- social?.seatedChat();showToast("Sitting in the lounge. Press E to stand, or chat with friends.");
+function standUp(){
+ if(!state.seated)return;
+ const previous=state.seatReturn;
+ state.seated=null;state.seatReturn=null;
+ // Return to the safe standing spot where E was originally pressed.
+ if(previous){
+  camera.position.set(previous.x,previous.y,previous.z);
+  state.yaw=previous.yaw;state.pitch=previous.pitch;
+ }else camera.position.y=1.7;
+ pressed.clear();showToast("You stood up. Walk around or press E to sit again.");
+}
+function sitIn(anchor){
+ if(state.seated){standUp();return;}
+ state.seatReturn={x:camera.position.x,y:1.7,z:camera.position.z,yaw:state.yaw,pitch:state.pitch};
+ state.seated=anchor;
+ camera.position.set(anchor.x,anchor.eyeY,anchor.z);
+ state.yaw=anchor.yaw;state.pitch=-.07;
+ pressed.clear();social?.seatedChat();
+ showToast("You are seated at the "+(anchor.kind==="stool"?"bar":anchor.kind==="table"?"table":"lounge")+". Press E to stand.");
 }
 function interact(st){
- if(state.seated){seat(st||{id:"lounge"});return;}
+ if(state.seated){standUp();return;}
  if(!st)return;
+ if(st.kind&&["sofa","stool","table"].includes(st.kind)){sitIn(st);return;}
  if(st.id==="mahjong"){window.MahjongClubhouse.enterMahjong();return;}
  if(["poker","blackjack","slots"].includes(st.id)){showToast(st.label+" is coming soon. Mahjong is playable now.");return;}
  if(st.id==="board"){$("clubNotice").classList.toggle("hidden");return;}
  if(st.id==="karaoke"){$("clubSocialPanel").classList.add("open");showToast("Welcome to the karaoke stage! Enable your mic to talk to others in this room.");return;}
- if(st.id==="bar"){showToast("Welcome to the club bar! Take a seat in the lounge and chat.");return;}
- if(st.id.startsWith("sofa"))seat(st);
+ if(st.id==="bar"){showToast("The bar is open! Walk up to any stool and press E to sit.");return;}
+ if(st.id.startsWith("sofa")){showToast("Move closer to a sofa cushion and press E to sit.");return;}
 }
 function nearest(){
- let best=null,distance=Infinity;
- for(const st of stations){const d=Math.hypot(camera.position.x-st.x,camera.position.z-st.z);if(d<st.r&&d<distance){best=st;distance=d;}}
- state.near=best;
+ const selected=nearestInteraction(camera.position.x,camera.position.z,seatAnchors,stations);
+ state.near=selected;
  const prompt=$("clubPrompt");
- prompt.textContent=state.seated?"Press E to stand · Open chat to talk":best?"Press E · "+best.label:"WASD to walk · Mouse to look · E to interact";
- prompt.classList.toggle("near",!!best||!!state.seated);
+ prompt.textContent=state.seated?"Press E to stand · Chat with friends":
+  selected?.kind?"Press E to sit · "+selected.label:
+  selected?"Press E · "+selected.label:"WASD to walk · Mouse to look · E to interact";
+ prompt.classList.toggle("near",!!selected||!!state.seated);
  const zone=zoneAt(camera.position.x,camera.position.z);
  $("clubZone").textContent=({hall:"MAIN HALL",mahjong:"MAHJONG ROOM",poker:"POKER ROOM",blackjack:"BLACKJACK ROOM",slots:"SLOTS ROOM"})[zone];
 }
 function collides(x,z){
  if(Math.abs(x)>22.35||Math.abs(z)>17.85)return true;
- return obstacles.some(o=>Math.abs(x-o.x)<o.w/2+.36&&Math.abs(z-o.z)<o.d/2+.36);
+ return blockedBy(x,z,obstacles,.34);
 }
 function move(dt){
  if(!state.active)return;
@@ -399,33 +415,8 @@ function hitStation(){
  if(hit&&hit.distance<4)return hit.object.userData.station;
  return state.near;
 }
-function initAudio(){
- if(audioCtx)return;
- audioCtx=new (window.AudioContext||window.webkitAudioContext)();
- musicGain=audioCtx.createGain();musicGain.gain.value=.09;musicGain.connect(audioCtx.destination);
-}
-function musicNote(hz,start,length){
- const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();
- osc.type="sine";osc.frequency.setValueAtTime(hz,start);
- gain.gain.setValueAtTime(.0001,start);gain.gain.exponentialRampToValueAtTime(.14,start+.08);
- gain.gain.exponentialRampToValueAtTime(.0001,start+length);
- osc.connect(gain).connect(musicGain);osc.start(start);osc.stop(start+length+.03);
-}
-let beat=0;
-function playMusicBar(){
- if(!audioCtx||audioCtx.state!=="running")return;
- const chords=[[174.61,220,261.63],[196,246.94,293.66],[164.81,207.65,261.63],[174.61,220,293.66]];
- const now=audioCtx.currentTime+.03,notes=chords[Math.floor(beat/4)%chords.length];
- musicNote(notes[beat%3],now,.74);if(beat%4===0)musicNote(notes[0]/2,now,2);
- beat++;
-}
-function musicToggle(){
- const button=$("clubMusic");
- if(musicTimer){clearInterval(musicTimer);musicTimer=null;musicGain.gain.value=0;button.textContent="♫ Play lounge music";button.setAttribute("aria-pressed","false");return;}
- try{initAudio();audioCtx.resume();musicGain.gain.value=.09;playMusicBar();musicTimer=setInterval(playMusicBar,930);
-  button.textContent="♫ Mute music";button.setAttribute("aria-pressed","true");}
- catch(err){showToast("Audio isn't supported on this device.");}
-}
+// The previous generated note loop has been removed; silence is the default.
+// A properly produced, legally licensed soundtrack can be added as a separate asset.
 function buildWorld(){
  scene=new THREE.Scene();scene.background=new THREE.Color(0x12252a);scene.fog=new THREE.FogExp2(0x12252a,.011);
  camera=new THREE.PerspectiveCamera(73,1,.1,115);camera.position.set(0,1.7,12.3);
@@ -443,7 +434,7 @@ window.addEventListener("keydown",e=>{
  if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","shift"].includes(k)){
   e.preventDefault();pressed.add(k);
  }
- if(k==="e"&&!e.repeat){e.preventDefault();interact(state.near);}
+ if(k==="e"&&!e.repeat){e.preventDefault();if(state.seated)standUp();else interact(state.near);}
  if(k==="enter"&&!e.repeat){$("clubChatToggle").click();}
 });
 window.addEventListener("keyup",e=>pressed.delete(e.key.toLowerCase()));
@@ -452,6 +443,7 @@ document.addEventListener("pointerlockchange",()=>state.locked=document.pointerL
 document.addEventListener("mousemove",e=>{if(state.active&&state.locked)look(e.movementX,e.movementY);});
 canvas.addEventListener("click",()=>{
  if(!state.active)return;
+ if(state.seated){standUp();return;}
  if(state.near){interact(state.near);return;}
  if(!state.locked&&!('ontouchstart' in window)&&canvas.requestPointerLock)canvas.requestPointerLock();
 });
@@ -466,11 +458,11 @@ document.querySelectorAll("[data-move]").forEach(b=>{
  const key=b.dataset.move;b.addEventListener("pointerdown",e=>{e.preventDefault();pressed.add(key);b.setPointerCapture?.(e.pointerId);});
  const up=()=>pressed.delete(key);b.addEventListener("pointerup",up);b.addEventListener("pointercancel",up);b.addEventListener("lostpointercapture",up);
 });
-$("clubInteract").onclick=()=>interact(state.near);
+$("clubInteract").onclick=()=>state.seated?standUp():interact(state.near);
 $("enterMahjong").onclick=()=>window.MahjongClubhouse.enterMahjong();
 $("clubToastClose").onclick=()=>$("clubToast").classList.add("hidden");
 $("clubNoticeClose").onclick=()=>$("clubNotice").classList.add("hidden");
-$("clubMusic").onclick=musicToggle;
+
 $("clubReturn").onclick=()=>window.MahjongClubhouse.returnToLobby();
 window.MahjongClubhouse={
  showLobby(){
@@ -479,7 +471,7 @@ window.MahjongClubhouse={
   $("clubReturn").classList.add("hidden");state.active=true;social?.start();
  },
  enterMahjong(){
-  state.active=false;state.seated=null;pressed.clear();social?.stop();
+  state.active=false;state.seated=null;state.seatReturn=null;pressed.clear();social?.stop();
   if(document.pointerLockElement===canvas)document.exitPointerLock();
   root.classList.add("hidden");$("home").classList.remove("hidden");
   $("room").classList.add("hidden");$("clubReturn").classList.remove("hidden");
