@@ -23,7 +23,7 @@ export class PokerTable{
   const s=this.data;return {
    type:"pokerState",hand:s.hand,phase:s.phase,street:s.street,
    dealer:s.dealer,toAct:s.toAct,pot:s.players.reduce((n,p)=>n+p.contributed,0),
-   currentBet:s.currentBet,community:s.community,message:s.message,
+   currentBet:s.currentBet,minRaise:s.minRaise,community:s.community,message:s.message,
    ownId:user,turnName:s.players[s.toAct]?.name||"",
    players:s.players.map((p,i)=>({
     id:p.id,name:p.name,kind:p.kind,stack:p.stack,street:p.street,contributed:p.contributed,
@@ -66,7 +66,8 @@ export class PokerTable{
    p.hole=[s.shoe.pop(),s.shoe.pop()];p.street=0;p.contributed=0;
    p.folded=false;p.allIn=false;p.acted=false;
   }
-  const sb=this.next(s.dealer,p=>this.active(p));
+  const headsUp=s.players.filter(p=>this.active(p)).length===2;
+  const sb=headsUp?s.dealer:this.next(s.dealer,p=>this.active(p));
   const bb=this.next(sb,p=>this.active(p));
   this.post(sb,SMALL_BLIND);this.post(bb,BIG_BLIND);
   s.currentBet=Math.max(s.players[sb].street,s.players[bb].street);
@@ -188,6 +189,7 @@ export class PokerTable{
  async webSocketMessage(ws,raw){
   await this.load();const user=ws.deserializeAttachment?.()?.user;
   if(!user||this.sockets.get(user)!==ws)return;
+  if(typeof raw==="string"&&raw.length>8192)return;
   let msg;try{msg=JSON.parse(typeof raw==="string"?raw:new TextDecoder().decode(raw));}catch{return;}
   try{
    if(msg.action==="newHand"){
