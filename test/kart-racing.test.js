@@ -127,7 +127,33 @@ test("high-quality circuit renders curved corner kerbs, asphalt and painted runo
  assert.match(clubhouse,/setInterval\(refresh,15000\)/);
 });
 function classicCheck(value){return value;}
+test("cockpit view, realistic metal guardrails and fullscreen race controls are wired",()=>{
+ const client=readFileSync("public/kart-racing.js","utf8");
+ const safety=readFileSync("public/kart-safety.js","utf8");
+ const html=readFileSync("public/index.html","utf8");
+ const css=readFileSync("public/kart-racing.css","utf8");
+ assert.match(client,/cameraMode==="cockpit"/);
+ assert.match(client,/setCameraMode\(cameraMode==="chase"\?"cockpit":"chase"\)/);
+ assert.match(client,/addKartSafety\(THREE,scene,ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH\)/);
+ assert.match(safety,/guardOffset=halfWidth\+runoffWidth\+2\.8/);
+ assert.match(safety,/InstancedMesh/);
+ assert.match(safety,/steel/);
+ assert.match(html,/id="kartCameraToggle"/);
+ assert.match(html,/id="kartFullscreen"/);
+ assert.match(html,/id="kartCameraLabel"/);
+ assert.match(client,/requestFullscreen\(\)/);
+ assert.match(client,/document\.exitFullscreen\(\)/);
+ assert.match(css,/\.kart-modal:fullscreen/);
+});
+test("racing kerbs do not slow down, while gravel and grass do",()=>{
+ const client=readFileSync("public/kart-racing.js","utf8");
+ assert.match(client,/distance<=ROAD_HALF_WIDTH\+1\.23\)return \{drag:0,surface:"kerb"\}/);
+ assert.match(client,/surface:"gravel"/);
+ assert.match(client,/surface:"grass"/);
+ assert.match(client,/if\(grip\.drag>0\)speed\*=Math\.exp\(-grip\.drag\*dt\)/);
+ assert.doesNotMatch(client,/onRunoff=projected\.distance>ROAD_HALF_WIDTH-\.2/);
+});
 test("all kart, blackjack and worker modules pass syntax checks",()=>{
- for(const p of ["public/kart-graphics.js","public/kart-global-board.js","public/kart-track.js","src/kart-leaderboard.js","src/blackjack-multiplayer.js","src/poker-table.js","src/worker.js","public/kart-racing.js","public/salon-games.js"])
+ for(const p of ["public/kart-safety.js","public/kart-graphics.js","public/kart-global-board.js","public/kart-track.js","src/kart-leaderboard.js","src/blackjack-multiplayer.js","src/poker-table.js","src/worker.js","public/kart-racing.js","public/salon-games.js"])
   execFileSync(process.execPath,["--check",p]);
 });
