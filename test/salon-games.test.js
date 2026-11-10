@@ -77,6 +77,27 @@ test("PokerTable lets multiple humans join and computer opponents fill seats",as
  assert.equal(table.data.players.every(p=>p.hole.length===2),true);
  assert.equal(table.data.players.reduce((sum,p)=>sum+p.contributed,0),30);
 });
+test("Heads-up Hold'em correctly alternates small blind and post-flop action",async()=>{
+ const {table}=harness();
+ for(const [user,name] of [["alice","Alice"],["bob","Bob"]]){
+  const response=await table.fetch(new Request("https://poker/join",{
+   method:"POST",body:JSON.stringify({user,name})
+  }));
+  assert.equal(response.status,200);
+ }
+ table.start();
+ assert.equal(table.data.players[table.data.dealer].street,10,"dealer posts small blind heads-up");
+ const dealer=table.data.players[table.data.dealer];
+ const other=table.data.players[(table.data.dealer+1)%2];
+ assert.equal(other.street,20,"other player posts big blind");
+ assert.equal(table.data.players[table.data.toAct].id,dealer.id,"small blind acts first pre-flop");
+ table.playerAct(dealer.id,"call");
+ assert.equal(table.data.players[table.data.toAct].id,other.id);
+ table.playerAct(other.id,"check");
+ assert.equal(table.data.street,"flop");
+ assert.equal(table.data.players[table.data.toAct].id,other.id,"big blind acts first after flop");
+ assert.equal(table.data.community.length,3);
+});
 test("PokerTable starts with a bot opponent and masks cards from other humans",async()=>{
  const {table}=harness();
  await table.fetch(new Request("https://poker/join",{method:"POST",body:JSON.stringify({user:"alice",name:"Alice"})}));
