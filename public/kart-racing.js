@@ -1,4 +1,4 @@
-import {ROAD,PIT,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,projectToRoute,raceStart} from "./kart-track.js";
+import {ROAD,PIT,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,projectToRoute,raceStart} from "./kart-track.js";
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
 const $=id=>document.getElementById(id);
@@ -113,7 +113,7 @@ function ribbon(route,from,to,color,raise=.02){
  for(let i=0;i<ps.length;i++){
   const p=ps[i],dir=tangent(route,i);
   for(const offset of [from,to]){
-   verts.push(p.x+dir.nx*offset,p.y+raise,p.z+dir.nz*offset);
+   verts.push(p.x+dir.nx*offset,p.y+raise+(route===ROAD?bankRise(i/ps.length,offset):0),p.z+dir.nz*offset);
    uv.push(i/ps.length*14,offset===from?0:1);
   }
  }
@@ -369,7 +369,9 @@ function update(dt){
  // Do not penalise tarmac, kerbs or green painted runoff.
  if(grip.drag>0)speed*=Math.exp(-grip.drag*dt);
  if(grip.surface!=="barrier"){
-  pos.x=x;pos.z=z;pos.y=projected.y;
+  pos.x=x;pos.z=z;
+  const lateral=(x-projected.x)*projected.normalX+(z-projected.z)*projected.normalZ;
+  pos.y=projected.y+(projected.isPit?0:bankRise(projected.progress,lateral));
   if(inPitLane!==projected.isPit){
    inPitLane=projected.isPit;
    updatePitHUD();
