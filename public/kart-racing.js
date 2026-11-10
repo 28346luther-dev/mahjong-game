@@ -38,7 +38,7 @@ function post(r,h,color,x,y,z){
 }
 function tangent(route,i){
  const points=route.samples;
- const from=points[(i-1+points.length)%points.length],to=points[(i+1)%points.length];
+ const from=points[route.closed?(i-1+points.length)%points.length:Math.max(0,i-1)],to=points[route.closed?(i+1)%points.length:Math.min(points.length-1,i+1)];
  const dx=to.x-from.x,dz=to.z-from.z,len=Math.hypot(dx,dz)||1;
  return {tx:dx/len,tz:dz/len,nx:-dz/len,nz:dx/len};
 }
@@ -61,6 +61,25 @@ function ribbon(route,from,to,color,raise=.02){
  geo.setIndex(indices);geo.computeVertexNormals();
  return object(geo,material(color,.94),0,0,0);
 }
+function embankment(route,side,width=8){
+ // Triangulated soil shoulders meet the underlying grass, so elevated corners
+ // sit on hills rather than appearing to hover several metres above the ground.
+ const vertices=[],indices=[],samples=route.samples;
+ for(let i=0;i<samples.length;i++){
+  const p=samples[i],d=tangent(route,i);
+  const edge=(ROAD_HALF_WIDTH+.35)*side;
+  vertices.push(p.x+d.nx*edge,p.y-.04,p.z+d.nz*edge);
+  vertices.push(p.x+d.nx*(edge+side*width),Math.max(-.06,p.y-2.7),p.z+d.nz*(edge+side*width));
+ }
+ for(let i=0;i<(route.closed?samples.length:samples.length-1);i++){
+  const a=i*2,b=((i+1)%samples.length)*2;
+  indices.push(a,a+1,b,a+1,b+1,b);
+ }
+ const geometry=new THREE.BufferGeometry();
+ geometry.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));
+ geometry.setIndex(indices);geometry.computeVertexNormals();
+ object(geometry,material(0x5b7a57,.99),0,0,0);
+}
 function stripeAcross(route,i,color,count=10,depth=.5){
  const ps=route.samples,p=ps[i%ps.length],d=tangent(route,i%ps.length);
  for(let n=0;n<count;n++){
@@ -73,6 +92,7 @@ function stripeAcross(route,i,color,count=10,depth=.5){
 function track(){
  const green=object(new THREE.PlaneGeometry(260,190),material(0x477854,.97),0,-.1,0);
  green.rotation.x=-Math.PI/2;
+ embankment(ROAD,-1);embankment(ROAD,1);
  ribbon(ROAD,-ROAD_HALF_WIDTH-.55,ROAD_HALF_WIDTH+.55,0x9b7e65,-.025);
  ribbon(ROAD,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0x373b43,.015);
  ribbon(PIT,-PIT_HALF_WIDTH-.34,PIT_HALF_WIDTH+.34,0x927765,-.02);
