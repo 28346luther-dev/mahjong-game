@@ -33,7 +33,7 @@
         <div class="club-crosshair" aria-hidden="true">+</div>
         <div class="club-hud">
           <span id="clubZone">MAIN HALL</span>
-          <span id="clubPlayerCount">1 online</span>
+          <span id="clubPlayerCount">1 online</span><span id="sanaBalance" aria-live="polite">🪙 500 Sana Coins</span>
           <span title="The original generated music has been removed">♫ Quiet lounge</span>
         </div>
         <button id="clubChatToggle" class="club-chat-toggle" type="button" aria-expanded="false">💬 Chat</button>
@@ -71,6 +71,12 @@
           <label>Display name<input id="avatarName" maxlength="22" minlength="2" autocomplete="nickname" placeholder="Your club name" required></label>
           <label>Velvet outfit<select id="avatarColor"><option value="ruby">Ruby red</option><option value="plum">Royal plum</option><option value="emerald">Emerald</option><option value="navy">Midnight blue</option><option value="gold">Champagne gold</option></select></label>
           <label>Hair colour<select id="avatarHair"><option value="dark">Dark</option><option value="brown">Brown</option><option value="blonde">Blonde</option><option value="auburn">Auburn</option></select></label>
+          <label class="avatar-photo-upload">Profile photo
+            <input id="avatarPhoto" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="avatarPhotoHelp">
+            <small id="avatarPhotoHelp">Your photo will be cropped to a small square and shown on your avatar's face.</small>
+          </label>
+          <img id="avatarPhotoPreview" class="avatar-photo-preview hidden" alt="Your selected avatar face photo">
+          <button type="button" id="avatarPhotoRemove" class="secondary">Remove photo</button>
           <button type="submit" class="primary">Save avatar & name</button>
         </form>
       </div>
@@ -84,27 +90,28 @@
       <div class="salon-sheet">
         <div class="salon-header"><div><span class="salon-eyebrow">THE GAMES CLUB · PLAY FOR FUN</span><h2 id="salonTitle">GAMES SALON</h2></div><button type="button" id="salonClose" class="salon-close" aria-label="Close game">✕ Back to clubhouse</button></div>
         <section id="salon-slots" class="salon-game hidden">
-          <p class="salon-help">Four arcade cabinets, unlimited free spins. Match three symbols for a jackpot, or two for a small score. No wagering or purchases.</p>
+          <p class="salon-help">Each spin uses 5 Sana Coins from your shared club balance. Match symbols to win Sana Coins. These are play-only tokens with no cash value.</p>
           <div id="slotReels" class="slot-reels"></div><div class="salon-result" id="slotResult">Spin the reels!</div>
-          <strong id="slotScore" class="salon-score">Fun score: 0</strong><button id="slotSpin" type="button" class="salon-action">🎰 SPIN THE REELS</button>
+          <strong id="slotScore" class="salon-score">Sana balance: 500</strong><button id="slotSpin" type="button" class="salon-action">🎰 SPIN THE REELS</button>
         </section>
         <section id="salon-blackjack" class="salon-game hidden">
-          <p class="salon-help">Blackjack against the house. Hit, stand, or deal again. Dealer stands on 17. No money involved.</p>
+          <p class="salon-help">Blackjack against the house. Hit, stand, or deal again. Dealer stands on 17. Play with other club members at one dealer table. Join the next round for 10 Sana Coins. No real money.</p>
+          <div id="blackjackPlayers" class="blackjack-players" aria-label="Players sharing the blackjack table"></div>
           <div class="card-board"><h3 id="blackjackDealerScore">Dealer</h3><div id="blackjackDealer" class="card-row"></div>
             <div class="salon-result" id="blackjackMessage">Deal to begin.</div>
             <h3 id="blackjackYourScore">Your hand</h3><div id="blackjackHand" class="card-row"></div>
           </div>
-          <div class="salon-actions"><button id="blackjackDeal" class="salon-action">Deal new hand</button><button id="blackjackHit" disabled>Hit</button><button id="blackjackStand" disabled>Stand</button></div>
+          <div class="salon-actions"><button id="blackjackDeal" class="salon-action">Deal shared round</button><button id="blackjackReady">Join next round · 10 Sana</button><button id="blackjackHit" disabled>Hit</button><button id="blackjackStand" disabled>Stand</button><span id="blackjackWallet" class="salon-score">500 Sana Coins</span></div>
         </section>
         <section id="salon-poker" class="salon-game hidden">
-          <div class="salon-score-row"><strong id="pokerPot">Pot: 0 Sana Coins</strong><span id="pokerStreet">WAITING</span><strong id="pokerTurn">Connecting…</strong></div>
-          <p class="salon-help">Live Texas Hold’em against other club members and computer players. Start with 1,000 play-only Sana Coins at this table. No purchases, cash-out or real-world value.</p>
+          <div class="salon-score-row"><strong id="pokerPot">Pot: 0 Sana Coins</strong><span id="pokerStreet">WAITING</span><strong id="pokerTurn">Connecting…</strong><span id="pokerWallet">🪙 Shared Sana Coins</span></div>
+          <p class="salon-help">Live Texas Hold’em against club members and computer players. Each new account starts with 500 shared Sana Coins, and a 200-coin buy-in moves from your wallet to your poker stack. No real-world value.</p>
           <div class="poker-felt">
             <div id="pokerCommunity" class="card-row poker-community"></div><div id="pokerPlayers" class="poker-players"></div>
           </div>
           <div id="pokerMessage" class="salon-result" role="status"></div>
           <div class="salon-actions poker-actions">
-            <button id="pokerDeal">Deal next hand</button><button id="pokerAddBot">Add computer player</button>
+            <button id="pokerDeal">Deal next hand</button><button id="pokerCashOut">Cash out to Sana wallet</button><button id="pokerAddBot">Add computer player</button>
             <button data-poker-action="fold">Fold</button><button id="pokerCheck" data-poker-action="check">Check</button>
             <label>Raise to <input id="pokerRaiseAmount" type="number" min="40" step="10" value="40"></label>
             <button data-poker-action="raise">Raise</button><button data-poker-action="allIn">All in</button>
