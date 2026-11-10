@@ -122,8 +122,8 @@ function renderPoker(){
  for(const b of document.querySelectorAll("[data-poker-action]"))b.disabled=!turn;
  $("pokerCheck").textContent=owe?"Call "+owe:"Check";
  $("pokerCheck").dataset.pokerAction=owe?"call":"check";
- $("pokerRaiseAmount").min=String(s.currentBet+20);
- $("pokerRaiseAmount").value=String(s.currentBet+40);
+ $("pokerRaiseAmount").min=String(s.currentBet+(s.minRaise||20));
+ $("pokerRaiseAmount").value=String(s.currentBet+(s.minRaise||20));
  $("pokerRaiseAmount").disabled=!turn;
  $("pokerDeal").disabled=s.phase==="playing";
  $("pokerAddBot").disabled=s.phase==="playing"||s.players.length>=4;
