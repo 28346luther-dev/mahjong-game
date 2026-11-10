@@ -1,0 +1,13 @@
+.mahjong-sessions{margin-top:15px;padding:13px 14px;border-radius:13px;background:#262435;border:1px solid #98785f}
+.mahjong-sessions-heading{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.mahjong-sessions-heading strong{color:#f2ce9c}
+.mahjong-sessions>p{font-size:12px;color:#d7c7b7}
+.session-games{display:flex;flex-direction:column;gap:7px}
+.session-entry{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#402f44;padding:9px 11px;border-radius:10px;border:1px solid #947056}
+.session-entry span{font-size:12px;min-width:0;color:#f3dfc2}
+.session-entry button{flex-shrink:0;font-size:11px;padding:7px 10px}
+.mahjong-queue{margin:4px 0 8px;padding:9px 14px;background:#443244;color:#f8e3c0;border:1px solid #b79068;border-radius:11px;font-size:12px}
+.mahjong-session-badge{font-size:11px;color:#f3d4a2;white-space:nowrap}
+#room .reaction-camera-preview:not(.hidden){position:fixed;right:clamp(14px,2vw,34px);top:clamp(86px,12vh,140px);width:min(300px,34vw);height:auto;aspect-ratio:4/3;z-index:4500;border:5px solid #e9c789;border-radius:18px;box-shadow:0 14px 55px #000a;background:#171923;transform:scaleX(-1);object-fit:cover}
+#room .reaction-clip-info:has(.reaction-camera-preview:not(.hidden)){border-color:#dcb46e}
+@media(max-width:700px){.session-entry{flex-wrap:wrap}.session-entry button{width:100%}#room .reaction-camera-preview:not(.hidden){top:72px;right:7px;width:min(190px,45vw);border-width:3px}}
