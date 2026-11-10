@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css"><link rel="stylesheet" href="/reaction-camera.css"><link rel="stylesheet" href="/mahjong-screen-fit.css"><link rel="stylesheet" href="/reaction-gallery-layout.css">
+<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css"><link rel="stylesheet" href="/reaction-camera.css"><link rel="stylesheet" href="/mahjong-screen-fit.css"><link rel="stylesheet" href="/reaction-clip.css">
 </head>
 <body>
 <div class="app">
@@ -82,14 +82,23 @@
     </section>
     <section id="room" class="hidden">
       <div id="reactionOverlay" class="reaction-overlay hidden" role="status" aria-live="polite">
-        <div class="reaction-topline"><span class="reaction-live-dot"></span><span id="reactionFeedLabel">LIVE TABLE REACTION</span><button id="reactionClose" type="button" aria-label="Close reaction camera">×</button></div>
-        <div class="reaction-video-wrap"><video id="reactionVideo" autoplay muted playsinline></video><div id="reactionFallback" class="reaction-fallback hidden">Camera unavailable — only players who opt in are shown.</div></div>
+        <div class="reaction-topline"><span class="reaction-live-dot"></span><span id="reactionFeedLabel">PLAYER REACTION</span><button id="reactionClose" type="button" aria-label="Close reaction video">×</button></div>
+        <div class="reaction-video-wrap"><video id="reactionVideo" autoplay muted playsinline></video><div id="reactionFallback" class="reaction-fallback hidden">A player has shared a short reaction clip.</div></div>
         <div class="reaction-caption"><strong id="reactionAction">PONG!</strong><span id="reactionName">Player</span></div>
       </div>
       <div class="roombar panel"><div><small>YOUR ROOM CODE</small><strong id="roomCode">------</strong></div>
-        <button id="reactionCameraGalleryToggle" type="button" class="secondary hidden" aria-expanded="false" aria-controls="reactionCameraGallery">📹 Cameras <span id="reactionCameraCount">0 live</span></button>
         <button id="copy" class="secondary">Copy invite code</button><button id="leave" class="ghost">Leave</button></div>
-      <div id="reactionCameraGallery" class="reaction-camera-gallery hidden" aria-label="Live camera feeds from consenting Mahjong players"></div>
+      <div id="reactionConsent" class="reaction-consent hidden" role="dialog" aria-labelledby="reactionConsentTitle" aria-describedby="reactionConsentDetail">
+        <div class="reaction-consent-icon">🎬</div>
+        <div class="reaction-consent-copy">
+          <strong id="reactionConsentTitle">Great move!</strong>
+          <span id="reactionConsentDetail">Would you like to record a three-second reaction for the other players?</span>
+        </div>
+        <div class="reaction-consent-actions">
+          <button id="reactionAccept" type="button" class="primary">Record reaction · 3 sec</button>
+          <button id="reactionSkip" type="button" class="secondary">Skip</button>
+        </div>
+      </div>
       <div class="table panel">
         <div class="tabletop">
           <div class="wall-counter"><span id="wallCount">Wall: --</span></div><div id="wallTiles" class="wall-tiles" aria-label="Remaining tile walls"></div>
@@ -109,12 +118,12 @@
           <div id="controls" class="controls"></div>
         </div>
       </div>
-      <div class="reaction-camera-controls panel">
-        <div class="reaction-camera-label"><strong>📷 Reaction camera</strong><span>Optional · Your camera is off by default. While enabled, tablemates can view your live camera; a successful Pong, Chow or Mahjong can briefly replay the preceding seconds in their browsers. Open the Cameras panel to see other players who have opted in; claim reactions still pop up in the top-right. Temporary replay clips stay in each browser only.</span></div>
-        <video id="reactionCameraPreview" class="reaction-camera-preview hidden" autoplay muted playsinline aria-label="Your camera preview"></video>
-        <button type="button" id="reactionCameraToggle" class="secondary" aria-pressed="false">Enable reaction camera</button>
-        <button type="button" id="reactionCameraRetry" class="secondary">Retry cameras</button>
-        <small id="reactionCameraNote" role="status">Your camera is off.</small>
+      <div class="reaction-camera-controls panel reaction-clip-info">
+        <div class="reaction-camera-label"><strong>🎬 Optional three-second reactions</strong>
+          <span>After you Pong, Chow or Mahjong, choose whether to record a reaction. Your camera is only used if you agree, records for three seconds, then turns off. The clip is sent to the other players at your table, not saved on the server.</span>
+        </div>
+        <video id="reactionCameraPreview" class="reaction-camera-preview hidden" autoplay muted playsinline aria-label="Recording your reaction"></video>
+        <small id="reactionCameraNote" role="status">Camera off. No live video feeds.</small>
       </div>
       <p id="roomError" class="error"></p>
     </section>
