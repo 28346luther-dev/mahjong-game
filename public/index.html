@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css"><link rel="stylesheet" href="/reaction-camera.css"><link rel="stylesheet" href="/mahjong-screen-fit.css"><link rel="stylesheet" href="/reaction-clip.css">
+<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css"><link rel="stylesheet" href="/reaction-camera.css"><link rel="stylesheet" href="/mahjong-screen-fit.css"><link rel="stylesheet" href="/reaction-clip.css"><link rel="stylesheet" href="/salon-games.css">
 </head>
 <body>
 <div class="app">
@@ -53,7 +53,7 @@
           <h3>CLUB NOTICEBOARD</h3>
           <p>Welcome to The Games Club! Enjoy the furnished lounge, bar and karaoke stage.</p>
           <p><strong>🀄 Mahjong:</strong> Playable now — invite friends to a private table.</p>
-          <p><strong>♠ Poker · Blackjack · Slots:</strong> Rooms open for socialising; games coming soon.</p>
+          <p><strong>♠ Poker:</strong> Multiplayer Texas Hold’em against people and computer players, Sana Coins for fun only.</p><p><strong>🃏 Blackjack & slots:</strong> Playable arcade-style games, no real money.</p>
           <p><strong>🎤 Karaoke:</strong> Enter the stage area and turn on your microphone to speak with visitors in the main hall. Background music is currently off while we choose a better licensed soundtrack. There is no karaoke song catalogue yet.</p>
           <p>Be kind and respect other players. Do not share private information in public chat.</p>
         </aside>
@@ -65,10 +65,51 @@
         <div class="club-legend"><span>Move: WASD / arrow keys</span><span>Look: click scene, move mouse · Esc releases</span><span>Interact: E · Sit / Stand: E · Chat: Enter</span></div>
         <div id="clubToast" class="club-toast hidden" role="status"><span></span><button id="clubToastClose" aria-label="Close message">×</button></div>
       </div>
+      <div class="avatar-editor panel" id="avatarEditor">
+        <div class="avatar-editor-heading"><div><strong>YOUR CLUB IDENTITY</strong><span>Customise how you appear to everybody in the 3D clubhouse.</span></div><span id="avatarSaveStatus" role="status"></span></div>
+        <form id="avatarForm" class="avatar-form">
+          <label>Display name<input id="avatarName" maxlength="22" minlength="2" autocomplete="nickname" placeholder="Your club name" required></label>
+          <label>Velvet outfit<select id="avatarColor"><option value="ruby">Ruby red</option><option value="plum">Royal plum</option><option value="emerald">Emerald</option><option value="navy">Midnight blue</option><option value="gold">Champagne gold</option></select></label>
+          <label>Hair colour<select id="avatarHair"><option value="dark">Dark</option><option value="brown">Brown</option><option value="blonde">Blonde</option><option value="auburn">Auburn</option></select></label>
+          <button type="submit" class="primary">Save avatar & name</button>
+        </form>
+      </div>
       <div class="club-footer">
         <span><strong>🀄 Mahjong</strong> <em>PLAYABLE NOW</em></span>
-        <span>♠ Poker · Blackjack <em>COMING SOON</em></span>
-        <span>🎰 Slots <em>COMING SOON</em></span><span>🎤 Karaoke · 💬 Clubhouse chat · 🎙 Opt-in voice</span>
+        <span>♠ Hold’em · Blackjack <em>PLAYABLE</em></span>
+        <span>🎰 Slots <em>PLAYABLE · FREE</em></span><span>🎤 Karaoke · 💬 Clubhouse chat · 🎙 Opt-in voice</span>
+      </div>
+    </section>
+    <section id="salonGame" class="salon-modal hidden" role="dialog" aria-modal="true" aria-labelledby="salonTitle">
+      <div class="salon-sheet">
+        <div class="salon-header"><div><span class="salon-eyebrow">THE GAMES CLUB · PLAY FOR FUN</span><h2 id="salonTitle">GAMES SALON</h2></div><button type="button" id="salonClose" class="salon-close" aria-label="Close game">✕ Back to clubhouse</button></div>
+        <section id="salon-slots" class="salon-game hidden">
+          <p class="salon-help">Four arcade cabinets, unlimited free spins. Match three symbols for a jackpot, or two for a small score. No wagering or purchases.</p>
+          <div id="slotReels" class="slot-reels"></div><div class="salon-result" id="slotResult">Spin the reels!</div>
+          <strong id="slotScore" class="salon-score">Fun score: 0</strong><button id="slotSpin" type="button" class="salon-action">🎰 SPIN THE REELS</button>
+        </section>
+        <section id="salon-blackjack" class="salon-game hidden">
+          <p class="salon-help">Blackjack against the house. Hit, stand, or deal again. Dealer stands on 17. No money involved.</p>
+          <div class="card-board"><h3 id="blackjackDealerScore">Dealer</h3><div id="blackjackDealer" class="card-row"></div>
+            <div class="salon-result" id="blackjackMessage">Deal to begin.</div>
+            <h3 id="blackjackYourScore">Your hand</h3><div id="blackjackHand" class="card-row"></div>
+          </div>
+          <div class="salon-actions"><button id="blackjackDeal" class="salon-action">Deal new hand</button><button id="blackjackHit" disabled>Hit</button><button id="blackjackStand" disabled>Stand</button></div>
+        </section>
+        <section id="salon-poker" class="salon-game hidden">
+          <div class="salon-score-row"><strong id="pokerPot">Pot: 0 Sana Coins</strong><span id="pokerStreet">WAITING</span><strong id="pokerTurn">Connecting…</strong></div>
+          <p class="salon-help">Live Texas Hold’em against other club members and computer players. Start with 1,000 play-only Sana Coins at this table. No purchases, cash-out or real-world value.</p>
+          <div class="poker-felt">
+            <div id="pokerCommunity" class="card-row poker-community"></div><div id="pokerPlayers" class="poker-players"></div>
+          </div>
+          <div id="pokerMessage" class="salon-result" role="status"></div>
+          <div class="salon-actions poker-actions">
+            <button id="pokerDeal">Deal next hand</button><button id="pokerAddBot">Add computer player</button>
+            <button data-poker-action="fold">Fold</button><button id="pokerCheck" data-poker-action="check">Check</button>
+            <label>Raise to <input id="pokerRaiseAmount" type="number" min="40" step="10" value="40"></label>
+            <button data-poker-action="raise">Raise</button><button data-poker-action="allIn">All in</button>
+          </div>
+        </section>
       </div>
     </section>
     <button id="clubReturn" class="club-return hidden" type="button">← Back to clubhouse</button>
@@ -134,5 +175,7 @@
 <script src="/reaction-camera.js"></script>
 <script src="/app.js"></script>
 <script src="/account.js"></script>
+<script type="module" src="/salon-games.js"></script>
+<script type="module" src="/avatar-editor.js"></script>
 <script type="module" src="/clubhouse.js"></script>
 </body></html>
