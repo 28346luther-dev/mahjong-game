@@ -89,7 +89,7 @@ function publicState(s,viewer) {
   return {
     code:s.code,phase:s.phase,ruleset:"Hong Kong-style",players:s.players.map((p,i)=>({
       id:p.id,name:p.name,seat:SEATS[i],ready:p.ready,
-      hand:i===me?p.hand.map(t=>({...t})):undefined,handCount:p.hand.length,
+      hand:i===me?p.hand.map(t=>({...t})):undefined,handCount:p.hand.length+(s.pendingDraw&&s.turn===i?1:0),
       melds:p.melds.map(m=>({...m,tiles:m.tiles.map(t=>({...t}))})),discards:p.discards.map(t=>({...t}))
     })),
     wallCount:s.wall.length,turn:s.turn,dealer:s.dealer,lastDiscard:s.lastDiscard,
@@ -269,8 +269,8 @@ export class MahjongRoom {
        ["offer","answer","ice"].includes(msg.kind)&&msg.payload&&
        JSON.stringify(msg.payload).length<22000&&this.sockets.has(msg.to)&&
        (this.cameras.has(playerId)||this.cameras.has(msg.to))){
-      const now=Date.now();if(now-(this.cameraSignals.get(playerId)||0)<15)return;
-      this.cameraSignals.set(playerId,now);
+      // Offer/answer and ICE candidates must arrive intact; dropping closely spaced
+      // ICE candidates can prevent peer connections from completing.
       this.send(msg.to,{type:"cameraSignal",from:playerId,kind:msg.kind,payload:msg.payload});
       return;
     }
