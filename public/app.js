@@ -6,10 +6,21 @@ async function post(path,data){const r=await fetch(path,{method:"POST",headers:{
 function showError(id,msg){$(id).textContent=msg||"";}
 function connect(code,id){roomCode=code;playerId=id;$("home").classList.add("hidden");$("room").classList.remove("hidden");$("roomCode").textContent=code;
  const scheme=location.protocol==="https:"?"wss:":"ws:";ws=new WebSocket(`${scheme}//${location.host}/ws?code=${code}&player=${id}`);
- ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==="state"){state=m.state;selected=state.players[state.myIndex]?.hand?.some(t=>t.key===selected)?selected:null;render();}if(m.type==="error")showError("roomError",m.message);};
- ws.onclose=()=>showError("roomError","Connection closed. Refresh to reconnect if needed.");
+ window.MahjongReactionCam?.attach(ws,id,code);
+ ws.onmessage=e=>{
+   const m=JSON.parse(e.data);
+   if(m.type==="state"){
+     const initialState=!state;
+     state=m.state;selected=state.players[state.myIndex]?.hand?.some(t=>t.key===selected)?selected:null;
+     render();
+     if(!initialState)window.MahjongReactionCam?.reaction(state.reaction);
+   }
+   else if(m.type==="error")showError("roomError",m.message);
+   else window.MahjongReactionCam?.handle(m);
+ };
+ ws.onclose=()=>{window.MahjongReactionCam?.stop();showError("roomError","Connection closed. Refresh to reconnect if needed.");};
  if(window.MahjongClubhouse)window.MahjongClubhouse.disconnect=()=>{
-   if(ws){ws.close();ws=null;}state=null;selected=null;playerId=null;roomCode=null;
+   window.MahjongReactionCam?.stop();if(ws){ws.close();ws=null;}state=null;selected=null;playerId=null;roomCode=null;
    showError("roomError","");
  };
 }
@@ -29,6 +40,13 @@ function render(){
  $("discards").innerHTML=MahjongVisuals.discards(state);
  $("melds").innerHTML=MahjongVisuals.melds(state);
  const me=state.players[state.myIndex],hand=me?.hand||[];
+ const drawn=state.pendingDraw;
+ const drawer=$("drawnTileArea");
+ drawer.classList.toggle("hidden",!drawn);
+ if(drawn){
+   $("drawnTileFace").innerHTML=MahjongVisuals.face(drawn);
+   $("drawnTileName").textContent=drawn.name;
+ }
  $("hand").innerHTML=hand.map(t=>`<button class="tile ${selected===t.key?'selected':''}" data-key="${t.key}" title="${t.name}">${MahjongVisuals.face(t)}</button>`).join("");
  $("hand").querySelectorAll("button").forEach(b=>b.onclick=()=>{selected=selected===b.dataset.key?null:b.dataset.key;render();});
  const controls=$("controls");controls.innerHTML="";
@@ -40,8 +58,14 @@ function render(){
    note(`${state.players.length}/4 players · Start with at least 2 for testing`);
  }else if(state.phase==="playing"&&state.turn===state.myIndex){
    if(state.selfWin)add("Mahjong! (self-draw)","selfWin","primary");
-   if(hand.length%3===2){if(selected)add("Discard selected tile","discard","primary",{tileKey:selected});else note("Select a tile to discard.");}
-   else if(hand.length%3===1)add("Draw tile","draw");
+   if(state.pendingDraw){
+     add("Keep drawn tile","keepDrawn","secondary");
+     add("Discard drawn tile","discardDrawn","primary");
+     note("Choose what to do with your drawn tile before it enters your hand.");
+   }else if(hand.length%3===2){
+     if(selected)add("Discard selected tile","discard","primary",{tileKey:selected});
+     else note("Select a tile to discard.");
+   }else if(hand.length%3===1)add("Draw tile","draw");
  }else if(state.phase==="claim"){
    if(state.claimSubmitted){note(`Your response is in. Waiting for: ${state.claimWaiting.join(", ")||"the table"}.`);}
    else if((state.claimOptions||[]).length){

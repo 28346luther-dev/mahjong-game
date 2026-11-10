@@ -89,7 +89,7 @@ function publicState(s,viewer) {
   return {
     code:s.code,phase:s.phase,ruleset:"Hong Kong-style",players:s.players.map((p,i)=>({
       id:p.id,name:p.name,seat:SEATS[i],ready:p.ready,
-      hand:i===me?p.hand.map(t=>({...t})):undefined,handCount:p.hand.length,
+      hand:i===me?p.hand.map(t=>({...t})):undefined,handCount:p.hand.length+(s.pendingDraw&&s.turn===i?1:0),
       melds:p.melds.map(m=>({...m,tiles:m.tiles.map(t=>({...t}))})),discards:p.discards.map(t=>({...t}))
     })),
     wallCount:s.wall.length,turn:s.turn,dealer:s.dealer,lastDiscard:s.lastDiscard,
@@ -97,7 +97,9 @@ function publicState(s,viewer) {
     claimOptions:me>=0&&s.phase==="claim"&&!submitted?getClaimOptions(s,me):[],
     chowChoices:me>=0&&s.phase==="claim"&&!submitted?getChowChoices(s.players[me].hand,s.lastDiscard?.tile):[],
     claimSubmitted:submitted,claimWaiting:waiting,
-    selfWin:me>=0&&s.phase==="playing"&&s.turn===me&&canWin(s.players[me].hand,s.players[me].melds)
+    pendingDraw:me>=0&&s.turn===me&&s.pendingDraw?{...s.pendingDraw}:null,
+    reaction:s.lastReaction||null,
+    selfWin:me>=0&&s.phase==="playing"&&s.turn===me&&canWin(s.pendingDraw&&s.turn===me?[...s.players[me].hand,s.pendingDraw]:s.players[me].hand,s.players[me].melds)
   };
 }
 
@@ -206,13 +208,13 @@ export default {
 };
 
 export class MahjongRoom {
-  constructor(ctx){this.ctx=ctx;this.state=null;this.sockets=new Map();}
+  constructor(ctx){this.ctx=ctx;this.state=null;this.sockets=new Map();this.cameras=new Set();this.cameraSignals=new Map();}
   async fetch(request){
     const url=new URL(request.url);
     if(url.pathname==="/init"&&request.method==="POST"){
       if(this.state||await this.ctx.storage.get("state"))return Response.json({error:"Room already exists"},{status:409});
       const {name}=await request.json(),player={id:uid(),name,hand:[],melds:[],discards:[],ready:false};
-      this.state={code:"",players:[player],wall:[],turn:0,dealer:0,phase:"lobby",lastDiscard:null,claimWindow:null,message:`${name} created the room.`,winner:null};
+      this.state={code:"",players:[player],wall:[],turn:0,dealer:0,phase:"lobby",pendingDraw:null,lastReaction:null,claimWindow:null,message:`${name} created the room.`,winner:null};
       await this.save();return Response.json({playerId:player.id});
     }
     if(url.pathname==="/join"&&request.method==="POST"){
@@ -228,8 +230,10 @@ export class MahjongRoom {
       const pair=new WebSocketPair(),client=pair[0],server=pair[1];server.accept();
       const old=this.sockets.get(playerId);try{old?.close(4001,"Reconnected elsewhere");}catch{}
       this.sockets.set(playerId,server);server.addEventListener("message",e=>this.onMessage(playerId,e.data));
-      server.addEventListener("close",()=>{if(this.sockets.get(playerId)===server)this.sockets.delete(playerId);});
-      server.send(JSON.stringify({type:"state",state:publicState(this.state,playerId)}));return new Response(null,{status:101,webSocket:client});
+      server.addEventListener("close",()=>{if(this.sockets.get(playerId)===server){this.sockets.delete(playerId);this.disableCamera(playerId);}});
+      server.send(JSON.stringify({type:"state",state:publicState(this.state,playerId)}));
+      server.send(JSON.stringify({type:"cameraPeers",players:this.state.players.map(p=>({id:p.id,name:p.name,enabled:this.cameras.has(p.id)}))}));
+      return new Response(null,{status:101,webSocket:client});
     }
     return new Response("Not found",{status:404});
   }
@@ -241,22 +245,56 @@ export class MahjongRoom {
     for(const id of s.claimWindow.eligible)if(!s.claimWindow.responses[id])s.claimWindow.responses[id]={action:"pass"};
     this.resolveClaimWindow();await this.save();this.broadcast();
   }
+  disableCamera(playerId){
+    if(this.cameras.delete(playerId))this.broadcastCamera({type:"cameraStatus",id:playerId,enabled:false});
+    this.cameraSignals.delete(playerId);
+  }
+  broadcastCamera(msg){for(const ws of this.sockets.values()){try{ws.send(JSON.stringify(msg));}catch{}}}
   async onMessage(playerId,raw){
     await this.load();const s=this.state;if(!s)return;
+    if(typeof raw!=="string"||raw.length>30000)return;
     let msg;try{msg=JSON.parse(raw);}catch{return;}
+    if(msg.action==="cameraStatus"&&typeof msg.enabled==="boolean"){
+      if(msg.enabled)this.cameras.add(playerId);
+      else this.disableCamera(playerId);
+      if(msg.enabled)this.broadcastCamera({type:"cameraStatus",id:playerId,enabled:true});
+      return;
+    }
+    if(msg.action==="cameraSubscribe"&&typeof msg.to==="string"){
+      if(this.cameras.has(msg.to)&&this.sockets.has(msg.to)&&msg.to!==playerId)
+        this.send(msg.to,{type:"cameraSubscribe",from:playerId});
+      return;
+    }
+    if(msg.action==="cameraSignal"&&typeof msg.to==="string"&&
+       ["offer","answer","ice"].includes(msg.kind)&&msg.payload&&
+       JSON.stringify(msg.payload).length<22000&&this.sockets.has(msg.to)&&
+       (this.cameras.has(playerId)||this.cameras.has(msg.to))){
+      // Offer/answer and ICE candidates must arrive intact; dropping closely spaced
+      // ICE candidates can prevent peer connections from completing.
+      this.send(msg.to,{type:"cameraSignal",from:playerId,kind:msg.kind,payload:msg.payload});
+      return;
+    }
     const idx=s.players.findIndex(p=>p.id===playerId);if(idx<0)return;const p=s.players[idx];
     if(msg.action==="ready"&&s.phase==="lobby"){
       p.ready=!p.ready;s.message=`${p.name} ${p.ready?"is ready":"is not ready"}.`;
       if(s.players.length===4&&s.players.every(x=>x.ready))this.startGame();
     }else if(msg.action==="start"&&s.phase==="lobby"&&idx===0&&s.players.length>=2){this.startGame();}
-    else if(msg.action==="discard"&&s.phase==="playing"&&s.turn===idx&&p.hand.length%3===2&&p.hand.some(t=>t.key===msg.tileKey)){
+    else if(msg.action==="discard"&&s.phase==="playing"&&s.turn===idx&&!s.pendingDraw&&p.hand.length%3===2&&p.hand.some(t=>t.key===msg.tileKey)){
       const at=p.hand.findIndex(t=>t.key===msg.tileKey),tile=p.hand.splice(at,1)[0];p.discards.push(tile);
       s.lastDiscard={tile,from:idx};s.phase="claim";await this.openClaimWindow();
       if(s.phase==="claim")s.message=`${p.name} discarded ${tile.name}. Claim window: Mahjong, then Kong/Pong, then Chow.`;
-    }else if(msg.action==="draw"&&s.phase==="playing"&&s.turn===idx&&p.hand.length%3===1){
-      this.drawFor(p);if(s.phase!=="finished")s.message=`${p.name} drew a tile.`;
-    }else if(msg.action==="selfWin"&&s.phase==="playing"&&s.turn===idx&&canWin(p.hand,p.melds)){
+    }else if(msg.action==="draw"&&s.phase==="playing"&&s.turn===idx&&!s.pendingDraw&&p.hand.length%3===1){
+      this.drawFor(p);if(s.phase!=="finished")s.message=`${p.name} drew a tile and is choosing whether to keep it.`;
+    }else if(msg.action==="keepDrawn"&&s.phase==="playing"&&s.turn===idx&&s.pendingDraw){
+      p.hand.push(s.pendingDraw);s.pendingDraw=null;s.message=`${p.name} kept the drawn tile and must discard one tile.`;
+    }else if(msg.action==="discardDrawn"&&s.phase==="playing"&&s.turn===idx&&s.pendingDraw){
+      const tile=s.pendingDraw;s.pendingDraw=null;p.discards.push(tile);
+      s.lastDiscard={tile,from:idx};s.phase="claim";await this.openClaimWindow();
+      if(s.phase==="claim")s.message=`${p.name} discarded the drawn ${tile.name}. Claim window open.`;
+    }else if(msg.action==="selfWin"&&s.phase==="playing"&&s.turn===idx&&canWin(s.pendingDraw?[...p.hand,s.pendingDraw]:p.hand,p.melds)){
+      if(s.pendingDraw){p.hand.push(s.pendingDraw);s.pendingDraw=null;}
       s.phase="finished";s.winner=playerId;s.message=`${p.name} wins by self-draw!`;
+      s.lastReaction={id:uid(),playerId,playerName:p.name,claim:"mahjong",at:Date.now()};
     }else if((msg.action==="pass"||["pong","kong","chow","mahjong"].includes(msg.action))&&s.phase==="claim"&&s.claimWindow){
       const w=s.claimWindow,options=w.eligible.includes(playerId)?getClaimOptions(s,idx):[];
       if(!w.eligible.includes(playerId)||w.responses[playerId]){this.send(playerId,{type:"error",message:"You do not have an active claim to respond to."});return;}
@@ -294,7 +332,7 @@ export class MahjongRoom {
     const [winnerId,response]=chosen,idx=s.players.findIndex(p=>p.id===winnerId),p=s.players[idx];
     const source=s.players[from];
     if(response.action==="mahjong"){
-      source.discards.pop();p.hand.push(discard);s.lastDiscard=null;s.claimWindow=null;s.winner=winnerId;s.phase="finished";s.message=`${p.name} wins by Mahjong!`;return;
+      source.discards.pop();p.hand.push(discard);s.lastDiscard=null;s.claimWindow=null;s.winner=winnerId;s.phase="finished";s.message=`${p.name} wins by Mahjong!`;s.lastReaction={id:uid(),playerId:winnerId,playerName:p.name,claim:"mahjong",at:Date.now()};return;
     }
     if(response.action==="chow"){
       const chosenTiles=response.tiles.map(key=>p.hand.find(t=>t.key===key));
@@ -308,15 +346,16 @@ export class MahjongRoom {
       p.melds.push({type:response.action,tiles:[discard,...matches]});
     }
     source.discards.pop();s.lastDiscard=null;s.claimWindow=null;s.turn=idx;s.phase="playing";
+    if(response.action==="pong"||response.action==="chow")s.lastReaction={id:uid(),playerId:winnerId,playerName:p.name,claim:response.action,at:Date.now()};
     if(response.action==="kong"){this.drawFor(p);if(s.phase!=="finished")s.message=`${p.name} called Kong and drew a replacement tile.`;}
     else s.message=`${p.name} won the claim with ${response.action.toUpperCase()}. They must discard.`;
   }
-  drawFor(p){if(!this.state.wall.length){this.state.phase="finished";this.state.message="The wall is empty. Draw game.";return;}p.hand.push(this.state.wall.pop());sortHand(p.hand);}
+  drawFor(p){if(!this.state.wall.length){this.state.phase="finished";this.state.message="The wall is empty. Draw game.";return;}this.state.pendingDraw=this.state.wall.pop();}
   startGame(){
     const s=this.state;s.wall=tileSet();
     for(const p of s.players){p.hand=[];p.melds=[];p.discards=[];p.ready=false;for(let i=0;i<13;i++)p.hand.push(s.wall.pop());sortHand(p.hand);}
     s.players[s.dealer].hand.push(s.wall.pop());sortHand(s.players[s.dealer].hand);
-    s.turn=s.dealer;s.phase="playing";s.lastDiscard=null;s.claimWindow=null;s.winner=null;s.message="Game started. East begins.";
+    s.turn=s.dealer;s.phase="playing";s.lastDiscard=null;s.pendingDraw=null;s.lastReaction=null;s.claimWindow=null;s.winner=null;s.message="Game started. East begins.";
   }
   send(id,obj){const ws=this.sockets.get(id);if(ws)try{ws.send(JSON.stringify(obj));}catch{}}
 }
