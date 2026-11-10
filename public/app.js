@@ -10,8 +10,10 @@ function connect(code,id){roomCode=code;playerId=id;$("home").classList.add("hid
  ws.onmessage=e=>{
    const m=JSON.parse(e.data);
    if(m.type==="state"){
+     const initialState=!state;
      state=m.state;selected=state.players[state.myIndex]?.hand?.some(t=>t.key===selected)?selected:null;
-     render();window.MahjongReactionCam?.reaction(state.reaction);
+     render();
+     if(!initialState)window.MahjongReactionCam?.reaction(state.reaction);
    }
    else if(m.type==="error")showError("roomError",m.message);
    else window.MahjongReactionCam?.handle(m);
