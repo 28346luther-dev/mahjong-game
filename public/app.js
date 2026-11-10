@@ -62,6 +62,27 @@ function send(action,extra={}){
  if(ws&&ws.readyState===WebSocket.OPEN){ws.send(JSON.stringify({action,...extra}));return;}
  showError("roomError","Reconnecting to the table — please try that move again in a moment.");
 }
+async function refreshSessions(){
+ const holder=$("sessionGames");if(!holder)return;
+ try{
+  const response=await fetch("/api/sessions",{credentials:"same-origin",cache:"no-store"});
+  if(!response.ok)throw Error("Session listing is unavailable");
+  const {sessions=[]}=await response.json();holder.replaceChildren();
+  if(!sessions.length){holder.textContent="No active tables yet. Create a room to start the first game.";return;}
+  for(const room of sessions){
+   const item=document.createElement("div");item.className="session-entry";
+   const info=document.createElement("span");
+   info.textContent=room.code+" · "+({lobby:"Waiting",playing:"Playing",claim:"Claim window",finished:"Round finished"}[room.phase]||room.phase)+
+    " · "+room.players+"/4 seated · "+room.spectators+" watching";
+   const btn=document.createElement("button");btn.className="secondary";
+   btn.textContent=room.phase==="lobby"&&room.players<4?"Join table":"Spectate / queue";
+   btn.onclick=()=>{$("joinCode").value=room.code;$("join").click();};
+   item.append(info,btn);holder.append(item);
+  }
+ }catch(error){holder.textContent=error.message;}
+}
+$("refreshSessions")?.addEventListener("click",refreshSessions);
+refreshSessions();
 $("create").onclick=async()=>{try{showError("homeError","");const r=await post("/api/create",{name:$("name").value||"Player 1"});connect(r.code,r.playerId);}catch(e){showError("homeError",e.message);}};
 $("join").onclick=async()=>{try{showError("homeError","");const code=$("joinCode").value.toUpperCase();const r=await post("/api/join",{code,name:$("name").value||"Player"});connect(code,r.playerId);}catch(e){showError("homeError",e.message);}};
 $("joinCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
