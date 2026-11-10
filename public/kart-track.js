@@ -2,7 +2,9 @@
  * The route is a closed continuous spline, not a generic ellipse.
  * No checkpoint gates, index-based user interactions or floating track props.
  */
-export const ROAD_HALF_WIDTH=3.7;
+export const ROAD_HALF_WIDTH=4.2;
+export const RUNOFF_WIDTH=7.5;
+export const TRACK_SCALE=1.65;
 export const PIT_HALF_WIDTH=2.45;
 export const ROAD_POINTS=[
  [-47,-22,0.8],[-30,-22,0.8],[-10,-22,0.9],[5,-22,0.9],
@@ -11,11 +13,11 @@ export const ROAD_POINTS=[
  [33,18,2.65],[21,13,2.1],[10,25,1.45],[-2,37,1.05],
  [-20,36,.65],[-31,27,.6],[-39,19,.95],[-53,30,1.25],
  [-65,28,1.45],[-72,12,1.55],[-67,-7,1.2],[-57,-18,.85]
-];
+].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y*1.35]);
 export const PIT_POINTS=[
  [-46,-22,.8],[-40,-16,.8],[-29,-10,.8],[-12,-9,.8],
  [3,-9,.82],[11,-12,.85],[19,-22,1.05]
-];
+].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y*1.35]);
 export const TRACK_SAMPLES=480;
 function point(p){return {x:p[0],z:p[1],y:p[2]};}
 function catmull(a,b,c,d,t){

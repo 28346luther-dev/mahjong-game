@@ -17,6 +17,25 @@ export class ClubSocial {
   return this.ctx.getWebSockets().map(ws=>this.socketInfo(ws)).filter(Boolean).map(p=>({id:p.id,name:p.name,x:p.x,z:p.z,yaw:p.yaw,zone:p.zone,voice:p.voice,color:p.color||"ruby",hair:p.hair||"dark",photo:p.photo||""}));
  }
  async fetch(request){
+  const url=new URL(request.url);
+  if(url.pathname==="/sessions"){
+   const current=await this.ctx.storage.get("mahjong-sessions")||{};
+   const now=Date.now();
+   const sessions=Object.entries(current).filter(([,v])=>now-v.updatedAt<12*60*60*1000)
+    .map(([code,v])=>({code,phase:v.phase,round:v.round||0,players:v.players,spectators:v.spectators,updatedAt:v.updatedAt}))
+    .sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,30);
+   return Response.json({sessions},{headers:{"cache-control":"no-store"}});
+  }
+  if(url.pathname==="/sessions/update"&&request.method==="POST"){
+   const b=await request.json(),code=String(b.code||"");
+   if(!/^[A-Z0-9]{6}$/.test(code))return new Response("Invalid code",{status:400});
+   const sessions=await this.ctx.storage.get("mahjong-sessions")||{};
+   sessions[code]={phase:String(b.phase||"lobby"),round:Number(b.round)||0,
+     players:Number(b.players)||0,spectators:Number(b.spectators)||0,updatedAt:Date.now()};
+   for(const [key,v] of Object.entries(sessions))if(Date.now()-v.updatedAt>12*60*60*1000)delete sessions[key];
+   await this.ctx.storage.put("mahjong-sessions",sessions);
+   return Response.json({ok:true});
+  }
   if(request.headers.get("Upgrade")?.toLowerCase()!=="websocket")return new Response("WebSocket required",{status:426});
   const name=clean(request.headers.get("x-club-name"),25)||"Guest";
   const userId=clean(request.headers.get("x-club-user"),100);

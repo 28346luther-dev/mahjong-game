@@ -86,10 +86,17 @@ function sortHand(hand) {
 }
 function publicState(s,viewer) {
   const me=s.players.findIndex(p=>p.id===viewer),window=s.claimWindow;
+  const spectators=s.spectators||[];
+  const spectator=spectators.find(p=>p.id===viewer);
   const submitted=!!(window&&window.responses[viewer]);
   const waiting=window?window.eligible.filter(id=>!window.responses[id]).map(id=>s.players.find(p=>p.id===id)?.name||"Player"):[];
   return {
-    code:s.code,phase:s.phase,ruleset:"Hong Kong-style",players:s.players.map((p,i)=>({
+    code:s.code,phase:s.phase,ruleset:"Hong Kong-style",
+    spectator:!!spectator,spectatorQueue:spectators.map(p=>({id:p.id,name:p.name,ready:!!p.ready})),
+    queuePosition:spectator?.ready?spectators.filter(p=>p.ready).findIndex(p=>p.id===viewer)+1:0,
+    nextRoundReady:s.phase==="finished"?s.players.filter(p=>p.ready).length+spectators.filter(p=>p.ready).length:0,
+    round:s.round||0,
+    players:s.players.map((p,i)=>({
       id:p.id,name:p.name,seat:SEATS[i],ready:p.ready,
       hand:i===me?p.hand.map(t=>({...t})):undefined,handCount:p.hand.length+(s.pendingDraw&&s.turn===i?1:0),
       melds:p.melds.map(m=>({...m,tiles:m.tiles.map(t=>({...t}))})),discards:p.discards.map(t=>({...t}))
@@ -266,9 +273,12 @@ export default {
         }
         return Response.json({iceServers:defaultServers,relayAvailable:false},{headers:{"cache-control":"no-store"}});
       }
+      if(url.pathname==="/api/sessions"&&request.method==="GET"){
+        return env.CLUB.get(env.CLUB.idFromName("main-lobby")).fetch("https://club/sessions");
+      }
       if(url.pathname==="/api/create"&&request.method==="POST"){
         const body=await request.json(),roomCode=code(),stub=env.ROOMS.get(env.ROOMS.idFromName(roomCode));
-        const res=await stub.fetch("https://room/init",{method:"POST",body:JSON.stringify({name:String(body.name||"Player 1").slice(0,20)})});
+        const res=await stub.fetch("https://room/init",{method:"POST",body:JSON.stringify({name:String(body.name||"Player 1").slice(0,20),code:roomCode})});
         return new Response(JSON.stringify({...(await res.json()),code:roomCode}),{headers:{"content-type":"application/json"}});
       }
       if(url.pathname==="/api/join"&&request.method==="POST"){
@@ -328,8 +338,8 @@ export default {
 };
 
 export class MahjongRoom {
-  constructor(ctx){
-    this.ctx=ctx;this.state=null;this.sockets=new Map();this.reactionTransfers=new Map();this.submittedReactions=new Set();
+  constructor(ctx,env){
+    this.ctx=ctx;this.env=env;this.state=null;this.sockets=new Map();this.reactionTransfers=new Map();this.submittedReactions=new Set();
     // Hibernatable WebSockets are reattached to a new Durable Object instance on wake.
     for(const ws of ctx.getWebSockets?.()||[]){
       const attachment=ws.deserializeAttachment?.();
@@ -345,20 +355,29 @@ export class MahjongRoom {
     const url=new URL(request.url);
     if(url.pathname==="/init"&&request.method==="POST"){
       if(this.state||await this.ctx.storage.get("state"))return Response.json({error:"Room already exists"},{status:409});
-      const {name}=await request.json(),player={id:uid(),name,hand:[],melds:[],discards:[],ready:false};
-      this.state={code:"",players:[player],wall:[],turn:0,dealer:0,phase:"lobby",pendingDraw:null,lastReaction:null,claimWindow:null,message:`${name} created the room.`,winner:null};
+      const {name,code:roomCode}=await request.json(),player={id:uid(),name,hand:[],melds:[],discards:[],ready:false};
+      this.state={code:roomCode||"",players:[player],spectators:[],round:0,wall:[],turn:0,dealer:0,phase:"lobby",pendingDraw:null,lastReaction:null,claimWindow:null,message:`${name} created the room.`,winner:null};
       await this.save();return Response.json({playerId:player.id});
     }
     if(url.pathname==="/join"&&request.method==="POST"){
       await this.load();if(!this.state)return Response.json({error:"Room not found."},{status:404});
-      if(this.state.phase!=="lobby")return Response.json({error:"This game has already started."},{status:409});
-      const {name}=await request.json();if(this.state.players.length>=4)return Response.json({error:"This room is full."},{status:409});
-      const p={id:uid(),name,hand:[],melds:[],discards:[],ready:false};this.state.players.push(p);this.state.message=`${name} joined the room.`;
-      await this.save();this.broadcast();return Response.json({playerId:p.id});
+      const {name}=await request.json();
+      const p={id:uid(),name:String(name||"Player").slice(0,20),hand:[],melds:[],discards:[],ready:false};
+      this.state.spectators||=[];
+      const spectate=this.state.phase!=="lobby"||this.state.players.length>=4;
+      if(spectate){
+        if(this.state.spectators.length>=24)return Response.json({error:"Spectator lobby is full."},{status:409});
+        this.state.spectators.push(p);
+        this.state.message=p.name+" joined as a spectator. They can queue for the next round.";
+      }else{
+        this.state.players.push(p);this.state.message=p.name+" joined the table.";
+      }
+      await this.save();this.broadcast();
+      return Response.json({playerId:p.id,spectator:spectate});
     }
     if(url.pathname==="/ws"){
       await this.load();if(!this.state)return new Response("Room not found",{status:404});
-      const playerId=url.searchParams.get("player");if(!this.state.players.some(p=>p.id===playerId))return new Response("Player not found",{status:404});
+      const playerId=url.searchParams.get("player");if(!this.state.players.some(p=>p.id===playerId)&&!(this.state.spectators||[]).some(p=>p.id===playerId))return new Response("Player not found",{status:404});
       const pair=new WebSocketPair(),client=pair[0],server=pair[1];
       const old=this.sockets.get(playerId);
       // A reconnection replaces the previous socket without removing the player.
@@ -388,7 +407,18 @@ export class MahjongRoom {
   }
   async webSocketError(ws){await this.webSocketClose(ws);}
   async load(){if(!this.state)this.state=await this.ctx.storage.get("state");}
-  async save(){await this.ctx.storage.put("state",this.state);}
+  async save(){
+    await this.ctx.storage.put("state",this.state);
+    if(this.env?.CLUB&&/^[A-Z0-9]{6}$/.test(this.state?.code||"")){
+      try{
+        await this.env.CLUB.get(this.env.CLUB.idFromName("main-lobby")).fetch(
+          "https://club/sessions/update",{method:"POST",body:JSON.stringify({
+            code:this.state.code,phase:this.state.phase,round:this.state.round||0,
+            players:this.state.players.length,spectators:(this.state.spectators||[]).length
+          })});
+      }catch(error){console.error("Mahjong room listing update",error?.message);}
+    }
+  }
   broadcast(){if(!this.state)return;for(const [id,ws] of this.sockets){try{ws.send(JSON.stringify({type:"state",state:publicState(this.state,id)}));}catch{}}}
   async alarm(){
     await this.load();const s=this.state;if(!s||s.phase!=="claim"||!s.claimWindow)return;
@@ -453,7 +483,30 @@ export class MahjongRoom {
     if(["reactionClipStart","reactionClipChunk","reactionClipEnd"].includes(msg.action)){
       this.handleReactionClip(playerId,msg);return;
     }
-    const idx=s.players.findIndex(p=>p.id===playerId);if(idx<0)return;const p=s.players[idx];
+    const idx=s.players.findIndex(p=>p.id===playerId);
+    const observer=(s.spectators||[]).find(p=>p.id===playerId);
+    if(msg.action==="queueNext"&&observer&&s.phase!=="lobby"){
+      observer.ready=!observer.ready;
+      s.message=observer.name+(observer.ready?" joined the next-round queue.":" left the next-round queue.");
+      await this.save();this.broadcast();return;
+    }
+    if(msg.action==="nextReady"&&idx>=0&&s.phase==="finished"){
+      s.players[idx].ready=!s.players[idx].ready;
+      s.message=s.players[idx].name+(s.players[idx].ready?" will play the next round.":" is sitting out the next round.");
+      await this.save();this.broadcast();return;
+    }
+    if(msg.action==="nextRound"&&s.phase==="finished"){
+      const queued=(s.spectators||[]).filter(p=>p.ready);
+      const returning=s.players.filter(p=>p.ready);
+      const lineup=[...queued,...returning].slice(0,4);
+      if(lineup.length<2){this.send(playerId,{type:"error",message:"At least two people must opt in to start the next round."});return;}
+      const ids=new Set(lineup.map(p=>p.id));
+      s.spectators=[...s.players,...(s.spectators||[])].filter(p=>!ids.has(p.id)).map(p=>({...p,hand:[],melds:[],discards:[],ready:false}));
+      s.players=lineup.map(p=>({...p,hand:[],melds:[],discards:[],ready:false}));
+      s.dealer=0;this.startGame();await this.save();this.broadcast();return;
+    }
+    if(idx<0)return;
+    const p=s.players[idx];
     if(msg.action==="ready"&&s.phase==="lobby"){
       p.ready=!p.ready;s.message=`${p.name} ${p.ready?"is ready":"is not ready"}.`;
       if(s.players.length===4&&s.players.every(x=>x.ready))this.startGame();
@@ -531,10 +584,10 @@ export class MahjongRoom {
   }
   drawFor(p){if(!this.state.wall.length){this.state.phase="finished";this.state.message="The wall is empty. Draw game.";return;}this.state.pendingDraw=this.state.wall.pop();}
   startGame(){
-    const s=this.state;s.wall=tileSet();
+    const s=this.state;s.round=(s.round||0)+1;s.wall=tileSet();
     for(const p of s.players){p.hand=[];p.melds=[];p.discards=[];p.ready=false;for(let i=0;i<13;i++)p.hand.push(s.wall.pop());sortHand(p.hand);}
     s.players[s.dealer].hand.push(s.wall.pop());sortHand(s.players[s.dealer].hand);
-    s.turn=s.dealer;s.phase="playing";s.lastDiscard=null;s.pendingDraw=null;s.lastReaction=null;s.claimWindow=null;s.winner=null;s.message="Game started. East begins.";
+    s.turn=s.dealer;s.phase="playing";s.lastDiscard=null;s.pendingDraw=null;s.lastReaction=null;s.claimWindow=null;s.winner=null;s.message="Round "+s.round+" started. East begins.";
   }
   send(id,obj){const ws=this.sockets.get(id);if(ws)try{ws.send(JSON.stringify(obj));}catch{}}
 }

@@ -1,4 +1,4 @@
-import {ROAD,PIT,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,projectToRoute,raceStart} from "./kart-track.js";
+import {ROAD,PIT,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,projectToRoute,raceStart} from "./kart-track.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
@@ -90,9 +90,11 @@ function stripeAcross(route,i,color,count=10,depth=.5){
  }
 }
 function track(){
- const green=object(new THREE.PlaneGeometry(260,190),material(0x477854,.97),0,-.1,0);
+ const green=object(new THREE.PlaneGeometry(430,330),material(0x477854,.97),0,-.1,0);
  green.rotation.x=-Math.PI/2;
  embankment(ROAD,-1);embankment(ROAD,1);
+ ribbon(ROAD,-ROAD_HALF_WIDTH-RUNOFF_WIDTH,ROAD_HALF_WIDTH+RUNOFF_WIDTH,0x698c68,-.058);
+ ribbon(ROAD,-ROAD_HALF_WIDTH-2.7,ROAD_HALF_WIDTH+2.7,0xa98c6c,-.043);
  ribbon(ROAD,-ROAD_HALF_WIDTH-.55,ROAD_HALF_WIDTH+.55,0x9b7e65,-.025);
  ribbon(ROAD,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0x373b43,.015);
  ribbon(PIT,-PIT_HALF_WIDTH-.34,PIT_HALF_WIDTH+.34,0x927765,-.02);
@@ -129,7 +131,7 @@ function track(){
   stripe.rotation.y=Math.atan2(d.tx,d.tz);
  }
  for(let i=0;i<5;i++){
-  const x=-32+i*9,z=-1.2;
+  const x=(-32+i*9)*TRACK_SCALE,z=-1.2*TRACK_SCALE;
   box(8.4,2.7,3.8,0x554356,x,1.35,z);
   box(7.5,1.7,.08,0x202b34,x,1.26,z-1.98);
   box(8.7,.34,4.1,0xdac6a0,x,2.8,z);
@@ -147,7 +149,7 @@ function track(){
  let seeded=109023;
  const rnd=()=>{seeded=(1664525*seeded+1013904223)>>>0;return seeded/4294967296;};
  for(let i=0;i<190;i++){
-  const x=(rnd()-.5)*225,z=(rnd()-.5)*155;
+  const x=(rnd()-.5)*380,z=(rnd()-.5)*270;
   if(projectToRoute(x,z,ROAD).distance<10||projectToRoute(x,z,PIT).distance<11)continue;
   const h=2.4+rnd()*2.7;
   post(.19,h*.55,0x70523c,x,h*.24,z);
@@ -170,7 +172,7 @@ function track(){
  front.rotation.y=Math.atan2(d.tx,d.tz);
  // Pit-lane tire stacks, curbs and trackside grandstand.
  for(let i=0;i<5;i++){
-  const x=55+i*4,z=-40;
+  const x=(55+i*4)*TRACK_SCALE,z=-40*TRACK_SCALE;
   for(let y=0;y<3;y++)post(.75,.46,y%2?0x2f3139:0x202128,x,y*.45+.2,z);
  }
 }
@@ -199,13 +201,13 @@ async function init(){
  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
  renderer.outputColorSpace=THREE.SRGBColorSpace;
  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;
- camera=new THREE.PerspectiveCamera(64,1,.1,260);clock=new THREE.Clock();
+ camera=new THREE.PerspectiveCamera(64,1,.1,410);clock=new THREE.Clock();
  construct();reset();requestAnimationFrame(frame);
 }
 function reset(){
  const start=raceStart();pos={x:start.x,y:start.y,z:start.z};yaw=start.yaw;
  speed=0;progress=0;reportedFinish=false;
- if(kart){kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw;}
+ if(kart){kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;}
 }
 function positionOnTrack(x,z){
  const road=projectToRoute(x,z,ROAD),pit=projectToRoute(x,z,PIT);
@@ -240,20 +242,24 @@ function update(dt){
  const accelerate=down("w")||down("arrowup");
  const brake=down("s")||down("arrowdown")||down(" ");
  const steer=Number(down("d")||down("arrowright"))-Number(down("a")||down("arrowleft"));
- speed+=Number(accelerate)*11*dt;
- speed-=Math.sign(speed)*(1.3+Math.abs(speed)*.16)*dt;
- if(brake)speed-=Math.sign(speed||1)*18*dt;
- speed=Math.max(-3.1,Math.min(12.5,speed));
+ speed+=Number(accelerate)*16*dt;
+ speed-=Math.sign(speed)*(0.9+Math.abs(speed)*.08)*dt;
+ if(brake)speed-=Math.sign(speed||1)*42*dt;
+ speed=Math.max(-4,Math.min(29,speed));
  if(!accelerate&&!brake&&Math.abs(speed)<.15)speed=0;
- yaw+=steer*dt*1.48*Math.min(1.1,Math.abs(speed)/4)*(speed>=0?1:-1);
+ // In this coordinate system positive yaw steers world-left, so D decreases yaw.
+ // Higher speed increases the turning radius; brake before the chicanes.
+ const steeringRate=2.25/(1+Math.abs(speed)/15);
+ yaw-=steer*dt*steeringRate*Math.min(1,Math.abs(speed)/3)*(speed>=0?1:-1);
  const x=pos.x+Math.sin(yaw)*speed*dt,z=pos.z+Math.cos(yaw)*speed*dt;
  const projected=positionOnTrack(x,z);
- if(projected.distance>ROAD_HALF_WIDTH-.2&&!projected.isPit){
-  speed*=.65;
- }else{
-  pos.x=x;pos.z=z;pos.y=projected.y;
- }
- kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw;
+ const onRunoff=projected.distance>ROAD_HALF_WIDTH-.2&&!projected.isPit;
+ if(onRunoff){
+  speed*=Math.max(.65,1-1.7*dt);
+  if(projected.distance>ROAD_HALF_WIDTH+RUNOFF_WIDTH) speed*=.35;
+  else{pos.x=x;pos.z=z;pos.y=projected.y;}
+ }else{pos.x=x;pos.z=z;pos.y=projected.y;}
+ kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;
  if(performance.now()-sendAt>600&&!telemetryPending){sendAt=performance.now();transmit();}
  $("kartTime").textContent=format(performance.now()-started);
 }
@@ -269,7 +275,7 @@ function frame(){
  camera.position.lerp(target,Math.min(1,dt*4.5));
  camera.lookAt(pos.x,pos.y+1.1,pos.z);
  renderer.render(scene,camera);
- $("kartSpeed").textContent=Math.round(Math.abs(speed)*10)+" km/h";
+ $("kartSpeed").textContent=Math.round(Math.abs(speed)*3.6)+" km/h";
 }
 async function begin(){
  if(busy)return;busy=true;$("kartStart").disabled=true;
