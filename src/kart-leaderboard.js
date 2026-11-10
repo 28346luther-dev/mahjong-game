@@ -125,7 +125,7 @@ export class KartLeaderboard {
    if(threshold!==undefined&&previousProgress<threshold&&check.progress>=threshold){
     session.sectorTimes??=[];
     session.sectorLastAt??=session.start;
-    const timeMs=now-session.sectorLastAt;
+    const timeMs=Math.max(1,now-session.sectorLastAt);
     session.sectorTimes.push(timeMs);
     session.sectorLastAt=now;
     sectorUpdate={index:count+1,timeMs,lap:session.lap||1};
