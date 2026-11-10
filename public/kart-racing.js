@@ -1,10 +1,28 @@
 import {ROAD,PIT,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,projectToRoute,raceStart} from "./kart-track.js";
 import {addCircuitGraphics} from "./kart-graphics.js";
+import {addKartSafety} from "./kart-safety.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
 let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPending=false,lastStatusAt=0;
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
+let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
+function setCameraMode(mode){
+ if(!["chase","cockpit"].includes(mode))return;
+ cameraMode=mode;
+ for(const mesh of cockpitOccluders)mesh.visible=mode!=="cockpit";
+ const label=document.getElementById("kartCameraLabel");
+ if(label)label.textContent=mode==="cockpit"?"HELMET / FIRST PERSON":"CHASE / THIRD PERSON";
+ const button=document.getElementById("kartCameraToggle");
+ if(button){
+  button.textContent=mode==="cockpit"?"🎥 Third-person view":"⛑ First-person view";
+  button.setAttribute("aria-pressed",String(mode==="cockpit"));
+ }
+ const caption=document.getElementById("kartCameraHelp");
+ if(caption)caption.textContent=mode==="cockpit"
+  ?"First-person helmet camera · press C to switch back"
+  :"Chase camera · press C for a driver's-eye view";
+}
 const keys=new Set(),touch=new Set(),down=k=>keys.has(k)||touch.has(k);
 async function api(path,body){
  const r=await fetch("/api/kart/"+path,{method:body?"POST":"GET",credentials:"same-origin",
@@ -111,6 +129,7 @@ function track(){
  // using batched geometry. The old alternating cubes along every straight,
  // and the longitudinal start line, are intentionally removed.
  addCircuitGraphics(THREE,scene,ROAD,PIT,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
+ addKartSafety(THREE,scene,ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  // Pit lane: visibly separated from the main straight, complete with garages and pit wall.
  for(let i=8;i<PIT.samples.length-10;i+=4){
   const p=PIT.samples[i],d=tangent(PIT,Math.min(PIT.samples.length-2,i));
@@ -173,9 +192,9 @@ function kartModel(){
  }
  const helmet=new THREE.Mesh(new THREE.SphereGeometry(.31,22,16),new THREE.MeshPhysicalMaterial({
   color:0xf2c77e,metalness:.35,roughness:.25,clearcoat:1}));
- helmet.position.set(0,1.57,.37);kart.add(helmet);
+ helmet.position.set(0,1.57,.37);kart.add(helmet);cockpitOccluders.push(helmet);
  const visor=object(new THREE.SphereGeometry(.26,20,12),material(0x1b313c,.09,.48),0,1.56,.19,kart);
- visor.scale.set(.95,.47,.42);
+ visor.scale.set(.95,.47,.42);cockpitOccluders.push(visor);
  const wheel=object(new THREE.TorusGeometry(.23,.045,8,22),rubber,0,1.04,-.38,kart);
  wheel.rotation.x=Math.PI*.27;
  for(const x of [-.39,.39]){
@@ -203,7 +222,16 @@ function construct(){
  sun.shadow.camera.top=125;sun.shadow.camera.bottom=-125;
  sun.shadow.camera.far=260;sun.shadow.bias=-.0002;
  scene.add(sun);
- track();kartModel();
+ // A tall sky dome uses a physically inspired horizon-to-zenith gradient.
+ const skyMaterial=new THREE.ShaderMaterial({
+  side:THREE.BackSide,depthWrite:false,
+  uniforms:{topColor:{value:new THREE.Color(0x558fc7)},horizonColor:{value:new THREE.Color(0xdcebf0)},
+    bottomColor:{value:new THREE.Color(0xb2c9b9)}},
+  vertexShader:"varying vec3 vWorld; void main(){ vec4 w=modelMatrix*vec4(position,1.);vWorld=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}",
+  fragmentShader:"varying vec3 vWorld;uniform vec3 topColor;uniform vec3 horizonColor;uniform vec3 bottomColor;void main(){float t=normalize(vWorld).y;vec3 col=t>0.?mix(horizonColor,topColor,pow(clamp(t,0.,1.),.48)):mix(horizonColor,bottomColor,clamp(-t*1.6,0.,1.));gl_FragColor=vec4(col,1.);}"
+ });
+ scene.add(new THREE.Mesh(new THREE.SphereGeometry(310,32,16),skyMaterial));
+ track();kartModel();setCameraMode(cameraMode);
 }
 async function init(){
  if(renderer)return;
@@ -292,9 +320,19 @@ function frame(){
  if(renderer.domElement.width!==Math.round(w*dpr)||renderer.domElement.height!==Math.round(h*dpr)){
   renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
  }
- const target=new THREE.Vector3(pos.x-Math.sin(yaw)*11,pos.y+7.3,pos.z-Math.cos(yaw)*11);
- camera.position.lerp(target,Math.min(1,dt*4.5));
- camera.lookAt(pos.x,pos.y+1.1,pos.z);
+ if(cameraMode==="cockpit"){
+  // The body points along local -Z, hence the helmet view follows the
+  // world-space vehicle heading (yaw) without inverting steering.
+  const eye=new THREE.Vector3(pos.x+Math.sin(yaw)*.22,pos.y+1.33,pos.z+Math.cos(yaw)*.22);
+  camera.position.lerp(eye,Math.min(1,dt*16));
+  camera.lookAt(pos.x+Math.sin(yaw)*24,pos.y+1.4,pos.z+Math.cos(yaw)*24);
+  if(camera.fov!==77){camera.fov=77;camera.updateProjectionMatrix();}
+ }else{
+  const target=new THREE.Vector3(pos.x-Math.sin(yaw)*11,pos.y+7.3,pos.z-Math.cos(yaw)*11);
+  camera.position.lerp(target,Math.min(1,dt*4.5));
+  camera.lookAt(pos.x,pos.y+1.1,pos.z);
+  if(camera.fov!==64){camera.fov=64;camera.updateProjectionMatrix();}
+ }
  renderer.render(scene,camera);
  if(performance.now()-lastLeaderboardRefresh>15000){lastLeaderboardRefresh=performance.now();leaderboard();}
  $("kartSpeed").textContent=Math.round(Math.abs(speed)*3.6)+" km/h";
@@ -330,6 +368,7 @@ window.addEventListener("keydown",e=>{
  if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)){
   keys.add(k);e.preventDefault();
  }
+ if(k==="c"){setCameraMode(cameraMode==="chase"?"cockpit":"chase");e.preventDefault();}
  if(k==="r"){reset();playing=false;message("Kart reset. Start a new timed lap to record a result.");}
  if(k==="escape"){e.preventDefault();close();}
 });
@@ -340,7 +379,8 @@ document.querySelectorAll("[data-kart-key]").forEach(button=>{
  button.addEventListener("pointerdown",e=>{e.preventDefault();touch.add(k);button.setPointerCapture?.(e.pointerId);});
  for(const event of ["pointerup","pointercancel","lostpointercapture"])button.addEventListener(event,()=>touch.delete(k));
 });
+$("kartCameraToggle").addEventListener("click",()=>setCameraMode(cameraMode==="chase"?"cockpit":"chase"));
 $("kartStart").addEventListener("click",begin);
 $("kartClose").addEventListener("click",close);
 $("kartRefresh").addEventListener("click",leaderboard);
-window.KartRacing={open,close,isOpen:()=>active};
+window.KartRacing={open,close,isOpen:()=>active,setCameraMode};
