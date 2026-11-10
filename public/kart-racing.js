@@ -1,8 +1,9 @@
 import {ROAD,PIT,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,projectToRoute,raceStart} from "./kart-track.js";
+import {enhanceCircuit,surfaceTexture} from "./kart-graphics.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
-let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPending=false,lastStatusAt=0;
+let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPending=false,lastStatusAt=0,lapCount=0,leaderboardTimer=null;
 const keys=new Set(),touch=new Set(),down=k=>keys.has(k)||touch.has(k);
 async function api(path,body){
  const r=await fetch("/api/kart/"+path,{method:body?"POST":"GET",credentials:"same-origin",
@@ -90,24 +91,24 @@ function stripeAcross(route,i,color,count=10,depth=.5){
  }
 }
 function track(){
- const green=object(new THREE.PlaneGeometry(430,330),material(0x477854,.97),0,-.1,0);
+ const greenMaterial=material(0x9cb89a,.96);
+ greenMaterial.map=surfaceTexture(THREE,"grass");
+ greenMaterial.map.repeat.set(28,22);
+ const green=object(new THREE.PlaneGeometry(430,330),greenMaterial,0,-.1,0);
  green.rotation.x=-Math.PI/2;
  embankment(ROAD,-1);embankment(ROAD,1);
  ribbon(ROAD,-ROAD_HALF_WIDTH-RUNOFF_WIDTH,ROAD_HALF_WIDTH+RUNOFF_WIDTH,0x698c68,-.058);
  ribbon(ROAD,-ROAD_HALF_WIDTH-2.7,ROAD_HALF_WIDTH+2.7,0xa98c6c,-.043);
  ribbon(ROAD,-ROAD_HALF_WIDTH-.55,ROAD_HALF_WIDTH+.55,0x9b7e65,-.025);
- ribbon(ROAD,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0x373b43,.015);
+ const asphalt=ribbon(ROAD,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0xffffff,.015);
+ asphalt.material.map=surfaceTexture(THREE,"road");
+ asphalt.material.map.repeat.set(1,1);
+ asphalt.material.roughness=.89;
+ asphalt.material.needsUpdate=true;
  ribbon(PIT,-PIT_HALF_WIDTH-.34,PIT_HALF_WIDTH+.34,0x927765,-.02);
  ribbon(PIT,-PIT_HALF_WIDTH,PIT_HALF_WIDTH,0x4b4e51,.035);
- for(let i=0;i<ROAD.samples.length;i+=3){
-  const p=ROAD.samples[i],d=tangent(ROAD,i),alt=Math.floor(i/3)%2;
-  for(const side of [-1,1]){
-   const off=side*(ROAD_HALF_WIDTH-.28);
-   const kerb=box(.62,.11,.98,alt?0xf8e9d2:0xc74552,
-    p.x+d.nx*off,p.y+.1,p.z+d.nz*off);
-   kerb.rotation.y=Math.atan2(d.tx,d.tz);
-  }
- }
+ // Keep a thin painted edge line; corner-specific raised kerbs are generated
+ // later as continuous spline-bound geometry in enhanceCircuit().
  for(let i=0;i<ROAD.samples.length;i+=20){
   const p=ROAD.samples[i],d=tangent(ROAD,i);
   const dash=box(.11,.025,1.28,0xe1cf9e,p.x,p.y+.056,p.z);
@@ -145,18 +146,9 @@ function track(){
    p.x+d.nx*3,p.y+.26,p.z+d.nz*3);
   wall.rotation.y=Math.atan2(d.tx,d.tz);
  }
- // Trees ring the track, but avoid the asphalt and pit lane.
- let seeded=109023;
- const rnd=()=>{seeded=(1664525*seeded+1013904223)>>>0;return seeded/4294967296;};
- for(let i=0;i<190;i++){
-  const x=(rnd()-.5)*380,z=(rnd()-.5)*270;
-  if(projectToRoute(x,z,ROAD).distance<10||projectToRoute(x,z,PIT).distance<11)continue;
-  const h=2.4+rnd()*2.7;
-  post(.19,h*.55,0x70523c,x,h*.24,z);
-  const crown=object(new THREE.ConeGeometry(.9+rnd()*.65,h,8),material(rnd()>.5?0x3a6650:0x477e55),
-   x,h*.74,z);
-  crown.rotation.y=rnd()*Math.PI;
- }
+ // Instanced conifer forest, curved apex kerbs and trackside props are
+ // assembled in one batched detail pass for smoother rendering.
+ enhanceCircuit(THREE,scene);
  // Physical starting gantry on the outside of the racing line.
  const p=ROAD.samples[0],d=tangent(ROAD,0);
  for(const side of [-1,1])post(.16,4.1,0xd4ad79,p.x+d.nx*side*4.8,p.y+2,p.z+d.nz*side*4.8);
@@ -190,15 +182,22 @@ function kartModel(){
 }
 function construct(){
  scene=new THREE.Scene();scene.background=new THREE.Color(0xa2c6d0);scene.fog=new THREE.FogExp2(0xa2c6d0,.0034);
- scene.add(new THREE.HemisphereLight(0xfff2dc,0x527c5e,2));
- const sun=new THREE.DirectionalLight(0xffedca,2.6);sun.position.set(-20,65,30);scene.add(sun);
+ scene.add(new THREE.HemisphereLight(0xfff1d7,0x3d6d63,1.5));
+ scene.add(new THREE.AmbientLight(0x6688a2,.35));
+ const sun=new THREE.DirectionalLight(0xffe6bf,3.2);sun.position.set(-35,82,52);
+ sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+ sun.shadow.camera.left=-170;sun.shadow.camera.right=170;
+ sun.shadow.camera.top=140;sun.shadow.camera.bottom=-140;
+ sun.shadow.bias=-.00045;sun.shadow.radius=3;scene.add(sun);
  track();kartModel();
 }
 async function init(){
  if(renderer)return;
  THREE=await import("https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js");
  renderer=new THREE.WebGLRenderer({canvas:$("kartCanvas"),antialias:true,powerPreference:"high-performance"});
- renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
+ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.6));
+ renderer.shadowMap.enabled=true;
+ renderer.shadowMap.type=THREE.PCFSoftShadowMap;
  renderer.outputColorSpace=THREE.SRGBColorSpace;
  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;
  camera=new THREE.PerspectiveCamera(64,1,.1,410);clock=new THREE.Clock();
@@ -227,10 +226,17 @@ async function transmit(){
    reportedFinish=true;
    const finish=await api("finish",{raceId:current,...position});
    if(raceId!==current)return;
-   playing=false;raceId=null;speed=0;
-   $("kartTime").textContent=format(finish.elapsedMs);
+   // A finish is a lap boundary, not the end of the driving session.
+   lapCount=finish.lapNumber;
+   started=performance.now();
+   progress=0;
+   reportedFinish=false;
+   $("kartLap").textContent="LAP "+(finish.nextLap||lapCount+1);
+   $("kartProgress").textContent="0%";
+   $("kartLast").textContent="Last lap "+format(finish.elapsedMs);
+   $("kartTime").textContent="00:00.000";
    $("kartBest").textContent="BEST "+format(finish.bestMs);
-   message((finish.personalBest?"🏆 NEW PERSONAL BEST! ":"FINISHED! ")+format(finish.elapsedMs)+" · Saved to leaderboard.");
+   message((finish.personalBest?"🏆 NEW PERSONAL BEST! ":"LAP COMPLETE! ")+format(finish.elapsedMs)+" · Keep driving! Lap "+(lapCount+1)+" is now underway.");
    standings(finish.entries);
   }
  }catch(error){
@@ -282,10 +288,12 @@ async function begin(){
  try{
   await init();
   const result=await api("start",{});
-  raceId=result.raceId;reset();started=performance.now();sendAt=performance.now();playing=true;
+  raceId=result.raceId;reset();started=performance.now();sendAt=performance.now();playing=true;lapCount=0;
+  $("kartLap").textContent="LAP 1";
+  $("kartLast").textContent="Last lap --:--.---";
   $("kartTime").textContent="00:00.000";
   $("kartProgress").textContent="0%";
-  $("kartStart").textContent="Restart lap";
+  $("kartStart").textContent="Restart session";
   if(result.bestMs)$("kartBest").textContent="BEST "+format(result.bestMs);
   message("GO! Follow the road around the chicanes and hills. Complete a full lap to set your time.");
  }catch(error){message(error.message);}
@@ -295,10 +303,14 @@ function open(){
  if(active)return;active=true;$("kartGame").classList.remove("hidden");
  document.body.classList.add("kart-open");document.exitPointerLock?.();
  message("Race the redesigned Velvet Circuit — corners, chicanes, hills and a pit lane.");
- leaderboard();init().catch(error=>message("Track unavailable: "+error.message));
+ leaderboard();
+ clearInterval(leaderboardTimer);
+ leaderboardTimer=setInterval(()=>{if(active)leaderboard();},12000);
+ init().catch(error=>message("Track unavailable: "+error.message));
 }
 function close(){
  active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;
+ clearInterval(leaderboardTimer);leaderboardTimer=null;
  $("kartGame").classList.add("hidden");document.body.classList.remove("kart-open");
 }
 window.addEventListener("keydown",e=>{
