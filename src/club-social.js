@@ -14,21 +14,23 @@ export class ClubSocial {
  send(ws,data){try{ws.send(JSON.stringify(data));}catch{}}
  broadcast(data,except){for(const ws of this.ctx.getWebSockets()){if(ws!==except)this.send(ws,data);}}
  peers(){
-  return this.ctx.getWebSockets().map(ws=>this.socketInfo(ws)).filter(Boolean).map(p=>({id:p.id,name:p.name,x:p.x,z:p.z,yaw:p.yaw,zone:p.zone,voice:p.voice,color:p.color||"ruby",hair:p.hair||"dark"}));
+  return this.ctx.getWebSockets().map(ws=>this.socketInfo(ws)).filter(Boolean).map(p=>({id:p.id,name:p.name,x:p.x,z:p.z,yaw:p.yaw,zone:p.zone,voice:p.voice,color:p.color||"ruby",hair:p.hair||"dark",photo:p.photo||""}));
  }
  async fetch(request){
   if(request.headers.get("Upgrade")?.toLowerCase()!=="websocket")return new Response("WebSocket required",{status:426});
   const name=clean(request.headers.get("x-club-name"),25)||"Guest";
   const userId=clean(request.headers.get("x-club-user"),100);
   const color=clean(request.headers.get("x-club-color"),12),hair=clean(request.headers.get("x-club-hair"),12);
+  const candidate=request.headers.get("x-club-photo")||"";
+  const photo=/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(candidate)&&candidate.length<18000?candidate:"";
   if(!userId)return new Response("Unauthorized",{status:401});
   const pair=new WebSocketPair();
   const client=pair[0],server=pair[1];
-  const info={id:crypto.randomUUID(),name,x:0,z:11,yaw:0,zone:"hall",voice:false,color,hair,userId,lastChat:0,lastMove:0,lastSignal:0};
+  const info={id:crypto.randomUUID(),name,x:0,z:11,yaw:0,zone:"hall",voice:false,color,hair,photo,userId,lastChat:0,lastMove:0,lastSignal:0};
   this.ctx.acceptWebSocket(server);
   server.serializeAttachment(info);this.members.set(server,info);
   this.send(server,{type:"welcome",id:info.id,peers:this.peers(),messages:[]});
-  this.broadcast({type:"join",peer:{id:info.id,name:info.name,x:info.x,z:info.z,yaw:0,zone:"hall",voice:false,color,hair}},server);
+  this.broadcast({type:"join",peer:{id:info.id,name:info.name,x:info.x,z:info.z,yaw:0,zone:"hall",voice:false,color,hair,photo}},server);
   return new Response(null,{status:101,webSocket:client});
  }
  webSocketMessage(ws,raw){
@@ -47,11 +49,13 @@ export class ClubSocial {
   }
   if(data.type==="profile"){
    const name=clean(data.name,22),color=clean(data.color,12),hair=clean(data.hair,12);
+   const raw=typeof data.photo==="string"?data.photo:"";
+   const photo=raw.length<18000&&/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(raw)?raw:"";
    if(name.length>=2&&/^[\p{L}\p{N} _.-]+$/u.test(name)&&
       ["ruby","plum","emerald","navy","gold"].includes(color)&&
       ["dark","brown","blonde","auburn"].includes(hair)){
-    info.name=name;info.color=color;info.hair=hair;ws.serializeAttachment(info);
-    this.broadcast({type:"profile",id:info.id,name,color,hair},ws);
+    info.name=name;info.color=color;info.hair=hair;info.photo=photo;ws.serializeAttachment(info);
+    this.broadcast({type:"profile",id:info.id,name,color,hair,photo},ws);
    }
   }
   if(data.type==="voice"&&typeof data.enabled==="boolean"){
