@@ -1,0 +1,40 @@
+/* Velvet Circuit — polished responsive go-kart UI, separate from the casino salons. */
+.kart-modal{position:fixed;inset:0;z-index:3200;background:#110d17ea;backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:14px;overflow:auto}
+.kart-modal.hidden{display:none!important}
+.kart-sheet{width:min(1450px,100%);max-height:95dvh;overflow:auto;background:linear-gradient(145deg,#382b39,#1d2530);border:2px solid #c99c65;border-radius:21px;box-shadow:0 28px 75px #000b;padding:clamp(12px,2vw,23px);color:#f7e5c6}
+.kart-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:4px 0 16px;border-bottom:1px solid #9b785974;margin-bottom:12px;background:none}
+.kart-header h2{font:700 clamp(23px,3vw,38px) Georgia,serif;color:#f5d5a0;margin:5px 0}
+.kart-header p{margin:0;font-size:12px;color:#dfc9b4}
+.kart-eyebrow{font-weight:800;color:#d4af80;letter-spacing:.14em;font-size:11px}
+.kart-header button,.kart-board-head button{background:#653e50;border:1px solid #c6a171;border-radius:10px;padding:10px 13px;color:#f7e0bb;cursor:pointer;font-weight:700}
+.kart-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,290px);gap:15px}
+.kart-drive{min-width:0}
+.kart-stage{position:relative;aspect-ratio:16/9;width:100%;border:6px solid #bf9867;border-radius:18px;background:#5c897e;overflow:hidden;box-shadow:inset 0 0 0 2px #edd09f,0 10px 30px #0006}
+.kart-stage canvas{display:block;width:100%;height:100%;touch-action:none}
+.kart-overlay{position:absolute;top:12px;left:12px;right:12px;display:flex;gap:7px;flex-wrap:wrap;pointer-events:none}
+.kart-overlay>div{background:#1f2433dd;border:1px solid #d2b07c;border-radius:8px;padding:7px 12px;display:flex;flex-direction:column;gap:2px;backdrop-filter:blur(5px)}
+.kart-overlay small{color:#dec7a9;font-size:9px;letter-spacing:.1em}
+.kart-overlay strong{font-size:clamp(13px,1.6vw,19px);font-variant-numeric:tabular-nums;color:#ffe1aa}
+.kart-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:12px 0}
+.kart-primary{background:linear-gradient(125deg,#f2d7a0,#c89b61);border:2px solid #ffe9bd;border-radius:12px;padding:12px 25px;font-weight:900;color:#302436;font-size:16px;cursor:pointer}
+.kart-primary:disabled{opacity:.5;cursor:wait}
+.kart-actions strong{color:#e8caa1;font-size:14px;font-variant-numeric:tabular-nums}
+#kartStatus{min-height:34px;padding:8px 10px;border:1px solid #8e6b58;background:#382d3e;border-radius:10px;color:#f6e0bf;font-size:12px}
+.kart-leaderboard{background:#211e2c;border:1px solid #ac855d;border-radius:15px;padding:14px;align-self:start}
+.kart-board-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.kart-board-head h3{font:700 19px Georgia,serif;color:#f5d69d;margin:0}
+.kart-board-head button{padding:6px 9px;font-size:11px}
+.kart-leaderboard>p,.kart-rules p{font-size:11px;line-height:1.5;color:#cbbbac}
+.kart-leaderboard ol{list-style:none;margin:13px 0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:360px;overflow-y:auto}
+.kart-leaderboard li{background:#403043;border:1px solid #795771;border-radius:9px;display:flex;gap:9px;align-items:center;padding:9px 10px;font-size:12px}
+.kart-leaderboard li strong{color:#f2cb85}
+.kart-leaderboard li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kart-leaderboard li b{color:#f5d2a6;font-variant-numeric:tabular-nums}
+.kart-rules{border-top:1px solid #7c6171;padding-top:12px}
+.kart-rules strong{font-size:11px;color:#e6c391}
+.kart-touch{display:flex;justify-content:center;gap:7px;flex-wrap:wrap;margin-top:10px}
+.kart-touch button{min-width:95px;touch-action:none;border:1px solid #cba675;border-radius:11px;padding:13px 11px;background:#603d50;color:#f7e2b9;user-select:none;-webkit-user-select:none;font-weight:800;cursor:pointer}
+.kart-touch button:active{background:#bb8f62;color:#231c27}
+body.kart-open{overflow:hidden}
+@media(max-width:930px){.kart-layout{grid-template-columns:1fr}.kart-sheet{max-height:98dvh}.kart-leaderboard{order:2}.kart-leaderboard ol{max-height:220px}}
+@media(max-width:600px){.kart-modal{padding:5px}.kart-sheet{padding:9px;border-radius:12px}.kart-header button{font-size:10px;padding:8px}.kart-header h2{font-size:21px}.kart-header p{font-size:10px}.kart-stage{aspect-ratio:4/3;border-width:4px}.kart-overlay{top:5px;left:5px;gap:4px}.kart-overlay>div{padding:4px 7px}.kart-overlay strong{font-size:12px}.kart-actions{gap:6px}.kart-primary{font-size:13px;padding:9px 13px}.kart-touch button{min-width:70px;font-size:11px;flex:1}.kart-board-head h3{font-size:16px}}
