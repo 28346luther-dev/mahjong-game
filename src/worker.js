@@ -273,9 +273,12 @@ export default {
         }
         return Response.json({iceServers:defaultServers,relayAvailable:false},{headers:{"cache-control":"no-store"}});
       }
+      if(url.pathname==="/api/sessions"&&request.method==="GET"){
+        return env.CLUB.get(env.CLUB.idFromName("main-lobby")).fetch("https://club/sessions");
+      }
       if(url.pathname==="/api/create"&&request.method==="POST"){
         const body=await request.json(),roomCode=code(),stub=env.ROOMS.get(env.ROOMS.idFromName(roomCode));
-        const res=await stub.fetch("https://room/init",{method:"POST",body:JSON.stringify({name:String(body.name||"Player 1").slice(0,20)})});
+        const res=await stub.fetch("https://room/init",{method:"POST",body:JSON.stringify({name:String(body.name||"Player 1").slice(0,20),code:roomCode})});
         return new Response(JSON.stringify({...(await res.json()),code:roomCode}),{headers:{"content-type":"application/json"}});
       }
       if(url.pathname==="/api/join"&&request.method==="POST"){
@@ -335,8 +338,8 @@ export default {
 };
 
 export class MahjongRoom {
-  constructor(ctx){
-    this.ctx=ctx;this.state=null;this.sockets=new Map();this.reactionTransfers=new Map();this.submittedReactions=new Set();
+  constructor(ctx,env){
+    this.ctx=ctx;this.env=env;this.state=null;this.sockets=new Map();this.reactionTransfers=new Map();this.submittedReactions=new Set();
     // Hibernatable WebSockets are reattached to a new Durable Object instance on wake.
     for(const ws of ctx.getWebSockets?.()||[]){
       const attachment=ws.deserializeAttachment?.();
@@ -352,8 +355,8 @@ export class MahjongRoom {
     const url=new URL(request.url);
     if(url.pathname==="/init"&&request.method==="POST"){
       if(this.state||await this.ctx.storage.get("state"))return Response.json({error:"Room already exists"},{status:409});
-      const {name}=await request.json(),player={id:uid(),name,hand:[],melds:[],discards:[],ready:false};
-      this.state={code:"",players:[player],spectators:[],round:0,wall:[],turn:0,dealer:0,phase:"lobby",pendingDraw:null,lastReaction:null,claimWindow:null,message:`${name} created the room.`,winner:null};
+      const {name,code:roomCode}=await request.json(),player={id:uid(),name,hand:[],melds:[],discards:[],ready:false};
+      this.state={code:roomCode||"",players:[player],spectators:[],round:0,wall:[],turn:0,dealer:0,phase:"lobby",pendingDraw:null,lastReaction:null,claimWindow:null,message:`${name} created the room.`,winner:null};
       await this.save();return Response.json({playerId:player.id});
     }
     if(url.pathname==="/join"&&request.method==="POST"){
@@ -404,7 +407,18 @@ export class MahjongRoom {
   }
   async webSocketError(ws){await this.webSocketClose(ws);}
   async load(){if(!this.state)this.state=await this.ctx.storage.get("state");}
-  async save(){await this.ctx.storage.put("state",this.state);}
+  async save(){
+    await this.ctx.storage.put("state",this.state);
+    if(this.env?.CLUB&&/^[A-Z0-9]{6}$/.test(this.state?.code||"")){
+      try{
+        await this.env.CLUB.get(this.env.CLUB.idFromName("main-lobby")).fetch(
+          "https://club/sessions/update",{method:"POST",body:JSON.stringify({
+            code:this.state.code,phase:this.state.phase,round:this.state.round||0,
+            players:this.state.players.length,spectators:(this.state.spectators||[]).length
+          })});
+      }catch(error){console.error("Mahjong room listing update",error?.message);}
+    }
+  }
   broadcast(){if(!this.state)return;for(const [id,ws] of this.sockets){try{ws.send(JSON.stringify({type:"state",state:publicState(this.state,id)}));}catch{}}}
   async alarm(){
     await this.load();const s=this.state;if(!s||s.phase!=="claim"||!s.claimWindow)return;
