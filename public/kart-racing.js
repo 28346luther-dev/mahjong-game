@@ -1,8 +1,10 @@
 import {ROAD,PIT,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,projectToRoute,raceStart} from "./kart-track.js";
+import {addCircuitGraphics} from "./kart-graphics.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
 let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPending=false,lastStatusAt=0;
+let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
 const keys=new Set(),touch=new Set(),down=k=>keys.has(k)||touch.has(k);
 async function api(path,body){
  const r=await fetch("/api/kart/"+path,{method:body?"POST":"GET",credentials:"same-origin",
@@ -21,7 +23,13 @@ function standings(records){
  }
 }
 async function leaderboard(){
- try{standings((await api("leaderboard")).entries);}catch{message("Could not load leaderboard.");}
+ if(boardRequest)return boardRequest;
+ boardRequest=(async()=>{
+  try{standings((await api("leaderboard")).entries);}catch{
+   if(active)message("Leaderboard temporarily unavailable; keep racing.");
+  }finally{boardRequest=null;}
+ })();
+ return boardRequest;
 }
 function object(geometry,material,x,y,z,parent=scene){
  const o=new THREE.Mesh(geometry,material);o.position.set(x,y,z);
@@ -99,31 +107,10 @@ function track(){
  ribbon(ROAD,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0x373b43,.015);
  ribbon(PIT,-PIT_HALF_WIDTH-.34,PIT_HALF_WIDTH+.34,0x927765,-.02);
  ribbon(PIT,-PIT_HALF_WIDTH,PIT_HALF_WIDTH,0x4b4e51,.035);
- for(let i=0;i<ROAD.samples.length;i+=3){
-  const p=ROAD.samples[i],d=tangent(ROAD,i),alt=Math.floor(i/3)%2;
-  for(const side of [-1,1]){
-   const off=side*(ROAD_HALF_WIDTH-.28);
-   const kerb=box(.62,.11,.98,alt?0xf8e9d2:0xc74552,
-    p.x+d.nx*off,p.y+.1,p.z+d.nz*off);
-   kerb.rotation.y=Math.atan2(d.tx,d.tz);
-  }
- }
- for(let i=0;i<ROAD.samples.length;i+=20){
-  const p=ROAD.samples[i],d=tangent(ROAD,i);
-  const dash=box(.11,.025,1.28,0xe1cf9e,p.x,p.y+.056,p.z);
-  dash.rotation.y=Math.atan2(d.tx,d.tz);
- }
- // Checkerboard squares alternate across the track WIDTH and along the road direction.
- // The line is perpendicular to travel, not a vertical series of blocks along the straight.
- for(let row=0;row<2;row++){
-  const point=ROAD.samples[(row+ROAD.samples.length-1)%ROAD.samples.length],d=tangent(ROAD,0);
-  for(let col=0;col<12;col++){
-   const lateral=-ROAD_HALF_WIDTH+(col+.5)*ROAD_HALF_WIDTH*2/12;
-   const tile=box(ROAD_HALF_WIDTH*2/12-.025,.025,.62,(row+col)%2?0x232a32:0xfff6e8,
-    point.x+d.nx*lateral,point.y+.09,point.z+d.nz*lateral);
-   tile.rotation.y=Math.atan2(d.tx,d.tz);
-  }
- }
+ // The graphics pass generates smooth apex kerbs and a wide green runoff
+ // using batched geometry. The old alternating cubes along every straight,
+ // and the longitudinal start line, are intentionally removed.
+ addCircuitGraphics(THREE,scene,ROAD,PIT,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  // Pit lane: visibly separated from the main straight, complete with garages and pit wall.
  for(let i=8;i<PIT.samples.length-10;i+=4){
   const p=PIT.samples[i],d=tangent(PIT,Math.min(PIT.samples.length-2,i));
@@ -144,18 +131,6 @@ function track(){
   const wall=box(.18,.52,1.65,i%2?0xf4e5d4:0xc84955,
    p.x+d.nx*3,p.y+.26,p.z+d.nz*3);
   wall.rotation.y=Math.atan2(d.tx,d.tz);
- }
- // Trees ring the track, but avoid the asphalt and pit lane.
- let seeded=109023;
- const rnd=()=>{seeded=(1664525*seeded+1013904223)>>>0;return seeded/4294967296;};
- for(let i=0;i<190;i++){
-  const x=(rnd()-.5)*380,z=(rnd()-.5)*270;
-  if(projectToRoute(x,z,ROAD).distance<10||projectToRoute(x,z,PIT).distance<11)continue;
-  const h=2.4+rnd()*2.7;
-  post(.19,h*.55,0x70523c,x,h*.24,z);
-  const crown=object(new THREE.ConeGeometry(.9+rnd()*.65,h,8),material(rnd()>.5?0x3a6650:0x477e55),
-   x,h*.74,z);
-  crown.rotation.y=rnd()*Math.PI;
  }
  // Physical starting gantry on the outside of the racing line.
  const p=ROAD.samples[0],d=tangent(ROAD,0);
@@ -178,20 +153,56 @@ function track(){
 }
 function kartModel(){
  kart=new THREE.Group();scene.add(kart);
- box(1.4,.36,2.3,0x97384b,0,.62,0,kart);
- box(1.1,.2,.87,0xe5be87,0,.82,-.5,kart);
- box(.9,.58,.8,0x4c2d3b,0,1.03,.3,kart);
- for(const x of [-.77,.77])for(const z of [-.84,.84]){
-  const wheel=object(new THREE.CylinderGeometry(.31,.31,.22,16),material(0x171e23),x,.4,z,kart);
+ const paint=new THREE.MeshPhysicalMaterial({color:0x9d284b,metalness:.35,roughness:.28,clearcoat:1,clearcoatRoughness:.11});
+ const chrome=new THREE.MeshStandardMaterial({color:0xc9c6c1,metalness:.82,roughness:.2});
+ const rubber=material(0x191b21,.98),leather=material(0x372735,.84);
+ const body=object(new THREE.SphereGeometry(1,24,16),paint,0,.66,0,kart);
+ body.scale.set(.83,.24,1.36);
+ const nose=object(new THREE.SphereGeometry(1,24,16),paint,0,.52,-.91,kart);
+ nose.scale.set(.68,.21,.54);
+ const frontBumper=box(1.75,.11,.18,0xdab989,0,.42,-1.36,kart);
+ box(1.85,.12,.18,0x23252b,0,.43,1.21,kart);
+ box(1.08,.28,.95,0x29232c,0,.85,.42,kart);
+ const seat=object(new THREE.SphereGeometry(1,16,12),leather,0,1.06,.45,kart);
+ seat.scale.set(.48,.46,.37);
+ for(const x of [-.79,.79])for(const z of [-.85,.85]){
+  const wheel=object(new THREE.CylinderGeometry(.33,.33,.28,18),rubber,x,.35,z,kart);
   wheel.rotation.z=Math.PI/2;
+  const hub=object(new THREE.CylinderGeometry(.14,.14,.295,16),chrome,x,.35,z,kart);
+  hub.rotation.z=Math.PI/2;
  }
- object(new THREE.SphereGeometry(.32,18,12),material(0xe5c292,.35),0,1.5,.49,kart);
- box(.93,.1,.24,0xf0d6a8,0,.62,-1.12,kart);
+ const helmet=new THREE.Mesh(new THREE.SphereGeometry(.31,22,16),new THREE.MeshPhysicalMaterial({
+  color:0xf2c77e,metalness:.35,roughness:.25,clearcoat:1}));
+ helmet.position.set(0,1.57,.37);kart.add(helmet);
+ const visor=object(new THREE.SphereGeometry(.26,20,12),material(0x1b313c,.09,.48),0,1.56,.19,kart);
+ visor.scale.set(.95,.47,.42);
+ const wheel=object(new THREE.TorusGeometry(.23,.045,8,22),rubber,0,1.04,-.38,kart);
+ wheel.rotation.x=Math.PI*.27;
+ for(const x of [-.39,.39]){
+  const arm=object(new THREE.CapsuleGeometry(.065,.36,5,9),material(0xdbc6a7,.75),x*.75,1.1,-.07,kart);
+  arm.rotation.x=Math.PI/4;
+  box(.11,.1,.14,0xf9eed5,x,.54,-1.31,kart);
+ }
+ const label=box(.75,.035,.55,0xf5e9d5,0,.93,-.7,kart);
+ label.rotation.x=-.06;
+ const number=box(.33,.014,.34,0x33333b,0,.961,-.7,kart);
+ number.rotation.x=-.06;
+ const shadow=new THREE.Mesh(new THREE.CircleGeometry(1.12,28),new THREE.MeshBasicMaterial({
+  color:0x111219,transparent:true,opacity:.21,depthWrite:false}));
+ shadow.rotation.x=-Math.PI/2;shadow.position.y=.024;
+ kart.add(shadow);
 }
 function construct(){
  scene=new THREE.Scene();scene.background=new THREE.Color(0xa2c6d0);scene.fog=new THREE.FogExp2(0xa2c6d0,.0034);
- scene.add(new THREE.HemisphereLight(0xfff2dc,0x527c5e,2));
- const sun=new THREE.DirectionalLight(0xffedca,2.6);sun.position.set(-20,65,30);scene.add(sun);
+ scene.add(new THREE.HemisphereLight(0xf2f6ff,0x5f765b,2.25));
+ scene.add(new THREE.AmbientLight(0xffe9d5,.38));
+ const sun=new THREE.DirectionalLight(0xffe2a3,3.25);
+ sun.position.set(-35,76,28);sun.castShadow=true;
+ sun.shadow.mapSize.set(1024,1024);
+ sun.shadow.camera.left=-160;sun.shadow.camera.right=160;
+ sun.shadow.camera.top=125;sun.shadow.camera.bottom=-125;
+ sun.shadow.camera.far=260;sun.shadow.bias=-.0002;
+ scene.add(sun);
  track();kartModel();
 }
 async function init(){
@@ -200,7 +211,8 @@ async function init(){
  renderer=new THREE.WebGLRenderer({canvas:$("kartCanvas"),antialias:true,powerPreference:"high-performance"});
  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
  renderer.outputColorSpace=THREE.SRGBColorSpace;
- renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;
+ renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.3;
+ renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
  camera=new THREE.PerspectiveCamera(64,1,.1,410);clock=new THREE.Clock();
  construct();reset();requestAnimationFrame(frame);
 }
@@ -227,11 +239,20 @@ async function transmit(){
    reportedFinish=true;
    const finish=await api("finish",{raceId:current,...position});
    if(raceId!==current)return;
-   playing=false;raceId=null;speed=0;
-   $("kartTime").textContent=format(finish.elapsedMs);
+   // Crossing the line records a lap and immediately starts the next one.
+   // Keep the same race ID and driving velocity; never lock the controls.
+   lapCount=finish.nextLap;
+   started=performance.now();
+   progress=0;reportedFinish=false;
+   $("kartLap").textContent=String(lapCount);
+   $("kartTime").textContent="00:00.000";
+   $("kartProgress").textContent="0%";
+   $("kartLast").textContent="LAST "+format(finish.elapsedMs);
    $("kartBest").textContent="BEST "+format(finish.bestMs);
-   message((finish.personalBest?"🏆 NEW PERSONAL BEST! ":"FINISHED! ")+format(finish.elapsedMs)+" · Saved to leaderboard.");
+   message((finish.personalBest?"🏆 NEW PERSONAL BEST! ":"LAP "+finish.lap+" COMPLETE! ")+
+     format(finish.elapsedMs)+" · Lap "+lapCount+" now running.");
    standings(finish.entries);
+   lastLeaderboardRefresh=performance.now();
   }
  }catch(error){
   if(raceId===current){playing=false;message(error.message+" Restart the lap to try again.");}
@@ -275,6 +296,7 @@ function frame(){
  camera.position.lerp(target,Math.min(1,dt*4.5));
  camera.lookAt(pos.x,pos.y+1.1,pos.z);
  renderer.render(scene,camera);
+ if(performance.now()-lastLeaderboardRefresh>15000){lastLeaderboardRefresh=performance.now();leaderboard();}
  $("kartSpeed").textContent=Math.round(Math.abs(speed)*3.6)+" km/h";
 }
 async function begin(){
@@ -282,12 +304,13 @@ async function begin(){
  try{
   await init();
   const result=await api("start",{});
-  raceId=result.raceId;reset();started=performance.now();sendAt=performance.now();playing=true;
+  raceId=result.raceId;reset();lapCount=1;started=performance.now();sendAt=performance.now();playing=true;
+  $("kartLap").textContent="1";$("kartLast").textContent="LAST --:--.---";
   $("kartTime").textContent="00:00.000";
   $("kartProgress").textContent="0%";
-  $("kartStart").textContent="Restart lap";
+  $("kartStart").textContent="Restart session";
   if(result.bestMs)$("kartBest").textContent="BEST "+format(result.bestMs);
-  message("GO! Follow the road around the chicanes and hills. Complete a full lap to set your time.");
+  message("GO! Hit the apex kerbs, keep clear of the gravel, and stay out for unlimited timed laps.");
  }catch(error){message(error.message);}
  finally{busy=false;$("kartStart").disabled=false;}
 }
@@ -295,7 +318,7 @@ function open(){
  if(active)return;active=true;$("kartGame").classList.remove("hidden");
  document.body.classList.add("kart-open");document.exitPointerLock?.();
  message("Race the redesigned Velvet Circuit — corners, chicanes, hills and a pit lane.");
- leaderboard();init().catch(error=>message("Track unavailable: "+error.message));
+ leaderboard();lastLeaderboardRefresh=performance.now();init().catch(error=>message("Track unavailable: "+error.message));
 }
 function close(){
  active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;
