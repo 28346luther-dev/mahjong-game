@@ -73,10 +73,18 @@ function render(){
  $("statusTitle").textContent=state.phase==="lobby"?"Waiting for players":state.phase==="finished"?"Hand complete":state.phase==="claim"?"Claim window":"Game in progress";
  $("statusText").textContent=state.message;
  $("seats").innerHTML=MahjongVisuals.seats(state);
+ const queue=$("mahjongQueue");
+ if(queue){
+  const observers=state.spectatorQueue||[];
+  queue.textContent=observers.length
+   ?"Spectator lobby ("+observers.length+"): "+observers.map(p=>p.name+(p.ready?" ✓ queued":"")).join(" · ")
+   :"Spectator lobby: no one waiting";
+ }
+ $("mahjongSession").textContent="Round "+(state.round||0)+" · "+state.players.length+"/4 seated · "+(state.spectatorQueue?.length||0)+" spectating";
  $("wallTiles").innerHTML=MahjongVisuals.walls(state);
  $("discards").innerHTML=MahjongVisuals.discards(state);
  $("melds").innerHTML=MahjongVisuals.melds(state);
- const me=state.players[state.myIndex],hand=me?.hand||[];
+ const me=state.myIndex>=0?state.players[state.myIndex]:null,hand=me?.hand||[];
  const drawn=state.pendingDraw;
  const drawer=$("drawnTileArea");
  drawer.classList.toggle("hidden",!drawn);
@@ -89,7 +97,13 @@ function render(){
  const controls=$("controls");controls.innerHTML="";
  const add=(label,action,cls="secondary",extra={})=>{const b=document.createElement("button");b.className=cls;b.textContent=label;b.onclick=()=>send(action,extra);controls.appendChild(b);};
  const note=message=>{const span=document.createElement("span");span.className="empty action-note";span.textContent=message;controls.appendChild(span);};
- if(state.phase==="lobby"){
+ if(state.spectator){
+   add(state.queuePosition?"Leave next-round queue":"Join next round queue","queueNext",state.queuePosition?"ghost":"primary");
+   note(state.queuePosition
+    ?"You're #"+state.queuePosition+" in the waiting queue. Watch the current game; when it ends, players can start the next round."
+    :"You're spectating. All player hands stay private until dealt to you next round.");
+   if(state.phase==="finished"&&state.nextRoundReady>=2)add("Start queued round","nextRound","secondary");
+ }else if(state.phase==="lobby"){
    if(state.myIndex===0&&state.players.length>=2)add("Start game","start","primary");
    add(me?.ready?"Not ready":"I'm ready","ready","secondary");
    note(`${state.players.length}/4 players · Start with at least 2 for testing`);
@@ -118,9 +132,11 @@ function render(){
      note("Claims resolve by priority: Mahjong, Kong/Pong, then Chow.");
    }else note(`Waiting for claim responses${state.claimWaiting?.length?`: ${state.claimWaiting.join(", ")}`:"..."}`);
  }else if(state.phase==="finished"){
-   note("The hand has finished. The room can be refreshed to start another table.");
+   add(me?.ready?"Sit out next round":"Play next round","nextReady","secondary");
+   if(state.nextRoundReady>=2)add("Start next round","nextRound","primary");
+   note("Next-round lobby: "+state.nextRoundReady+" players ready · spectators receive seats first, then returning players. Minimum 2, maximum 4.");
  }
- $("turnLabel").textContent=state.phase==="playing"?(state.turn===state.myIndex?"Your turn":`Waiting for ${state.players[state.turn]?.name||"player"}`):state.phase==="claim"?"Claim window · 18 seconds":"";
+ $("turnLabel").textContent=state.spectator?"Spectator view · no private tiles":state.phase==="playing"?(state.turn===state.myIndex?"Your turn":`Waiting for ${state.players[state.turn]?.name||"player"}`):state.phase==="claim"?"Claim window · 18 seconds":"";
 }
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 const params=new URLSearchParams(location.search);if(params.get("room"))$("joinCode").value=params.get("room").toUpperCase();
