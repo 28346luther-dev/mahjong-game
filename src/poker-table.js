@@ -1,5 +1,5 @@
 import {deck,shuffle,evaluateSeven,distributePots,botDecision} from "./poker-rules.js";
-import {INITIAL_SANA,POKER_BUYIN,SLOT_PRICE,newBlackjack,blackjackView,joinBlackjack,readyBlackjack,beginBlackjack,moveBlackjack} from "./blackjack-multiplayer.js";
+import {INITIAL_SANA,POKER_BUYIN,SLOT_PRICE,newBlackjack,blackjackView,joinBlackjack,readyBlackjack,beginBlackjack,moveBlackjack,chooseBlackjackMode} from "./blackjack-multiplayer.js";
 import {spinSlots} from "../public/salon-rules.js";
 const START_STACK=POKER_BUYIN,SMALL_BLIND=10,BIG_BLIND=20,MAX_PLAYERS=4;
 const cleanName=name=>String(name||"Guest").replace(/[^\p{L}\p{N} ._-]/gu,"").slice(0,22)||"Guest";
@@ -260,13 +260,15 @@ export class PokerTable{
  }
  async webSocketMessage(ws,raw){
   await this.load();const user=ws.deserializeAttachment?.()?.user;
-  if(!user||this.sockets.get(user)!==ws)return;
+  const isBlackjack=ws.deserializeAttachment?.()?.kind==="blackjack";
+  if(!user||(isBlackjack?this.blackjackSockets.get(user)!==ws:this.sockets.get(user)!==ws))return;
   if(typeof raw==="string"&&raw.length>8192)return;
   let msg;try{msg=JSON.parse(typeof raw==="string"?raw:new TextDecoder().decode(raw));}catch{return;}
   try{
    if(ws.deserializeAttachment?.()?.kind==="blackjack"){
     const g=this.data.blackjack;
-    if(msg.action==="ready")readyBlackjack(g,user,this.data.wallets);
+    if(msg.action==="mode")chooseBlackjackMode(g,msg.mode);
+    else if(msg.action==="ready")readyBlackjack(g,user,this.data.wallets);
     else if(msg.action==="deal")beginBlackjack(g,this.data.wallets);
     else if(["hit","stand"].includes(msg.action))moveBlackjack(g,user,msg.action,this.data.wallets);
     else if(msg.action==="heartbeat"){this.send(ws,{type:"heartbeatAck"});return;}
