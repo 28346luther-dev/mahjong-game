@@ -59,7 +59,7 @@ export class KartLeaderboard {
    return Response.json({ok:true,raceId:s.id,startedAt:s.start,
     trackLength:Math.round(ROAD.length),bestMs:(await this.read())[id]?.bestMs??null});
   }
-  const key="kart-session-v2:"+id,session=await this.storage.get(key);
+  const key="kart-session-v3:"+id,session=await this.storage.get(key);
   if(!session||session.id!==body.raceId)
    return Response.json({error:"No active lap. Start a new race."},{status:409});
   if(now-session.start>MAX_LAP_MS){
@@ -98,12 +98,12 @@ export class KartLeaderboard {
   if(elapsed<MIN_LAP_MS||session.travel<.93||session.travel>1.2)
    return Response.json({error:"Lap must complete the circuit at racing speed."},{status:422});
   const result=await this.storage.transaction(async txn=>{
-   const records=await txn.get("best-times-v2")||{};
+   const records=await txn.get("best-times-v3")||{};
    const previous=records[id]?.bestMs??Infinity;
    const personalBest=elapsed<previous;
    if(personalBest){
     records[id]={name:session.name,bestMs:elapsed,at:now,version:3};
-    await txn.put("best-times-v2",records);
+    await txn.put("best-times-v3",records);
    }
    await txn.delete(key);
    return {personalBest,bestMs:personalBest?elapsed:previous,entries:leaderboardEntries(records)};
