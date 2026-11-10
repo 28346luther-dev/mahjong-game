@@ -1,0 +1,81 @@
+/* Room camera and table breathing-space pass. Camera previews are collapsed unless requested. */
+#room .roombar{flex-wrap:wrap;gap:7px;align-items:center}
+#room .roombar>div{flex:1;min-width:100px;margin-right:auto}
+#reactionCameraGalleryToggle{background:#704256;color:#fff0d2;border:1px solid #b9996d;font-size:12px;white-space:nowrap}
+#reactionCameraCount{font-size:10px;color:#f4d59a}
+.reaction-camera-gallery{
+ display:flex;gap:10px;overflow-x:auto;max-width:100%;
+ padding:9px 10px 12px;margin:-2px 0 8px;
+ border:1px solid #94704b;border-radius:13px;background:#241e2acc;
+ scrollbar-width:thin;
+}
+.reaction-peer{
+ position:relative;flex:0 0 170px;height:134px;
+ background:radial-gradient(circle at 50% 35%,#573449,#251d29);
+ border:1px solid #c4a073;border-radius:11px;overflow:hidden;
+}
+.reaction-peer-video{
+ display:block;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);
+ background:#2a2029;
+}
+.reaction-peer-placeholder{
+ display:grid;place-items:center;text-align:center;padding:12px;
+ position:absolute;inset:0 0 28px;color:#ecd7b5;font-size:12px;
+}
+.reaction-peer-name{
+ position:absolute;bottom:0;left:0;right:0;
+ padding:5px 9px;background:#311f31ed;color:#f6d5a2;
+ font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.reaction-peer-status{
+ position:absolute;right:6px;top:6px;border-radius:6px;
+ padding:3px 6px;background:#241b26d9;color:#f2d7ae;font-size:10px;
+}
+#room .reaction-camera-controls{
+ margin:5px 0 4px;padding:7px 10px;
+ display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;
+ gap:6px 11px;border-radius:11px;
+}
+#room .reaction-camera-label{min-width:0;gap:2px}
+#room .reaction-camera-label strong{font-size:12px}
+#room .reaction-camera-label span{font-size:10px;line-height:1.35}
+#room .reaction-camera-controls small{grid-column:1/-1;margin-top:0;line-height:1.2}
+#room .reaction-camera-preview{width:64px;height:48px}
+#room .reaction-camera-controls button{font-size:11px;padding:6px 9px}
+#room .tabletop{
+ /* Keep the table readable without making players zoom out to see their rack. */
+ height:clamp(320px,calc(100dvh - 370px),560px);
+ border-width:clamp(7px,1vw,12px);
+}
+#room .tabletop .status{
+ max-height:72px;overflow:auto;
+ padding:6px 10px;z-index:4;
+}
+#room .tabletop .status b{font-size:clamp(12px,1.2vw,16px)}
+#room .tabletop .status span{font-size:11px;line-height:1.25}
+#room .handarea{padding-top:6px;padding-bottom:8px}
+#room .hand{padding-bottom:7px}
+#room .seats .seat{box-shadow:0 3px 12px #0004}
+#room .wall-counter{font-size:10px}
+#room .melds{margin:3px 1.2%}
+#room .hand>.tile{
+ height:clamp(65px,6.2vw,86px);
+ width:clamp(42px,4.4vw,59px);
+ flex-basis:clamp(42px,4.4vw,59px);
+}
+#room .controls{align-items:center}
+#room .controls button{padding:8px 11px}
+#room #roomError:not(:empty){margin:5px 7px;padding:6px 10px;background:#422d33;border-radius:8px}
+@media (max-width:700px){
+ #room .tabletop{height:clamp(300px,49dvh,450px)}
+ #room .reaction-camera-controls{grid-template-columns:1fr auto}
+ #room .reaction-camera-label span{display:none}
+ #room .reaction-camera-controls small{font-size:10px}
+ #room .reaction-camera-preview{display:none}
+ #room .hand{justify-content:flex-start}
+ #room .hand>.tile{height:70px;width:46px;flex-basis:46px}
+ .reaction-peer{flex-basis:138px;height:110px}
+}
+@media (max-height:650px) and (min-width:701px){
+ #room .tabletop{height:clamp(285px,calc(100dvh - 310px),400px)}
+}

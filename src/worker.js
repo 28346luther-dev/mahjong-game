@@ -174,6 +174,27 @@ export default {
     if(url.pathname.startsWith("/api/")){
       const viewer=await authenticate();
       if(!viewer)return Response.json({error:"Please sign in first"},{status:401});
+      if(url.pathname==="/api/rtc/ice"&&request.method==="GET"){
+        // ICE configuration is issued only to signed-in users. TURN key secrets
+        // stay in Cloudflare Worker secrets and are never sent to the browser.
+        const defaultServers=[{urls:["stun:stun.cloudflare.com:3478","stun:stun.l.google.com:19302"]}];
+        if(env.TURN_KEY_ID&&env.TURN_KEY_API_TOKEN){
+          try{
+            const upstream=await fetch("https://rtc.live.cloudflare.com/v1/turn/keys/"+encodeURIComponent(env.TURN_KEY_ID)+"/credentials/generate-ice-servers",{
+              method:"POST",
+              headers:{"authorization":"Bearer "+env.TURN_KEY_API_TOKEN,"content-type":"application/json"},
+              body:JSON.stringify({ttl:3600})
+            });
+            if(upstream.ok){
+              const payload=await upstream.json();
+              if(Array.isArray(payload.iceServers)&&payload.iceServers.length)
+                return Response.json({iceServers:payload.iceServers,relayAvailable:true},{headers:{"cache-control":"no-store"}});
+            }
+            console.error("TURN credentials unavailable",upstream.status);
+          }catch(e){console.error("TURN credentials request failed",e?.name);}
+        }
+        return Response.json({iceServers:defaultServers,relayAvailable:false},{headers:{"cache-control":"no-store"}});
+      }
       if(url.pathname==="/api/create"&&request.method==="POST"){
         const body=await request.json(),roomCode=code(),stub=env.ROOMS.get(env.ROOMS.idFromName(roomCode));
         const res=await stub.fetch("https://room/init",{method:"POST",body:JSON.stringify({name:String(body.name||"Player 1").slice(0,20)})});
