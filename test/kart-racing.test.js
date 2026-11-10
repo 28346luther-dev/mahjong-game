@@ -23,7 +23,7 @@ async function post(race,path,body){
 test("new track has chicanes, hairpins, hills, and its own pit lane",()=>{
  assert.ok(ROAD_POINTS.length>=20);
  assert.ok(ROAD.samples.length>=400);
- assert.ok(ROAD.length>200);
+ assert.ok(ROAD.length>400);
  assert.ok(Math.max(...ROAD_POINTS.map(p=>p[2]))-Math.min(...ROAD_POINTS.map(p=>p[2]))>2);
  assert.ok(PIT.samples.length>50);
  assert.ok(ROAD_HALF_WIDTH>3);
@@ -40,7 +40,7 @@ test("server rejects anonymous drivers, shortcuts and teleports without physical
  assert.equal((await post(race,"/finish",{user:id,raceId:start.result.raceId,x:100,z:100})).status,422);
  const far=sampleAt(.48);
  assert.equal((await post(race,"/sample",{user:id,raceId:start.result.raceId,x:far.x,z:far.z})).status,422);
- assert.equal(data.get("kart-session-v2:"+id).valid,false);
+ assert.equal(data.get("kart-session-v3:"+id).valid,false);
 });
 test("continuous telemetry can complete an honest full-lap sequence and persist best time",async()=>{
  const {race,data}=fixture(),id=user("b");
@@ -50,9 +50,9 @@ test("continuous telemetry can complete an honest full-lap sequence and persist 
  for(let i=1;i<=50;i++){
   const pct=i===50?.005:i/50;
   const point=sampleAt(pct);
-  const session=data.get("kart-session-v2:"+id);
+  const session=data.get("kart-session-v3:"+id);
   session.lastAt=Date.now()-1300;session.start=Date.now()-MIN_LAP_MS-2000;
-  data.set("kart-session-v2:"+id,session);
+  data.set("kart-session-v3:"+id,session);
   const res=await post(race,"/sample",{user:id,raceId,x:point.x,z:point.z});
   assert.equal(res.status,200,"progress "+pct+" "+JSON.stringify(res.result));
  }
@@ -61,14 +61,14 @@ test("continuous telemetry can complete an honest full-lap sequence and persist 
  assert.equal(completed.status,200,JSON.stringify(completed.result));
  assert.equal(completed.result.personalBest,true);
  assert.equal(completed.result.entries[0].name,"Road Racer");
- assert.equal(data.has("kart-session-v2:"+id),false);
+ assert.equal(data.has("kart-session-v3:"+id),false);
 });
 test("new circuit leaderboard does not compare old oval records to new road course",()=>{
  const entries=leaderboardEntries({
   old:{name:"Old Track",bestMs:14000,at:1},
-  new:{name:"New Track",bestMs:60000,at:2,version:2}
+  new:{name:"Extended Track",bestMs:60000,at:2,version:3}
  });
- assert.deepEqual(entries.map(x=>x.name),["New Track"]);
+ assert.deepEqual(entries.map(x=>x.name),["Extended Track"]);
 });
 test("blackjack allows a computer dealer or a real challenger/dealer with 10 Sana each",()=>{
  const game=newBlackjack(),wallets={a:{balance:500},b:{balance:500}};
