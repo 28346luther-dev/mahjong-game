@@ -8,7 +8,7 @@ const root=$("clubhouse"),canvas=$("clubhouseCanvas"),pressed=new Set();
 let THREE=null;
 try{THREE=await import("https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js");}
 catch(err){console.error(err);$("clubToast").classList.remove("hidden");$("clubToast").querySelector("span").textContent="The 3D engine could not load. Check your connection and refresh.";}
-const state={active:false,yaw:0,pitch:0,near:null,locked:false,seated:null,seatReturn:null};
+const state={active:false,yaw:0,pitch:0,near:null,locked:false,seated:null,seatReturn:null,avatarYaw:Math.PI};
 const stations=STATIONS;
 let scene,camera,renderer,clock,raycaster,social=null,lastPresence=0,toastTimeout=null;
 let obstacles=[],seatAnchors=[];
@@ -42,9 +42,15 @@ function sitIn(anchor){
 function interact(st){
  if(state.seated){standUp();return;}
  if(!st)return;
- if(st.kind&&["sofa","stool","table"].includes(st.kind)){sitIn(st);return;}
+ if(st.kind&&["sofa","stool","table"].includes(st.kind)){
+   const game=st.id.startsWith("poker-")?"poker":st.id.startsWith("blackjack-")?"blackjack":null;
+   if(game){window.SalonGames?.open(game);return;}
+   sitIn(st);return;
+ }
  if(st.id==="mahjong"){window.MahjongClubhouse.enterMahjong();return;}
- if(["poker","blackjack","slots"].includes(st.id)){showToast(st.label+" is coming soon. Mahjong is playable now.");return;}
+ if(["poker","blackjack","slots"].includes(st.id)){
+   window.SalonGames?.open(st.id);return;
+ }
  if(st.id==="board"){$("clubNotice").classList.toggle("hidden");return;}
  if(st.id==="karaoke"){$("clubSocialPanel").classList.add("open");showToast("Welcome to the karaoke stage! Enable your mic to talk to others in this room.");return;}
  if(st.id==="bar"){showToast("The bar is open! Walk up to any stool and press E to sit.");return;}
@@ -66,7 +72,8 @@ function collides(x,z){
  return blockedBy(x,z,obstacles,.34);
 }
 function move(dt){
- if(!state.active)return;
+ if(!state.active||window.SalonGames?.isOpen())return;
+ const oldX=camera.position.x,oldZ=camera.position.z;
  const dx=Number(pressed.has("d")||pressed.has("arrowright"))-Number(pressed.has("a")||pressed.has("arrowleft"));
  const dz=Number(pressed.has("w")||pressed.has("arrowup"))-Number(pressed.has("s")||pressed.has("arrowdown"));
  const length=Math.hypot(dx,dz);
@@ -77,10 +84,13 @@ function move(dt){
   if(!collides(nx,camera.position.z))camera.position.x=nx;
   if(!collides(camera.position.x,nz))camera.position.z=nz;
  }
+ // Character face direction tracks the actual movement vector, not camera yaw.
+ const movedX=camera.position.x-oldX,movedZ=camera.position.z-oldZ;
+ if(Math.hypot(movedX,movedZ)>.001)state.avatarYaw=Math.atan2(movedX,movedZ);
  camera.rotation.order="YXZ";camera.rotation.y=state.yaw;camera.rotation.x=state.pitch;
  nearest();
  const now=performance.now();
- if(now-lastPresence>170){lastPresence=now;social?.move(camera.position.x,camera.position.z,state.yaw);}
+ if(now-lastPresence>170){lastPresence=now;social?.move(camera.position.x,camera.position.z,state.avatarYaw);}
 }
 function resize(){
  if(!renderer)return;
@@ -118,7 +128,7 @@ function buildWorld(){
  social=createClubSocial(THREE,scene,camera,zoneAt);
 }
 window.addEventListener("keydown",e=>{
- if(!state.active||["INPUT","TEXTAREA"].includes(document.activeElement?.tagName))return;
+ if(!state.active||window.SalonGames?.isOpen()||["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName))return;
  const k=e.key.toLowerCase();
  if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","shift"].includes(k)){
   e.preventDefault();pressed.add(k);
@@ -157,7 +167,7 @@ window.MahjongClubhouse={
  showLobby(){
   if(!$("authScreen").classList.contains("hidden"))return;
   $("home").classList.add("hidden");$("room").classList.add("hidden");root.classList.remove("hidden");
-  $("clubReturn").classList.add("hidden");state.active=true;social?.start();
+  $("clubReturn").classList.add("hidden");state.active=true;social?.start();window.SalonProfile?.load();
  },
  enterMahjong(){
   state.active=false;state.seated=null;state.seatReturn=null;pressed.clear();social?.stop();

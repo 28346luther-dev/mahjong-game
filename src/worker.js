@@ -1,6 +1,7 @@
 import {AuthStore,sessionCookieName,emptySessionCookie} from "./auth.js";
 export {AuthStore};
 export {ClubSocial} from "./club-social.js";
+export {PokerTable} from "./poker-table.js";
 
 const TILE_NAMES = [
   ...Array.from({length:9},(_,i)=>({id:`c${i+1}`,name:`${i+1} Characters`,short:`${i+1}萬`,suit:"characters",rank:i+1})),
@@ -135,6 +136,17 @@ export default {
         return Response.json({ok:false,component:"account-storage",code:"AUTH_STORAGE_UNAVAILABLE"},{status:503,headers:{"cache-control":"no-store"}});
       }
     }
+    if(url.pathname==="/api/profile"&&(request.method==="GET"||request.method==="POST")){
+      if(!token)return Response.json({error:"Sign in first"},{status:401});
+      let details={};if(request.method==="POST"){
+        if(request.headers.get("origin")&&request.headers.get("origin")!==url.origin)
+          return Response.json({error:"Invalid origin"},{status:403});
+        if(Number(request.headers.get("content-length")||0)>2048)return Response.json({error:"Too large"},{status:413});
+        try{details=await request.json();}catch{return Response.json({error:"Invalid JSON"},{status:400});}
+        details.update=true;
+      }
+      return authStub.fetch("https://auth/profile",{method:"POST",body:JSON.stringify({token,...details})});
+    }
     if(url.pathname.startsWith("/api/auth/")){
       if(url.pathname==="/api/auth/me"){
         const me=await authenticate();
@@ -174,6 +186,17 @@ export default {
     if(url.pathname.startsWith("/api/")){
       const viewer=await authenticate();
       if(!viewer)return Response.json({error:"Please sign in first"},{status:401});
+      if(url.pathname==="/api/poker/join"&&request.method==="POST"){
+        const origin=request.headers.get("origin");
+        if(origin&&origin!==url.origin)return Response.json({error:"Invalid request origin"},{status:403});
+        const profileRes=await authStub.fetch("https://auth/profile",{method:"POST",body:JSON.stringify({token})});
+        const profile=profileRes.ok?await profileRes.json():{name:"Player"};
+        const user=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(viewer.email));
+        const userId=Array.from(new Uint8Array(user),b=>b.toString(16).padStart(2,"0")).join("");
+        return env.POKER.get(env.POKER.idFromName("club-texas-holdem")).fetch("https://poker/join",{
+          method:"POST",body:JSON.stringify({user:userId,name:profile.name})
+        });
+      }
       if(url.pathname==="/api/rtc/ice"&&request.method==="GET"){
         // ICE configuration is issued only to signed-in users. TURN key secrets
         // stay in Cloudflare Worker secrets and are never sent to the browser.
@@ -207,14 +230,30 @@ export default {
       }
       return new Response("Not found",{status:404});
     }
+    if(url.pathname==="/poker/ws"){
+      if(request.headers.get("upgrade")?.toLowerCase()!=="websocket")
+        return Response.json({error:"Upgrade required"},{status:426});
+      const viewer=await authenticate();
+      if(!viewer)return Response.json({error:"Sign in first"},{status:401});
+      const user=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(viewer.email));
+      const userId=Array.from(new Uint8Array(user),b=>b.toString(16).padStart(2,"0")).join("");
+      const headers=new Headers(request.headers);
+      return env.POKER.get(env.POKER.idFromName("club-texas-holdem")).fetch(
+        new Request("https://poker/ws?user="+userId,{headers})
+      );
+    }
     if(url.pathname==="/club/ws"){
       if(request.headers.get("upgrade")?.toLowerCase()!=="websocket")
         return Response.json({error:"WebSocket upgrade required"},{status:426});
       const viewer=await authenticate();
       if(!viewer)return Response.json({error:"Please sign in first"},{status:401});
       const headers=new Headers(request.headers);
+      const profileRes=await authStub.fetch("https://auth/profile",{method:"POST",body:JSON.stringify({token})});
+      const profile=profileRes.ok?await profileRes.json():{name:viewer.email.split("@")[0].slice(0,22),color:"ruby",hair:"dark"};
       headers.set("x-club-user",viewer.email);
-      headers.set("x-club-name",viewer.email.split("@")[0].slice(0,25));
+      headers.set("x-club-name",profile.name);
+      headers.set("x-club-color",profile.color);
+      headers.set("x-club-hair",profile.hair);
       const lobby=env.CLUB.get(env.CLUB.idFromName("main-lobby"));
       return lobby.fetch(new Request("https://club/ws",{method:"GET",headers}));
     }

@@ -61,6 +61,28 @@ export class AuthStore {
       await this.ctx.storage.put("session:"+await digest(token),session);
       return json({email:user.email},200,{"set-cookie":setCookie(token,secure)});
     }
+    if(action==="/profile"){
+      const token=typeof body.token==="string"&&/^[a-f0-9]{64}$/.test(body.token)?body.token:"";
+      if(!token)return json({error:"Sign in required"},401);
+      const session=await this.ctx.storage.get("session:"+await digest(token));
+      if(!session||session.expiresAt<=Date.now())return json({error:"Session expired"},401);
+      const key="profile:"+await digest(session.email);
+      if(body.update){
+        const name=String(body.name||"").trim();
+        const color=String(body.color||"");
+        const hair=String(body.hair||"");
+        if(name.length<2||name.length>22||!/^[\p{L}\p{N} _.-]+$/u.test(name))
+          return json({error:"Username must be 2–22 letters, numbers, spaces or _.-"},400);
+        if(!["ruby","plum","emerald","navy","gold"].includes(color))
+          return json({error:"Invalid outfit colour"},400);
+        if(!["dark","brown","blonde","auburn"].includes(hair))
+          return json({error:"Invalid hair colour"},400);
+        await this.ctx.storage.put(key,{name,color,hair});
+      }
+      return json(await this.ctx.storage.get(key)||{
+        name:session.email.split("@")[0].slice(0,22),color:"ruby",hair:"dark"
+      });
+    }
     if(action==="/me"||action==="/logout"){
       const token=typeof body.token==="string"&&/^[a-f0-9]{64}$/.test(body.token)?body.token:"";
       if(!token)return json({error:"Not signed in"},401);

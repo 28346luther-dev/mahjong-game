@@ -1,0 +1,53 @@
+/* Velvet Salon — three genuine play-only games, plus avatar editor. */
+.salon-modal{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;background:#130e1bd9;backdrop-filter:blur(9px);padding:16px;overflow:auto;}
+.salon-modal.hidden{display:none!important}
+.salon-sheet{width:min(1100px,100%);max-height:min(92dvh,960px);overflow:auto;background:linear-gradient(125deg,#412a40,#211c2e);border:2px solid #c6a46c;box-shadow:0 30px 80px #000b;border-radius:22px;color:#f5e5c7;padding:clamp(14px,2.5vw,28px)}
+.salon-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;border-bottom:1px solid #b68b6d7b;padding-bottom:13px}
+.salon-header h2{font:700 clamp(21px,3vw,36px)/1.1 Georgia,serif;letter-spacing:.06em;color:#f1d7a5;margin:6px 0}
+.salon-eyebrow{font:700 10px system-ui;color:#cea97a;letter-spacing:.15em}
+.salon-close{border:1px solid #a88a6f;border-radius:12px;padding:10px 12px;color:#f4d6af;background:#5c3446;cursor:pointer}
+.salon-help{max-width:750px;color:#ddcdbf;font-size:13px;line-height:1.5;margin:4px auto 18px;text-align:center}
+.salon-game{display:flex;flex-direction:column;align-items:center;gap:15px}
+.salon-game.hidden{display:none!important}
+.salon-game button{border-radius:10px;background:#8a4b5f;color:#fff3d8;border:1px solid #caaa83;padding:11px 16px;cursor:pointer;font-weight:700}
+.salon-game button:disabled{opacity:.38;cursor:not-allowed}
+.salon-game button.salon-action{padding:14px 27px;background:linear-gradient(135deg,#f1ce93,#b88e58);color:#342130;font-size:16px}
+.salon-result{color:#fae0a6;font:700 clamp(14px,1.8vw,21px) Georgia,serif;text-align:center;min-height:24px}
+.salon-score{font:700 17px system-ui;color:#f3d49c}
+.slot-reels{display:flex;gap:clamp(6px,2vw,18px);padding:18px;background:linear-gradient(#5f2c45,#2c1a31);border:10px ridge #c3a26e;border-radius:28px;box-shadow:inset 0 0 26px #0008,0 14px 35px #0006}
+.slot-reel{width:clamp(73px,14vw,146px);height:clamp(108px,17vw,174px);background:linear-gradient(145deg,#fff9e7,#dfd6ba);border:3px solid #d7b884;border-radius:16px;display:grid;place-items:center;font-size:clamp(39px,8vw,80px);box-shadow:inset 0 0 20px #9b85676b}
+.card-board{background:radial-gradient(ellipse,#245947,#132f37);width:min(710px,100%);border:12px solid #533329;box-shadow:inset 0 0 0 3px #d6b379,0 18px 32px #0005;border-radius:110px;padding:clamp(16px,3vw,35px);display:flex;align-items:center;flex-direction:column;gap:12px}
+.card-board h3{font:700 16px Georgia,serif;color:#fbe3ab;margin:0}
+.card-row{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;min-height:106px}
+.salon-card{height:104px;width:70px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;background:#fffaf0;border:3px solid white;box-shadow:0 4px 12px #0006;border-radius:9px;color:#1c2630;padding:7px;font:700 21px Georgia,serif}
+.salon-card.red{color:#ae354b}.salon-card.black{color:#182b34}
+.salon-card b{align-self:center;font-size:35px;line-height:1}
+.salon-card.back{justify-content:center;align-items:center;color:#f9e2ad;background:repeating-linear-gradient(45deg,#783c53 0 9px,#572f4a 9px 17px);font-size:34px}
+.salon-actions{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap}
+.salon-score-row{display:flex;justify-content:space-around;flex-wrap:wrap;align-items:center;width:100%;gap:12px;color:#f7dca5;font:700 14px system-ui}
+.poker-felt{width:100%;padding:17px 12px;background:radial-gradient(ellipse,#215344,#122e33);border:11px solid #6a4635;border-radius:80px;box-shadow:inset 0 0 0 3px #d4b37d,0 12px 35px #0006}
+.poker-community{min-height:110px;margin-bottom:15px}
+.poker-players{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px}
+.poker-player{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0;padding:10px 6px;background:#231e2da8;border:1px solid #ad8a63;border-radius:16px}
+.poker-player.current{border:2px solid #ffe49b;box-shadow:0 0 16px #e1bc7880}
+.poker-player.folded{opacity:.57}
+.poker-player strong{color:#f8db9d;font:700 13px system-ui;text-align:center}
+.poker-player span{color:#e7dacd;font:11px system-ui;text-align:center}
+.poker-hole{display:flex;gap:4px}
+.poker-hole .salon-card{height:68px;width:45px;padding:4px;font-size:14px;border-width:2px}
+.poker-hole .salon-card b{font-size:21px}
+.poker-hole .salon-card.back{font-size:24px}
+.poker-actions{gap:7px}
+.poker-actions input{width:92px;margin-left:5px;padding:8px;border:1px solid #c3a678;border-radius:7px;background:#fff8e4;color:#271d23}
+.poker-actions label{font-size:12px;color:#f1dfc5}
+.avatar-editor{margin:8px 0;padding:12px 16px;border:1px solid #ad8968;background:linear-gradient(100deg,#2e2434,#402b3b);color:#f4dec3;border-radius:14px}
+.avatar-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+.avatar-editor-heading div{display:flex;flex-direction:column;gap:3px}
+.avatar-editor-heading strong{color:#f4d4a5;font:700 13px Georgia,serif}
+.avatar-editor-heading span{font-size:11px;color:#dcc5b7}
+.avatar-form{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+.avatar-form label{display:flex;flex-direction:column;gap:5px;color:#f1d9b8;font-size:11px;font-weight:700;flex:1;min-width:130px}
+.avatar-form input,.avatar-form select{padding:9px 10px;background:#f9f0de;color:#342636;border:1px solid #bfa078;border-radius:8px;font-size:13px;width:100%;max-width:100%}
+.avatar-form button{white-space:nowrap;padding:10px 16px;border-radius:9px;background:#e4bd80;border:1px solid #f4d9a6;color:#382837;font-weight:700;cursor:pointer}
+body.salon-playing{overflow:hidden}
+@media(max-width:700px){.salon-modal{padding:5px}.salon-sheet{max-height:96dvh;padding:12px;border-radius:14px}.salon-header{gap:5px}.salon-close{font-size:11px;padding:8px}.poker-felt{border-radius:30px;padding:10px 6px}.poker-players{grid-template-columns:repeat(2,minmax(0,1fr))}.poker-player{padding:7px 3px}.salon-card{height:78px;width:53px;padding:5px}.salon-card b{font-size:28px}.avatar-form label{min-width:130px}}

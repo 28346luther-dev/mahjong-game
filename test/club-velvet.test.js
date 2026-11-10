@@ -9,7 +9,7 @@ test("all existing gameplay and social interaction targets survive the visual ov
  const needed=["mahjong","poker","blackjack","slots","board","karaoke","bar","sofa-left","sofa-right"];
  assert.deepEqual(STATIONS.map(s=>s.id),needed);
  assert.equal(STATIONS.find(s=>s.id==="mahjong").enabled,true);
- assert.equal(STATIONS.find(s=>s.id==="poker").enabled,false);
+ assert.equal(STATIONS.find(s=>s.id==="poker").enabled,true);
 });
 test("red velvet lounges and bar retain seating locations",()=>{
  const sofa=couchSeatPlan(-5.15,7.62,Math.PI,"west-north");
