@@ -170,15 +170,51 @@ function track(){
 }
 function kartModel(){
  kart=new THREE.Group();scene.add(kart);
- box(1.4,.36,2.3,0x97384b,0,.62,0,kart);
- box(1.1,.2,.87,0xe5be87,0,.82,-.5,kart);
- box(.9,.58,.8,0x4c2d3b,0,1.03,.3,kart);
- for(const x of [-.77,.77])for(const z of [-.84,.84]){
-  const wheel=object(new THREE.CylinderGeometry(.31,.31,.22,16),material(0x171e23),x,.4,z,kart);
+ const metallic=(color,roughness=.36,metalness=.38)=>
+  new THREE.MeshStandardMaterial({color,roughness,metalness});
+ const crimson=metallic(0xa12749,.24,.55),highlight=metallic(0xe3b983,.3,.63);
+ const rubber=metallic(0x171d25,.96,0),dark=metallic(0x272b36,.55,.16);
+ const chassis=object(new THREE.CapsuleGeometry(.73,1.15,5,14),crimson,0,.62,0,kart);
+ chassis.rotation.x=Math.PI/2;chassis.scale.set(1.10,1.05,1.0);
+ const nose=object(new THREE.SphereGeometry(.82,18,12),crimson,0,.55,-.92,kart);
+ nose.scale.set(.9,.35,.72);
+ const bumper=object(new THREE.TorusGeometry(.72,.09,10,26,Math.PI),highlight,0,.49,-1.36,kart);
+ bumper.rotation.x=Math.PI/2;bumper.rotation.z=Math.PI;
+ const seat=object(new THREE.CapsuleGeometry(.46,.18,4,12),dark,0,.98,.31,kart);
+ seat.rotation.x=Math.PI/2;
+ const back=object(new THREE.SphereGeometry(.46,14,14),metallic(0x4d3042,.82,.05),0,1.08,.70,kart);
+ back.scale.set(1,.86,.34);
+ const wheelMeshes=[];
+ for(const x of [-.87,.87])for(const z of [-.83,.84]){
+  const wheel=object(new THREE.CylinderGeometry(.32,.32,.26,22),rubber,x,.40,z,kart);
   wheel.rotation.z=Math.PI/2;
+  wheelMeshes.push(wheel);
+  const hub=object(new THREE.CylinderGeometry(.16,.16,.27,18),highlight,x,.4,z,kart);
+  hub.rotation.z=Math.PI/2;
  }
- object(new THREE.SphereGeometry(.32,18,12),material(0xe5c292,.35),0,1.5,.49,kart);
- box(.93,.1,.24,0xf0d6a8,0,.62,-1.12,kart);
+ // Driver with gold helmet, clear visor, suit and gloves.
+ const suit=object(new THREE.CapsuleGeometry(.33,.44,4,12),crimson,0,1.15,.37,kart);
+ suit.rotation.x=-.15;
+ object(new THREE.SphereGeometry(.33,20,16),highlight,0,1.63,.37,kart);
+ const visor=object(new THREE.SphereGeometry(.29,20,12),metallic(0x263746,.18,.47),0,1.63,.14,kart);
+ visor.scale.set(.88,.52,.42);
+ for(const x of [-.28,.28]){
+  object(new THREE.SphereGeometry(.11,12,10),dark,x,1.06,-.23,kart);
+ }
+ // Painted race number, steering wheel and subtle running light.
+ const wheel=object(new THREE.TorusGeometry(.23,.035,8,16),dark,0,1.05,-.29,kart);
+ wheel.rotation.x=Math.PI/3;
+ const noseStripe=box(.24,.04,1.09,0xf9d49e,0,.82,-.65,kart);
+ noseStripe.rotation.x=.08;
+ for(const x of [-.45,.45]){
+  const lamp=object(new THREE.SphereGeometry(.08,10,10),
+   new THREE.MeshStandardMaterial({color:0xffda8b,emissive:0xffb35b,emissiveIntensity:.6}),
+   x,.55,-1.38,kart);
+ }
+ // Contact shadow remains visible even on uneven track geometry.
+ const shadow=new THREE.Mesh(new THREE.CircleGeometry(1.15,32),
+  new THREE.MeshBasicMaterial({color:0x182228,transparent:true,opacity:.23,depthWrite:false}));
+ shadow.rotation.x=-Math.PI/2;shadow.scale.set(1.1,1.55,1);shadow.position.y=.12;kart.add(shadow);
 }
 function construct(){
  scene=new THREE.Scene();scene.background=new THREE.Color(0xa2c6d0);scene.fog=new THREE.FogExp2(0xa2c6d0,.0034);
