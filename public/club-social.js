@@ -181,7 +181,10 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
      if(arr.length<75){arr.push(data.payload);iceQueue.set(p.id,arr);}
     }
    }else if(data.kind==="offer"){
-    if(pc)closePeer(p.id);
+    if(pc){
+      // Preserve early ICE candidates and the serial signalling queue during renegotiation.
+      pc.onicecandidate=null;pc.ontrack=null;pc.onconnectionstatechange=null;pc.close();calls.delete(p.id);
+    }
     pc=await ensureCall(p,false);if(!pc)return;
     await pc.setRemoteDescription(new RTCSessionDescription(data.payload));
     await flushIce(p.id,pc);
