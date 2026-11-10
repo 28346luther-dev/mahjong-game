@@ -5,11 +5,22 @@
  const peers=new Map(),names=new Map(),publishers=new Set();
  let socket=null,myId=null,localStream=null,enabled=false,iceConfig=null,icePromise=null,epoch=0;
  let lastReactionId=null,overlayTimer=null,replayUrl=null,expanded=false,failedPeers=new Set();
+ const CAMERA_WIDTH=320,CAMERA_HEIGHT=240,CAMERA_FPS=12,MAX_VIDEO_BITRATE=180000;
  const fallbackIce=[{urls:["stun:stun.cloudflare.com:3478","stun:stun.l.google.com:19302"]}];
  const open=()=>socket?.readyState===WebSocket.OPEN;
  const send=obj=>{if(open())socket.send(JSON.stringify(obj));};
  const note=text=>{if($("reactionCameraNote"))$("reactionCameraNote").textContent=text;};
  const publisherName=id=>names.get(id)||"Player";
+ async function tuneSender(sender){
+  try{
+   const params=sender.getParameters();
+   if(!params.encodings?.length)params.encodings=[{}];
+   params.encodings[0].maxBitrate=MAX_VIDEO_BITRATE;
+   params.encodings[0].maxFramerate=CAMERA_FPS;
+   params.degradationPreference="maintain-framerate";
+   await sender.setParameters(params);
+  }catch(e){console.warn("Camera bitrate adjustment not supported",e?.name);}
+ }
  async function ice(){
   if(iceConfig)return iceConfig;
   if(icePromise)return icePromise;
@@ -48,7 +59,7 @@
    if(!item.active||current!==epoch||!stream.getVideoTracks().some(t=>t.readyState==="live"))return;
    try{
     const mime=["video/webm;codecs=vp8","video/webm","video/mp4"].find(t=>MediaRecorder.isTypeSupported(t));
-    const recorder=new MediaRecorder(stream,mime?{mimeType:mime,videoBitsPerSecond:350000}:{videoBitsPerSecond:350000});
+    const recorder=new MediaRecorder(stream,mime?{mimeType:mime,videoBitsPerSecond:120000}:{videoBitsPerSecond:120000});
     const chunks=[];item.recorder=recorder;
     recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data);};
     recorder.onstop=()=>{
@@ -58,7 +69,7 @@
      if(item.active)cycle();
     };
     recorder.start();
-    item.timer=setTimeout(()=>{if(recorder.state==="recording")recorder.stop();},3800);
+    item.timer=setTimeout(()=>{if(recorder.state==="recording")recorder.stop();},3000);
    }catch{item.active=false;peer.rec=null;}
   }
   cycle();
@@ -117,6 +128,13 @@
   toggle.classList.toggle("hidden",!active.length);
   if(count)count.textContent=active.length+" live";
   gallery.classList.toggle("hidden",!expanded||!active.length);
+  // Do not decode live remote video into hidden <video> elements.
+  if(!expanded||!active.length){
+   for(const card of gallery.children){
+    const video=card.querySelector("video");
+    if(video){video.pause();video.srcObject=null;}
+   }
+  }
   const existing=new Map([...gallery.children].map(e=>[e.dataset.playerId,e]));
   for(const id of active){
    let card=existing.get(id);
@@ -132,9 +150,9 @@
    const video=card.querySelector("video"),placeholder=card.querySelector(".reaction-peer-placeholder");
    card.querySelector("strong").textContent=publisherName(id);
    card.querySelector(".reaction-peer-status").textContent=peer?.status||"Connecting…";
-   if(stream?.getVideoTracks().some(t=>t.readyState==="live")){
-    if(video.srcObject!==stream)video.srcObject=stream;
-    video.classList.remove("hidden");placeholder.classList.add("hidden");video.play().catch(()=>{});
+   if(expanded&&stream?.getVideoTracks().some(t=>t.readyState==="live")){
+    if(video.srcObject!==stream){video.srcObject=stream;video.play().catch(()=>{});}
+    video.classList.remove("hidden");placeholder.classList.add("hidden");
    }else{
     video.srcObject=null;video.classList.add("hidden");placeholder.classList.remove("hidden");
     placeholder.textContent=peer?.status||"Connecting…";
@@ -153,13 +171,19 @@
   pc.onicecandidate=e=>{if(e.candidate)send({action:"cameraSignal",to:id,kind:"ice",payload:e.candidate.toJSON()});};
   pc.ontrack=e=>{
    peer.stream=e.streams[0]||new MediaStream([e.track]);
-   peer.status="Live";failedPeers.delete(id);record(peer,peer.stream);updateGallery();
+   peer.status="Live";failedPeers.delete(id);
+   // Continuous MediaRecorder encoding for EVERY inbound stream was the main
+   // source of video stutter. Remote video stays live, without background encoding.
+   updateGallery();
    if($("reactionOverlay")?.dataset.playerId===id&&!$("reactionOverlay").classList.contains("hidden"))showFeed(id);
   };
   pc.onconnectionstatechange=()=>{
    if(peer.pc!==pc)return;
    peer.status=pc.connectionState==="connected"?"Live":pc.connectionState;
    updateGallery();
+   if(pc.connectionState==="disconnected"){
+    peer.status="Signal interrupted";updateGallery();
+   }
    if(pc.connectionState==="failed"){
     peer.status=config.relayAvailable?"Video connection failed":"TURN relay not configured";
     failedPeers.add(id);
@@ -169,7 +193,10 @@
    }
   };
   if(publish&&localStream){
-   for(const track of localStream.getVideoTracks())pc.addTrack(track,localStream);
+   for(const track of localStream.getVideoTracks()){
+    const sender=pc.addTrack(track,localStream);
+    tuneSender(sender);
+   }
   }else pc.addTransceiver("video",{direction:"recvonly"});
   updateGallery();return pc;
  }
@@ -225,12 +252,17 @@
   if(!open()){note("Wait for the Mahjong room to reconnect.");return;}
   if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection){note("Camera sharing is unavailable in this browser.");return;}
   try{
-   const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480},frameRate:{ideal:20,max:24}},audio:false});
+   const stream=await navigator.mediaDevices.getUserMedia({
+    video:{facingMode:"user",width:{ideal:CAMERA_WIDTH},height:{ideal:CAMERA_HEIGHT},
+      frameRate:{ideal:CAMERA_FPS,max:15}},audio:false
+   });
    localStream=stream;enabled=true;
    for(const track of stream.getVideoTracks())track.onended=()=>{if(enabled)disable();};
+   // Keep one lightweight optional replay buffer for your own reactions only,
+   // not one encoder for every remote viewer.
    const self=member(myId);record(self,stream);
    send({action:"cameraStatus",enabled:true});
-   button();note("Camera is live for other players at this table. You can switch it off at any time.");
+   button();note("Low-lag camera mode (320p / 12 fps) enabled. Other players can see your video. You can switch it off at any time.");
   }catch{note("Camera permission was denied or the camera is busy.");}
  }
  function handle(data){
