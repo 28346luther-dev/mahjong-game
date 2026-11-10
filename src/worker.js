@@ -230,7 +230,7 @@ export default {
 
 export class MahjongRoom {
   constructor(ctx){
-    this.ctx=ctx;this.state=null;this.sockets=new Map();this.cameras=new Set();this.cameraSignals=new Map();
+    this.ctx=ctx;this.state=null;this.sockets=new Map();this.reactionTransfers=new Map();this.submittedReactions=new Set();
     // Hibernatable WebSockets are reattached to a new Durable Object instance on wake.
     for(const ws of ctx.getWebSockets?.()||[]){
       const attachment=ws.deserializeAttachment?.();
@@ -239,7 +239,7 @@ export class MahjongRoom {
       const older=this.sockets.get(playerId);
       if(older&&older!==ws)try{older.close(4001,"Reconnected elsewhere");}catch{}
       this.sockets.set(playerId,ws);
-      if(attachment.cameraEnabled)this.cameras.add(playerId);
+
     }
   }
   async fetch(request){
@@ -265,11 +265,11 @@ export class MahjongRoom {
       // A reconnection replaces the previous socket without removing the player.
       if(old)try{old.close(4001,"Reconnected elsewhere");}catch{}
       this.ctx.acceptWebSocket(server);
-      server.serializeAttachment({playerId,cameraEnabled:false});
+      server.serializeAttachment({playerId});
       this.sockets.set(playerId,server);
-      this.disableCamera(playerId); // Do not restore camera consent after reconnect.
+
       server.send(JSON.stringify({type:"state",state:publicState(this.state,playerId)}));
-      server.send(JSON.stringify({type:"cameraPeers",players:this.state.players.map(p=>({id:p.id,name:p.name,enabled:this.cameras.has(p.id)}))}));
+
       return new Response(null,{status:101,webSocket:client});
     }
     return new Response("Not found",{status:404});
@@ -285,7 +285,7 @@ export class MahjongRoom {
   }
   async webSocketClose(ws){
     const id=ws.deserializeAttachment?.()?.playerId;
-    if(id&&this.sockets.get(id)===ws){this.sockets.delete(id);this.disableCamera(id);}
+    if(id&&this.sockets.get(id)===ws){this.sockets.delete(id);this.reactionTransfers.delete(id);}
   }
   async webSocketError(ws){await this.webSocketClose(ws);}
   async load(){if(!this.state)this.state=await this.ctx.storage.get("state");}
@@ -296,37 +296,63 @@ export class MahjongRoom {
     for(const id of s.claimWindow.eligible)if(!s.claimWindow.responses[id])s.claimWindow.responses[id]={action:"pass"};
     this.resolveClaimWindow();await this.save();this.broadcast();
   }
-  disableCamera(playerId){
-    if(this.cameras.delete(playerId))this.broadcastCamera({type:"cameraStatus",id:playerId,enabled:false});
-    this.cameraSignals.delete(playerId);
+  // Short reaction videos travel as small bounded WebSocket messages. The Durable
+  // Object forwards each chunk only to other players and never persists video.
+  reactionBroadcast(from,data){
+    for(const [id,ws] of this.sockets)if(id!==from){
+      try{ws.send(JSON.stringify(data));}catch{}
+    }
   }
-  broadcastCamera(msg){for(const ws of this.sockets.values()){try{ws.send(JSON.stringify(msg));}catch{}}}
+  handleReactionClip(playerId,msg){
+    const event=this.state?.lastReaction;
+    if(!event||event.playerId!==playerId||event.id!==msg.eventId||Date.now()-event.at>90000)return;
+    const transfer=this.reactionTransfers.get(playerId);
+    if(msg.action==="reactionClipStart"){
+      if(this.submittedReactions.has(event.id)||transfer)return;
+      const mime=String(msg.mime||"");
+      if(!/^video\/(webm|mp4)(;[a-zA-Z0-9=.,+ -]+)?$/.test(mime))return;
+      const chunks=msg.chunks;
+      if(!Number.isInteger(chunks)||chunks<1||chunks>56)return;
+      this.reactionTransfers.set(playerId,{eventId:event.id,mime,chunks,next:0,total:0,started:Date.now()});
+      this.reactionBroadcast(playerId,{type:"reactionClipStart",eventId:event.id,from:playerId,
+        name:event.playerName,claim:event.claim,mime,chunks});
+      return;
+    }
+    if(!transfer||transfer.eventId!==event.id||Date.now()-transfer.started>30000){
+      this.reactionTransfers.delete(playerId);return;
+    }
+    if(msg.action==="reactionClipChunk"){
+      if(!Number.isInteger(msg.index)||msg.index!==transfer.next||
+         typeof msg.data!=="string"||msg.data.length>12000||
+         !/^[A-Za-z0-9+/]*={0,2}$/.test(msg.data)){
+        this.reactionTransfers.delete(playerId);
+        this.reactionBroadcast(playerId,{type:"reactionClipAbort",eventId:event.id});return;
+      }
+      transfer.total+=msg.data.length;
+      if(transfer.total>360000){
+        this.reactionTransfers.delete(playerId);
+        this.reactionBroadcast(playerId,{type:"reactionClipAbort",eventId:event.id});return;
+      }
+      transfer.next++;
+      this.reactionBroadcast(playerId,{type:"reactionClipChunk",eventId:event.id,index:msg.index,data:msg.data});
+      return;
+    }
+    if(msg.action==="reactionClipEnd"){
+      if(transfer.next!==transfer.chunks){this.reactionTransfers.delete(playerId);return;}
+      this.reactionTransfers.delete(playerId);
+      this.submittedReactions.add(event.id);
+      if(this.submittedReactions.size>32)this.submittedReactions.delete(this.submittedReactions.values().next().value);
+      this.reactionBroadcast(playerId,{type:"reactionClipEnd",eventId:event.id});
+      this.send(playerId,{type:"reactionClipAccepted",eventId:event.id});
+    }
+  }
   async onMessage(playerId,raw){
     await this.load();const s=this.state;if(!s)return;
     if(typeof raw!=="string"||raw.length>30000)return;
     let msg;try{msg=JSON.parse(raw);}catch{return;}
     if(msg.action==="heartbeat"){this.send(playerId,{type:"heartbeatAck"});return;}
-    if(msg.action==="cameraStatus"&&typeof msg.enabled==="boolean"){
-      if(msg.enabled)this.cameras.add(playerId);
-      else this.disableCamera(playerId);
-      const socket=this.sockets.get(playerId);
-      socket?.serializeAttachment?.({playerId,cameraEnabled:msg.enabled});
-      if(msg.enabled)this.broadcastCamera({type:"cameraStatus",id:playerId,enabled:true});
-      return;
-    }
-    if(msg.action==="cameraSubscribe"&&typeof msg.to==="string"){
-      if(this.cameras.has(msg.to)&&this.sockets.has(msg.to)&&msg.to!==playerId)
-        this.send(msg.to,{type:"cameraSubscribe",from:playerId});
-      return;
-    }
-    if(msg.action==="cameraSignal"&&typeof msg.to==="string"&&
-       ["offer","answer","ice"].includes(msg.kind)&&msg.payload&&
-       JSON.stringify(msg.payload).length<22000&&this.sockets.has(msg.to)&&
-       (this.cameras.has(playerId)||this.cameras.has(msg.to))){
-      // Offer/answer and ICE candidates must arrive intact; dropping closely spaced
-      // ICE candidates can prevent peer connections from completing.
-      this.send(msg.to,{type:"cameraSignal",from:playerId,kind:msg.kind,payload:msg.payload});
-      return;
+    if(["reactionClipStart","reactionClipChunk","reactionClipEnd"].includes(msg.action)){
+      this.handleReactionClip(playerId,msg);return;
     }
     const idx=s.players.findIndex(p=>p.id===playerId);if(idx<0)return;const p=s.players[idx];
     if(msg.action==="ready"&&s.phase==="lobby"){
