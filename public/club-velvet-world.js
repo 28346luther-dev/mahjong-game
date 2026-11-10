@@ -9,7 +9,8 @@ export const STATIONS=[
  {id:"poker",label:"TEXAS HOLD’EM",x:17,z:-11,r:3.25,enabled:true},
  {id:"blackjack",label:"BLACKJACK",x:-17,z:9,r:3.25,enabled:true},
  {id:"slots",label:"SLOT MACHINES",x:17.4,z:8.7,r:4.3,enabled:true},
- {id:"board",label:"NOTICEBOARD",x:-8.6,z:-4.6,r:2.15},
+ {id:"board",label:"NOTICEBOARD",x:-8.5,z:1.75,r:2.15},
+ {id:"gokarts",label:"GO-KART PORTAL · VELVET CIRCUIT",x:0,z:16.25,r:2.2,enabled:true},
  {id:"karaoke",label:"KARAOKE STAGE",x:0,z:-13,r:3.8},
  {id:"bar",label:"COCKTAIL BAR",x:5.7,z:-5.4,r:2.4},
  {id:"sofa-left",label:"VELVET LOUNGE",x:-5.2,z:5.8,r:2.7},
@@ -219,10 +220,8 @@ export function buildVelvetClub(THREE,scene){
    for(let k=0;k<5;k++)soft(.19,.018,.31,cream,-.68+k*.33,1.32,-.14,g,.018);
    for(let k=0;k<3;k++)column(.14,.035,standard(k%2?0xa83547:0xefcf85),.5+k*.19,1.32,.5,g);
   }
-  const caption=st.id==="poker"?"HUMANS · BOTS · SANA COINS":st.id==="blackjack"?"PLAY THE HOUSE · NO MONEY":"PRESS E TO PLAY";
-  // Room plaques are flush-mounted on real wall surfaces, never suspended above tables.
-  framedText(st.id==="poker"?"TEXAS HOLD'EM":st.id.toUpperCase(),caption,
-    st.x,4.15,st.z<0?-18.23:1.47,4.7,0);
+  // Room signs belong to roomShell. Duplicating them above the table caused
+  // overlapping, illegible labels and visual z-fighting.
  }
  function bottles(x,z){
   for(let k=0;k<12;k++){
@@ -330,7 +329,7 @@ export function buildVelvetClub(THREE,scene){
   framedText("THE GAMES CLUB","A PRIVATE WORLD OF GAMES & FRIENDS",0,5.05,-17.62,8.25,0);
  }
  function board(){
-  const g=new THREE.Group();g.position.set(-9.67,3.18,-4.42);g.rotation.y=Math.PI/2;scene.add(g);
+  const g=new THREE.Group();g.position.set(-9.69,3.05,1.75);g.rotation.y=Math.PI/2;scene.add(g);
   soft(3.18,2.5,.16,walnut,0,0,0,g,.10);
   soft(2.98,2.30,.08,brass,0,0,.1,g,.06);
   const canvas=document.createElement("canvas");canvas.width=560;canvas.height=420;
@@ -342,6 +341,32 @@ export function buildVelvetClub(THREE,scene){
   const front=new THREE.Mesh(new THREE.PlaneGeometry(2.75,2.06),
    new THREE.MeshBasicMaterial({map:tex,side:THREE.FrontSide}));
   front.position.z=.15;g.add(front);
+ }
+ function goKartPortal(){
+  // A physical racing-themed portal built against the north hall wall.
+  // The wall remains solid; E transports the visitor to a separate racing scene.
+  const g=new THREE.Group();g.position.set(0,0,17.87);g.rotation.y=Math.PI;scene.add(g);
+  const glow=new THREE.MeshBasicMaterial({color:0x32d6c4});
+  soft(4.35,4.1,.28,walnut,0,2.12,-.08,g,.13);
+  soft(3.82,3.62,.09,brass,0,2.08,.12,g,.10);
+  soft(3.53,3.3,.06,standard(0x172b36,.42,.33),0,2.05,.20,g,.09);
+  // Neon racetrack loops give the door visible depth even when not entered.
+  for(const r of [1.2,1.0,.78]){
+   const ring=new THREE.Mesh(new THREE.TorusGeometry(r,.055,10,52),glow);
+   ring.scale.set(1,.98,1);ring.position.set(0,2.05,.29);g.add(ring);
+  }
+  const kartSign=soft(1.1,.22,.18,bright,0,.52,.29,g,.06);
+  for(let i=0;i<12;i++){
+   const x=-1.55+i*.282;
+   soft(.14,.05,.11,i%2?cream:standard(0x201a29),x,.37,.33,g,.014);
+  }
+  for(const side of [-2.28,2.28]){
+   soft(.20,4.15,.34,brass,side,2.08,.03,g,.045);
+   ball(.21,standard(0x50cabb,.2,.3),side,4.08,.16,g);
+  }
+  const light=new THREE.PointLight(0x42d8c4,8,6,2);
+  light.position.set(0,2,.75);g.add(light);
+  // Keep interaction approach clear of decorative railings.
  }
  function roomShell(){
   const ceiling=standard(0x352a32,.04,.84),floor=standard(0x4b352e,.08,.71);
@@ -416,10 +441,12 @@ export function buildVelvetClub(THREE,scene){
   framedText("BLACKJACK","HIT · STAND · PLAY",-17,4.6,18.22,5.4,Math.PI);
   framedText("SLOT SALON","FREE SPINS · FUN POINTS",17,4.6,18.22,5.4,Math.PI);
   // Entrance welcome plaque faces the incoming player (negative Z).
-  framedText("WELCOME","THE GAMES CLUB",0,4.52,18.24,5.4,Math.PI);
+  // At this end of the main hall the go-kart portal replaces the old welcome
+  // sign. Both cannot occupy the same solid wall.
+  framedText("GO-KART PORTAL","ENTER VELVET CIRCUIT · PRESS E",0,4.88,18.13,5.4,Math.PI);
  }
  roomShell();
- stage();bar();board();
+ goKartPortal();stage();bar();board();
  lounge(-5.15,6,"west");lounge(5.15,6,"east");
  for(const st of STATIONS.filter(st=>["mahjong","poker","blackjack"].includes(st.id)))table(st);
  slots();
