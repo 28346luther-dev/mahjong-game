@@ -1,4 +1,4 @@
-import {ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,raceStart} from "../public/kart-track.js";
+import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,raceStart} from "../public/kart-track.js";
 
 // Continuous on-road progress verification. No checkpoint gates or checkpoints UI.
 // Times use server wall-clock, and accepted samples must stay near the circuit
@@ -6,6 +6,7 @@ import {ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,raceStart} from "../pub
 export const MIN_LAP_MS=22000;
 export const MAX_LAP_MS=10*60*1000;
 export const MAX_SPEED_MPS=37;
+export const SECTOR_MARKS=[1/3,2/3];
 export function sanitizeDriverName(name){
  return String(name||"Racer").replace(/[^\p{L}\p{N} _.-]/gu,"").trim().slice(0,22)||"Racer";
 }
@@ -54,7 +55,7 @@ export class KartLeaderboard {
    const start=raceStart();
    const s={id:crypto.randomUUID(),name:sanitizeDriverName(body.name),
     start:now,lastAt:now,lastAtProgress:0,x:start.x,z:start.z,
-    progress:0,travel:0,valid:true,lap:1,crossed:false};
+    progress:0,travel:0,valid:true,lap:1,crossed:false,sectorTimes:[],sectorLastAt:now};
    await this.storage.put("kart-session-v3:"+id,s);
    return Response.json({ok:true,raceId:s.id,startedAt:s.start,
     trackLength:Math.round(ROAD.length),bestMs:(await this.read())[id]?.bestMs??null});
@@ -73,6 +74,40 @@ export class KartLeaderboard {
   if(url.pathname!=="/sample"&&url.pathname!=="/finish")
    return Response.json({error:"Unknown kart route"},{status:404});
   const x=Number(body.x),z=Number(body.z);
+  // The marked pit lane is a legitimate separate road, but is never a shortcut
+  // for a leaderboard lap. A pit visit discards the current lap and a fresh
+  // timed circuit begins only once the driver rejoins the main asphalt.
+  const pit=body.pit===true;
+  if(pit&&url.pathname==="/sample"){
+   const projected=projectToRoute(x,z,PIT);
+   const dt=now-session.lastAt;
+   const displacement=Math.hypot(x-session.x,z-session.z);
+   if(!Number.isFinite(x)||!Number.isFinite(z)||projected.distance>PIT_HALF_WIDTH+.8||
+      dt<0||displacement>13*dt/1000+4){
+    session.valid=false;await this.storage.put(key,session);
+    return Response.json({error:"Pit lane requires the limiter and a valid entry."},{status:422});
+   }
+   const entered=!session.pitMode;
+   session.pitMode=true;session.pitVisited=true;
+   session.x=x;session.z=z;session.lastAt=now;
+   session.travel=0;session.crossed=false;session.sectorTimes=[];session.sectorLastAt=now;
+   await this.storage.put(key,session);
+   return Response.json({ok:true,pit:true,pitEntry:entered,progress:0,readyToFinish:false});
+  }
+  if(session.pitMode&&url.pathname==="/sample"){
+   const road=projectToRoute(x,z,ROAD);
+   const dt=now-session.lastAt;
+   if(road.distance>ROAD_HALF_WIDTH+1.23||
+      Math.hypot(x-session.x,z-session.z)>MAX_SPEED_MPS*dt/1000+7){
+    return Response.json({error:"Rejoin the main track safely at pit exit."},{status:422});
+   }
+   session.pitMode=false;session.pitVisited=false;
+   session.progress=road.progress;session.x=x;session.z=z;session.lastAt=now;
+   session.start=now;session.travel=0;session.crossed=false;session.valid=true;
+   session.sectorTimes=[];session.sectorLastAt=now;
+   await this.storage.put(key,session);
+   return Response.json({ok:true,pitExit:true,progress:0,readyToFinish:false});
+  }
   const check=validateSample(session,x,z,now);
   if(check.error){
    session.valid=false;await this.storage.put(key,session);
@@ -80,6 +115,22 @@ export class KartLeaderboard {
   }
   if(!session.valid)
    return Response.json({error:"This lap was invalidated. Restart to record a new time."},{status:422});
+  // Three server-timed sectors, 0%-33%, 33%-66%, 66%-finish.
+  // Each sector is acknowledged only once, at the real split crossing.
+  const previousProgress=session.progress;
+  let sectorUpdate=null;
+  if(url.pathname==="/sample"&&!check.complete){
+   const count=(session.sectorTimes||[]).length;
+   const threshold=SECTOR_MARKS[count];
+   if(threshold!==undefined&&previousProgress<threshold&&check.progress>=threshold){
+    session.sectorTimes??=[];
+    session.sectorLastAt??=session.start;
+    const timeMs=Math.max(1,now-session.sectorLastAt);
+    session.sectorTimes.push(timeMs);
+    session.sectorLastAt=now;
+    sectorUpdate={index:count+1,timeMs,lap:session.lap||1};
+   }
+  }
   const increase=Math.max(0,check.delta);
   session.travel+=increase;
   session.progress=check.progress;session.x=x;session.z=z;session.lastAt=now;
@@ -90,13 +141,17 @@ export class KartLeaderboard {
    }
    await this.storage.put(key,session);
    return Response.json({ok:true,progress:Math.min(100,Math.floor(session.travel*100)),
-    readyToFinish:!!session.crossed});
+    readyToFinish:!!session.crossed,sectorUpdate});
   }
   if(!check.complete&&!session.crossed)
    return Response.json({error:"Cross the start/finish line after a full lap."},{status:422});
   const elapsed=now-session.start;
   if(elapsed<MIN_LAP_MS||session.travel<.93||session.travel>1.2)
    return Response.json({error:"Lap must complete the circuit at racing speed."},{status:422});
+  const sectorTimes=[...(session.sectorTimes||[])];
+  if(sectorTimes.length!==2)return Response.json({error:"Complete all three timing sectors to set a lap."},{status:422});
+  sectorTimes.push(elapsed-sectorTimes[0]-sectorTimes[1]);
+  if(sectorTimes.some(n=>n<=0))return Response.json({error:"Invalid sector split."},{status:422});
   const result=await this.storage.transaction(async txn=>{
    const records=await txn.get("best-times-v3")||{};
    const previous=records[id]?.bestMs??Infinity;
@@ -111,10 +166,11 @@ export class KartLeaderboard {
    session.lap=completedLap+1;
    session.start=now;session.lastAt=now;
    session.travel=0;session.crossed=false;
+   session.sectorTimes=[];session.sectorLastAt=now;
    session.progress=check.progress;
    session.x=x;session.z=z;session.valid=true;
    await txn.put(key,session);
-   return {lap:completedLap,nextLap:session.lap,personalBest,
+   return {lap:completedLap,nextLap:session.lap,sectorTimes,personalBest,
     bestMs:personalBest?elapsed:previous,entries:leaderboardEntries(records)};
   });
   return Response.json({ok:true,elapsedMs:elapsed,...result},

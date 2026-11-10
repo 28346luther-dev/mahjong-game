@@ -18,6 +18,20 @@ export const PIT_POINTS=[
  [-46,-22,.8],[-40,-16,.8],[-29,-10,.8],[-12,-9,.8],
  [3,-9,.82],[11,-12,.85],[19,-22,1.05]
 ].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y*1.35]);
+// The extended eastern right-hand sweeper has approximately 9 degrees of
+// progressive banking. Banking is tapered smoothly on entry and exit.
+export const BANK_START=.20,BANK_END=.40,BANK_MAX_DEGREES=9;
+export function bankAngle(progress){
+ const p=((progress%1)+1)%1;
+ if(p<=BANK_START||p>=BANK_END)return 0;
+ const t=(p-BANK_START)/(BANK_END-BANK_START);
+ const taper=Math.sin(Math.PI*t)**2;
+ return (BANK_MAX_DEGREES*Math.PI/180)*taper;
+}
+export function bankRise(progress,lateralOffset){
+ // Outside of this right-hander lies on the negative normal side.
+ return -lateralOffset*Math.tan(bankAngle(progress));
+}
 export const TRACK_SAMPLES=480;
 function point(p){return {x:p[0],z:p[1],y:p[2]};}
 function catmull(a,b,c,d,t){

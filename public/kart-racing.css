@@ -67,3 +67,19 @@ body.kart-open{overflow:hidden}
 #kartCameraLabel{font-size:clamp(10px,1.1vw,14px)}
 @media(max-width:930px){.kart-modal:fullscreen .kart-layout{height:auto;min-height:calc(100dvh - 110px)}.kart-modal:fullscreen .kart-stage{min-height:42dvh}}
 @media(max-width:600px){.kart-header-controls{justify-content:flex-start}.kart-header-controls button{font-size:10px;padding:7px 8px}}
+
+/* Accessible pit-lane limiter, independent of camera and fullscreen toggles. */
+#kartPitLimiter{background:#304b4c;border-color:#95b2a9}
+#kartPitLimiter[aria-pressed="true"]{background:#ebbd53;border-color:#fff0ac;color:#26242e}
+#kartPitStatus{white-space:nowrap;color:#f7d38b}
+.kart-header-controls{gap:7px}
+@media(max-width:650px){#kartPitLimiter{order:1;flex:1 1 130px}}
+
+/* Three timing sectors beneath the circuit; visible in chase and cockpit mode. */
+.kart-sector-splits{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:9px}
+.kart-sector-splits>div{display:flex;align-items:center;justify-content:space-between;gap:7px;padding:9px 12px;border-radius:10px;background:#25323a;border:1px solid #9c896d;color:#f6dbb1}
+.kart-sector-splits span{font-size:11px;font-weight:800;letter-spacing:.06em}
+.kart-sector-splits strong{font-size:clamp(12px,1.3vw,18px);font-variant-numeric:tabular-nums}
+.kart-sector-splits strong.sector-current{color:#69dfc7}
+#kartSectorLive{color:#88edca}
+@media(max-width:630px){.kart-sector-splits>div{flex-direction:column;align-items:flex-start;padding:8px}.kart-sector-splits span{font-size:9px}}

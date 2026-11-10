@@ -1,6 +1,7 @@
 /* VELVET CIRCUIT — high-detail, procedural Three.js art pass.
    Curved paint & apex kerbs are geometry following the road surface, not
    stacked cubes. Low-cost instancing retains frame rate on laptop GPUs. */
+import {bankRise} from "./kart-track.js";
 export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  const ps=ROAD.samples,N=ps.length,PI2=Math.PI*2;
  const standard=(color,rough=.85,metal=0)=>new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal,side:THREE.DoubleSide});
@@ -71,7 +72,7 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
     [q,db,from],[p,da,to],[q,db,to]
    ];
    for(const [pt,d,offset] of quad){
-    positions.push(pt.x+d.nx*offset,pt.y+height,pt.z+d.nz*offset);
+    positions.push(pt.x+d.nx*offset,pt.y+height+bankRise(i/N,offset),pt.z+d.nz*offset);
     uv.push((i/N)*22,offset===from?0:1);
     indices.push(index++);
    }
@@ -99,7 +100,7 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  const red=standard(0xd32937,.61),white=standard(0xfff6e5,.6);
  const kerbVerts=[[],[]];
  function stripVertex(out,p,t,offset,y){
-  out.push(p.x+t.nx*offset,p.y+y,p.z+t.nz*offset);
+  out.push(p.x+t.nx*offset,p.y+y+bankRise((p.distance||0)/ROAD.length,offset),p.z+t.nz*offset);
  }
  // Side selection follows curvature, so apex kerbs sit inside a corner.
  // Triangles are merged into two draw calls (red and white) instead of
