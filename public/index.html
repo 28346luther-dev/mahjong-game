@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css">
+<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css"><link rel="stylesheet" href="/reaction-camera.css">
 </head>
 <body>
 <div class="app">
@@ -81,6 +81,11 @@
       <div class="rules"><b>Included:</b> draw · discard · Pong · Chow · Kong · Mahjong<br><small>Four-player Hong Kong-style foundation. Scoring and house-rule options are planned next.</small></div>
     </section>
     <section id="room" class="hidden">
+      <div id="reactionOverlay" class="reaction-overlay hidden" role="status" aria-live="polite">
+        <div class="reaction-topline"><span class="reaction-live-dot"></span><span>LIVE TABLE REACTION</span><button id="reactionClose" type="button" aria-label="Close reaction camera">×</button></div>
+        <div class="reaction-video-wrap"><video id="reactionVideo" autoplay muted playsinline></video><div id="reactionFallback" class="reaction-fallback hidden">Camera unavailable — only players who opt in are shown.</div></div>
+        <div class="reaction-caption"><strong id="reactionAction">PONG!</strong><span id="reactionName">Player</span></div>
+      </div>
       <div class="roombar panel"><div><small>YOUR ROOM CODE</small><strong id="roomCode">------</strong></div><button id="copy" class="secondary">Copy invite code</button><button id="leave" class="ghost">Leave</button></div>
       <div class="table panel">
         <div class="tabletop">
@@ -91,10 +96,21 @@
         </div>
         <div id="melds" class="melds"></div>
         <div class="handarea">
+          <div id="drawnTileArea" class="drawn-tile-area hidden">
+            <div class="drawn-tile-title">YOUR NEWLY DRAWN TILE <span>Choose to keep or discard before adding it to your hand</span></div>
+            <div id="drawnTileFace" class="drawn-tile-face"></div>
+            <b id="drawnTileName"></b>
+          </div>
           <div class="handhead"><b>Your tiles</b><span id="turnLabel"></span></div>
           <div id="hand" class="hand"></div>
           <div id="controls" class="controls"></div>
         </div>
+      </div>
+      <div class="reaction-camera-controls panel">
+        <div class="reaction-camera-label"><strong>📷 Reaction camera</strong><span>Optional · Your camera is off until you turn it on. A successful Pong, Chow or Mahjong opens a live reaction window for the table. No video is stored.</span></div>
+        <video id="reactionCameraPreview" class="reaction-camera-preview hidden" autoplay muted playsinline aria-label="Your camera preview"></video>
+        <button type="button" id="reactionCameraToggle" class="secondary" aria-pressed="false">Enable reaction camera</button>
+        <small id="reactionCameraNote" role="status">Your camera is off.</small>
       </div>
       <p id="roomError" class="error"></p>
     </section>
@@ -102,6 +118,7 @@
   <footer>Mahjong Club · A friendly table for your group</footer>
 </div>
 <script src="/table-visuals.js"></script>
+<script src="/reaction-camera.js"></script>
 <script src="/app.js"></script>
 <script src="/account.js"></script>
 <script type="module" src="/clubhouse.js"></script>
