@@ -7,6 +7,20 @@ let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false
 let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPending=false,lastStatusAt=0;
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
+const PIT_LIMIT_MS=11.1; // 40 km/h
+let pitLimiter=false,inPitLane=false;
+function updatePitHUD(){
+ const button=$("kartPitLimiter"),label=$("kartPitStatus");
+ if(button){button.textContent=pitLimiter?"🟡 PIT LIMITER ON · P":"🛠 PIT LIMITER OFF · P";button.setAttribute("aria-pressed",String(pitLimiter));}
+ if(label){label.textContent=inPitLane?"PIT LANE · 40 KM/H":pitLimiter?"PIT LIMITER ACTIVE · 40 KM/H":"PIT LIMITER OFF";}
+}
+function togglePitLimiter(){
+ if(inPitLane&&pitLimiter){message("Stay on the pit limiter until you've rejoined the circuit.");return;}
+ pitLimiter=!pitLimiter;
+ updatePitHUD();
+ message(pitLimiter?"Pit limiter engaged — maximum 40 km/h. Follow the marked pit-lane entry.":
+ "Pit limiter disengaged — full racing speed restored.");
+}
 function setCameraMode(mode){
  if(!["chase","cockpit"].includes(mode))return;
  cameraMode=mode;
@@ -156,6 +170,17 @@ function track(){
  // and the longitudinal start line, are intentionally removed.
  addCircuitGraphics(THREE,scene,ROAD,PIT,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  addKartSafety(THREE,scene,ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
+ // Pit-lane entry, pit-speed signs and road markings: use P before entering.
+ const pitEntry=PIT.samples[0],pitExit=PIT.samples[PIT.samples.length-1];
+ for(const [point,label] of [[pitEntry,"PIT IN 40"],[pitExit,"PIT OUT"]]){
+  const signCanvas=document.createElement("canvas");signCanvas.width=512;signCanvas.height=128;
+  const ctx=signCanvas.getContext("2d");ctx.fillStyle="#1b3542";ctx.fillRect(0,0,512,128);
+  ctx.fillStyle="#ffe3a4";ctx.font="bold 62px Arial";ctx.textAlign="center";ctx.fillText(label,256,88);
+  const texture=new THREE.CanvasTexture(signCanvas);texture.colorSpace=THREE.SRGBColorSpace;
+  const sign=object(new THREE.PlaneGeometry(3.9,1),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}),
+   point.x,point.y+2.15,point.z);
+  const pole=post(.09,2.3,0xb8bdc0,point.x,point.y+1.0,point.z);
+ }
  // Pit lane: visibly separated from the main straight, complete with garages and pit wall.
  for(let i=8;i<PIT.samples.length-10;i+=4){
   const p=PIT.samples[i],d=tangent(PIT,Math.min(PIT.samples.length-2,i));
@@ -272,23 +297,33 @@ async function init(){
 }
 function reset(){
  const start=raceStart();pos={x:start.x,y:start.y,z:start.z};yaw=start.yaw;
- speed=0;progress=0;reportedFinish=false;
+ speed=0;progress=0;reportedFinish=false;pitLimiter=false;inPitLane=false;updatePitHUD();
  if(kart){kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;}
 }
 function positionOnTrack(x,z){
  const road=projectToRoute(x,z,ROAD),pit=projectToRoute(x,z,PIT);
- if(pit.distance<PIT_HALF_WIDTH&&pit.distance<road.distance)return {...pit,isPit:true};
+ const pitSurface=pit.distance<PIT_HALF_WIDTH+.55&&pit.distance<road.distance;
+ // The pit route is only accessible with the limiter engaged.
+ if(pitSurface&&pitLimiter)return {...pit,isPit:true};
  return {...road,isPit:false};
 }
 async function transmit(){
  if(telemetryPending||!raceId||!playing)return;
  telemetryPending=true;
- const current=raceId,position={x:pos.x,z:pos.z};
+ const current=raceId,position={x:pos.x,z:pos.z,pit:inPitLane};
  try{
   const result=await api("sample",{raceId:current,...position});
   if(!active||raceId!==current)return;
   progress=result.progress;
   $("kartProgress").textContent=progress+"%";
+  if(result.pit){
+   $("kartProgress").textContent="PIT";
+   if(result.pitEntry)message("In the pit lane — 40 km/h limiter active. Your current lap is not timed.");
+  }else if(result.pitExit){
+   started=performance.now();
+   $("kartTime").textContent="00:00.000";
+   message("Pit exit — rejoin the circuit. Your timed lap has restarted.");
+  }
   if(result.readyToFinish&&!reportedFinish){
    reportedFinish=true;
    const finish=await api("finish",{raceId:current,...position});
@@ -320,7 +355,8 @@ function update(dt){
  speed+=Number(accelerate)*16*dt;
  speed-=Math.sign(speed)*(0.9+Math.abs(speed)*.08)*dt;
  if(brake)speed-=Math.sign(speed||1)*42*dt;
- speed=Math.max(-4,Math.min(29,speed));
+ speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:29,speed));
+ if(pitLimiter&&speed>PIT_LIMIT_MS)speed=PIT_LIMIT_MS;
  if(!accelerate&&!brake&&Math.abs(speed)<.15)speed=0;
  // In this coordinate system positive yaw steers world-left, so D decreases yaw.
  // Higher speed increases the turning radius; brake before the chicanes.
@@ -329,13 +365,18 @@ function update(dt){
  const x=pos.x+Math.sin(yaw)*speed*dt,z=pos.z+Math.cos(yaw)*speed*dt;
  const projected=positionOnTrack(x,z);
  const grip=gripForDistance(projected.distance,projected.isPit);
- // Kerbs are fully driveable at racing speed; slowdown begins ONLY past
- // green paint, in the gravel trap or grass beyond it.
+ // PIT route is a real driveable road ONLY with P limiter enabled.
+ // Do not penalise tarmac, kerbs or green painted runoff.
  if(grip.drag>0)speed*=Math.exp(-grip.drag*dt);
  if(grip.surface!=="barrier"){
   pos.x=x;pos.z=z;pos.y=projected.y;
+  if(inPitLane!==projected.isPit){
+   inPitLane=projected.isPit;
+   updatePitHUD();
+   message(inPitLane?"Entering pit lane at 40 km/h. Your lap timer is paused.":"Pit exit — back on the circuit.");
+  }
  }else{
-  speed*=.23; // Armco / outside barrier prevents an off-track shortcut.
+  speed*=.23; // Outside barrier prevents off-track shortcut.
  }
  kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;
  if(performance.now()-sendAt>600&&!telemetryPending){sendAt=performance.now();transmit();}
@@ -352,10 +393,14 @@ function frame(){
  if(cameraMode==="cockpit"){
   // The body points along local -Z, hence the helmet view follows the
   // world-space vehicle heading (yaw) without inverting steering.
-  const eye=new THREE.Vector3(pos.x+Math.sin(yaw)*.22,pos.y+1.33,pos.z+Math.cos(yaw)*.22);
-  camera.position.lerp(eye,Math.min(1,dt*16));
-  camera.lookAt(pos.x+Math.sin(yaw)*24,pos.y+1.4,pos.z+Math.cos(yaw)*24);
-  if(camera.fov!==77){camera.fov=77;camera.updateProjectionMatrix();}
+  // Lock cockpit to a point FORWARD of the driver's helmet. Never smooth
+  // behind the kart: chase-style interpolation exposed the driver's head
+  // whenever acceleration caused the vehicle to pull ahead of the camera.
+  const forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw);
+  camera.position.set(pos.x+forwardX*1.08,pos.y+1.44,pos.z+forwardZ*1.08);
+  camera.lookAt(pos.x+forwardX*28,pos.y+1.42,pos.z+forwardZ*28);
+  // Constant field of view: no acceleration-induced zoom or head clipping.
+  if(camera.fov!==73){camera.fov=73;camera.updateProjectionMatrix();}
  }else{
   const target=new THREE.Vector3(pos.x-Math.sin(yaw)*11,pos.y+7.3,pos.z-Math.cos(yaw)*11);
   camera.position.lerp(target,Math.min(1,dt*4.5));
@@ -389,7 +434,7 @@ function open(){
 }
 function close(){
  if(document.fullscreenElement===$("kartGame"))document.exitFullscreen().catch(()=>{});
- active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;
+ active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;pitLimiter=false;inPitLane=false;updatePitHUD();
  $("kartGame").classList.add("hidden");document.body.classList.remove("kart-open");
 }
 window.addEventListener("keydown",e=>{
@@ -399,6 +444,7 @@ window.addEventListener("keydown",e=>{
   keys.add(k);e.preventDefault();
  }
  if(k==="c"){setCameraMode(cameraMode==="chase"?"cockpit":"chase");e.preventDefault();}
+ if(k==="p"){togglePitLimiter();e.preventDefault();}
  if(k==="f"){toggleFullscreen();e.preventDefault();}
  if(k==="r"){reset();playing=false;message("Kart reset. Start a new timed lap to record a result.");}
  if(k==="escape"){e.preventDefault();close();}
@@ -412,6 +458,7 @@ document.querySelectorAll("[data-kart-key]").forEach(button=>{
 });
 $("kartCameraToggle").addEventListener("click",()=>setCameraMode(cameraMode==="chase"?"cockpit":"chase"));
 $("kartFullscreen").addEventListener("click",toggleFullscreen);
+$("kartPitLimiter").addEventListener("click",togglePitLimiter);
 $("kartStart").addEventListener("click",begin);
 $("kartClose").addEventListener("click",close);
 $("kartRefresh").addEventListener("click",leaderboard);
