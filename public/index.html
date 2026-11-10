@@ -135,7 +135,13 @@
           <strong id="slotScore" class="salon-score">Sana balance: 500</strong><button id="slotSpin" type="button" class="salon-action">🎰 SPIN THE REELS</button>
         </section>
         <section id="salon-blackjack" class="salon-game hidden">
-          <p class="salon-help">Blackjack against the house. Hit, stand, or deal again. Dealer stands on 17. Play with other club members at one dealer table. Join the next round for 10 Sana Coins. No real money.</p>
+          <p class="salon-help">Choose a computer dealer (up to six players) or challenge a real club member in a head-to-head blackjack duel. Each participant enters for 10 play-only Sana Coins.</p>
+          <div class="blackjack-opponent-picker" aria-label="Blackjack opponent">
+            <span>Choose who to face:</span>
+            <button id="blackjackVsComputer" type="button" class="secondary">🤖 Computer dealer</button>
+            <button id="blackjackVsPerson" type="button" class="secondary">👤 Real player duel</button>
+          </div>
+          <p id="blackjackOpponentInfo" class="salon-help">Choose computer or another club member. A real-player duel needs two players.</p>
           <div id="blackjackPlayers" class="blackjack-players" aria-label="Players sharing the blackjack table"></div>
           <div class="card-board"><h3 id="blackjackDealerScore">Dealer</h3><div id="blackjackDealer" class="card-row"></div>
             <div class="salon-result" id="blackjackMessage">Deal to begin.</div>
