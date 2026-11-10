@@ -51,6 +51,7 @@ function interact(st){
  if(["poker","blackjack","slots"].includes(st.id)){
    window.SalonGames?.open(st.id);return;
  }
+ if(st.id==="gokarts"){window.KartRacing?.open();return;}
  if(st.id==="board"){$("clubNotice").classList.toggle("hidden");return;}
  if(st.id==="karaoke"){$("clubSocialPanel").classList.add("open");showToast("Welcome to the karaoke stage! Enable your mic to talk to others in this room.");return;}
  if(st.id==="bar"){showToast("The bar is open! Walk up to any stool and press E to sit.");return;}
@@ -72,7 +73,7 @@ function collides(x,z){
  return blockedBy(x,z,obstacles,.34);
 }
 function move(dt){
- if(!state.active||window.SalonGames?.isOpen())return;
+ if(!state.active||window.SalonGames?.isOpen()||window.KartRacing?.isOpen())return;
  const oldX=camera.position.x,oldZ=camera.position.z;
  const dx=Number(pressed.has("d")||pressed.has("arrowright"))-Number(pressed.has("a")||pressed.has("arrowleft"));
  const dz=Number(pressed.has("w")||pressed.has("arrowup"))-Number(pressed.has("s")||pressed.has("arrowdown"));
@@ -128,7 +129,7 @@ function buildWorld(){
  social=createClubSocial(THREE,scene,camera,zoneAt);
 }
 window.addEventListener("keydown",e=>{
- if(!state.active||window.SalonGames?.isOpen()||["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName))return;
+ if(!state.active||window.SalonGames?.isOpen()||window.KartRacing?.isOpen()||["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName))return;
  const k=e.key.toLowerCase();
  if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","shift"].includes(k)){
   e.preventDefault();pressed.add(k);
@@ -141,7 +142,7 @@ window.addEventListener("blur",()=>pressed.clear());
 document.addEventListener("pointerlockchange",()=>state.locked=document.pointerLockElement===canvas);
 document.addEventListener("mousemove",e=>{if(state.active&&state.locked)look(e.movementX,e.movementY);});
 canvas.addEventListener("click",()=>{
- if(!state.active)return;
+ if(!state.active||window.KartRacing?.isOpen())return;
  if(state.seated){standUp();return;}
  if(state.near){interact(state.near);return;}
  if(!state.locked&&!('ontouchstart' in window)&&canvas.requestPointerLock)canvas.requestPointerLock();
