@@ -192,6 +192,30 @@ test("pit entry is recognized as legitimate, discards shortcut lap and resets ti
  assert.equal(after.travel,0);
  assert.equal(after.crossed,false);
 });
+test("right-hand sweeper is physically banked in road, kerbs and kart ride height",async()=>{
+ const {bankAngle,bankRise,BANK_MAX_DEGREES}=await import("../public/kart-track.js");
+ assert.ok(BANK_MAX_DEGREES>=8);
+ assert.equal(bankAngle(.1),0);
+ assert.ok(bankAngle(.3)>.14);
+ assert.ok(bankRise(.3,-4)>0);
+ assert.ok(bankRise(.3,4)<0);
+ assert.equal(bankRise(.45,4),0);
+ const client=readFileSync("public/kart-racing.js","utf8");
+ const graphics=readFileSync("public/kart-graphics.js","utf8");
+ assert.match(client,/bankRise\(i\/ps\.length,offset\)/);
+ assert.match(client,/bankRise\(projected\.progress,lateral\)/);
+ assert.match(graphics,/bankRise\(i\/N,offset\)/);
+});
+test("live sector UI displays three official timed split values",()=>{
+ const client=readFileSync("public/kart-racing.js","utf8");
+ const server=readFileSync("src/kart-leaderboard.js","utf8");
+ const html=readFileSync("public/index.html","utf8");
+ for(let i=1;i<=3;i++)assert.ok(html.includes('id="kartSector'+i+'"'));
+ assert.match(client,/showSector\(result\.sectorUpdate\.index,result\.sectorUpdate\.timeMs\)/);
+ assert.match(client,/finish\.sectorTimes\.forEach/);
+ assert.match(server,/SECTOR_MARKS=\[1\/3,2\/3\]/);
+ assert.match(server,/sectorUpdate=\{index:count\+1,timeMs,lap:session\.lap\|\|1\}/);
+});
 test("all kart, blackjack and worker modules pass syntax checks",()=>{
  for(const p of ["public/kart-safety.js","public/kart-graphics.js","public/kart-global-board.js","public/kart-track.js","src/kart-leaderboard.js","src/blackjack-multiplayer.js","src/poker-table.js","src/worker.js","public/kart-racing.js","public/salon-games.js"])
   execFileSync(process.execPath,["--check",p]);
