@@ -1,11 +1,11 @@
-import {ROAD,ROAD_HALF_WIDTH,projectToRoute,raceStart} from "../public/kart-track.js";
+import {ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,raceStart} from "../public/kart-track.js";
 
 // Continuous on-road progress verification. No checkpoint gates or checkpoints UI.
 // Times use server wall-clock, and accepted samples must stay near the circuit
 // and travel plausible distances. This is an arcade leaderboard, not anti-cheat proof.
 export const MIN_LAP_MS=22000;
 export const MAX_LAP_MS=10*60*1000;
-export const MAX_SPEED_MPS=17;
+export const MAX_SPEED_MPS=37;
 export function sanitizeDriverName(name){
  return String(name||"Racer").replace(/[^\p{L}\p{N} _.-]/gu,"").trim().slice(0,22)||"Racer";
 }
@@ -16,22 +16,22 @@ export function leaderboardEntries(records,limit=10){
   .map((r,i)=>({rank:i+1,name:r.name,bestMs:r.bestMs,at:r.at}));
 }
 export function validateSample(session,x,z,now){
- if(!Number.isFinite(x)||!Number.isFinite(z)||Math.abs(x)>115||Math.abs(z)>95)
+ if(!Number.isFinite(x)||!Number.isFinite(z)||Math.abs(x)>220||Math.abs(z)>160)
   return {error:"Invalid kart position"};
  const road=projectToRoute(x,z);
- if(road.distance>ROAD_HALF_WIDTH+1.25)return {error:"Stay on the race track for a valid lap"};
+ if(road.distance>ROAD_HALF_WIDTH+RUNOFF_WIDTH)return {error:"Stay on the race track for a valid lap"};
  const dt=now-session.lastAt;
  if(dt<0)return {error:"Invalid race clock"};
  const moved=Math.hypot(x-session.x,z-session.z);
  // One half-second telemetry interval at 12.6 m/s covers ~6 metres.
- if(moved>MAX_SPEED_MPS*dt/1000+4)
+ if(moved>MAX_SPEED_MPS*dt/1000+7)
   return {error:"Lap rejected: position changed too quickly"};
  const old=session.progress,p=road.progress;
  let delta=p-old;
  // Finish line seam: 0.98 -> 0.01 means a forward crossing.
  if(delta<-.7)delta+=1;
  if(delta>.7)delta-=1;
- if(delta>0.08)return {error:"Lap rejected: progress jumped too far"};
+ if(delta>0.10)return {error:"Lap rejected: progress jumped too far"};
  if(delta<-.08)return {error:"Lap rejected: reverse shortcut"};
  return {progress:p,delta,complete:old>.94&&p<.06&&delta>=0};
 }
