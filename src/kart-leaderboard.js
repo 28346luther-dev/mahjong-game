@@ -11,7 +11,7 @@ export function sanitizeDriverName(name){
 }
 export function leaderboardEntries(records,limit=10){
  return Object.entries(records).map(([id,r])=>({id,name:r.name,bestMs:r.bestMs,at:r.at,version:r.version||1}))
-  .filter(r=>Number.isInteger(r.bestMs)&&r.bestMs>=MIN_LAP_MS&&r.bestMs<=MAX_LAP_MS&&r.version===2)
+  .filter(r=>Number.isInteger(r.bestMs)&&r.bestMs>=MIN_LAP_MS&&r.bestMs<=MAX_LAP_MS&&r.version===3)
   .sort((a,b)=>a.bestMs-b.bestMs||a.at-b.at).slice(0,limit)
   .map((r,i)=>({rank:i+1,name:r.name,bestMs:r.bestMs,at:r.at}));
 }
@@ -37,12 +37,12 @@ export function validateSample(session,x,z,now){
 }
 export class KartLeaderboard {
  constructor(ctx){this.ctx=ctx;this.storage=ctx.storage;}
- async read(){return await this.storage.get("best-times-v2")||{};}
+ async read(){return await this.storage.get("best-times-v3")||{};}
  async fetch(request){
   const url=new URL(request.url);
   if(request.method==="GET"&&url.pathname==="/leaderboard"){
    const records=await this.read();
-   return Response.json({track:"Velvet Circuit Road Course",laps:1,entries:leaderboardEntries(records)},
+   return Response.json({track:"Velvet Circuit Extended",laps:1,entries:leaderboardEntries(records)},
     {headers:{"cache-control":"no-store"}});
   }
   if(request.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
@@ -55,7 +55,7 @@ export class KartLeaderboard {
    const s={id:crypto.randomUUID(),name:sanitizeDriverName(body.name),
     start:now,lastAt:now,lastAtProgress:0,x:start.x,z:start.z,
     progress:0,travel:0,valid:true};
-   await this.storage.put("kart-session-v2:"+id,s);
+   await this.storage.put("kart-session-v3:"+id,s);
    return Response.json({ok:true,raceId:s.id,startedAt:s.start,
     trackLength:Math.round(ROAD.length),bestMs:(await this.read())[id]?.bestMs??null});
   }
@@ -102,7 +102,7 @@ export class KartLeaderboard {
    const previous=records[id]?.bestMs??Infinity;
    const personalBest=elapsed<previous;
    if(personalBest){
-    records[id]={name:session.name,bestMs:elapsed,at:now,version:2};
+    records[id]={name:session.name,bestMs:elapsed,at:now,version:3};
     await txn.put("best-times-v2",records);
    }
    await txn.delete(key);
