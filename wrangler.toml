@@ -6,7 +6,8 @@ compatibility_date = "2025-09-01"
 bindings = [
   { name = "ROOMS", class_name = "MahjongRoom" },
   { name = "AUTH", class_name = "AuthStore" },
-  { name = "CLUB", class_name = "ClubSocial" }
+  { name = "CLUB", class_name = "ClubSocial" },
+  { name = "POKER", class_name = "PokerTable" }
 ]
 
 [[migrations]]
@@ -20,6 +21,10 @@ new_sqlite_classes = ["AuthStore"]
 [[migrations]]
 tag = "v3"
 new_sqlite_classes = ["ClubSocial"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["PokerTable"]
 
 [assets]
 directory = "./public"
