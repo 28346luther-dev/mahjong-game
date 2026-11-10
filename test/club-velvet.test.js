@@ -6,7 +6,7 @@ import {STATIONS} from "../public/club-velvet-world.js";
 import {barSeatPlan,couchSeatPlan,gameSeatPlan,DOOR_GAPS} from "../public/club-layout.js";
 
 test("all existing gameplay and social interaction targets survive the visual overhaul",()=>{
- const needed=["mahjong","poker","blackjack","slots","board","karaoke","bar","sofa-left","sofa-right"];
+ const needed=["mahjong","poker","blackjack","slots","board","gokarts","karaoke","bar","sofa-left","sofa-right"];
  assert.deepEqual(STATIONS.map(s=>s.id),needed);
  assert.equal(STATIONS.find(s=>s.id==="mahjong").enabled,true);
  assert.equal(STATIONS.find(s=>s.id==="poker").enabled,true);

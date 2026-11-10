@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css"><link rel="stylesheet" href="/reaction-camera.css"><link rel="stylesheet" href="/mahjong-screen-fit.css"><link rel="stylesheet" href="/reaction-clip.css"><link rel="stylesheet" href="/salon-games.css">
+<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css"><link rel="stylesheet" href="/reaction-camera.css"><link rel="stylesheet" href="/mahjong-screen-fit.css"><link rel="stylesheet" href="/reaction-clip.css"><link rel="stylesheet" href="/salon-games.css"><link rel="stylesheet" href="/kart-racing.css">
 </head>
 <body>
 <div class="app">
@@ -29,7 +29,7 @@
         <button id="enterMahjong" class="primary">Play Mahjong <span aria-hidden="true">→</span></button>
       </div>
       <div class="club-stage">
-        <canvas id="clubhouseCanvas" width="1100" height="670" aria-label="First-person 3D clubhouse with Mahjong, poker, blackjack and slot machines"></canvas>
+        <canvas id="clubhouseCanvas" width="1100" height="670" aria-label="First-person 3D clubhouse with Mahjong, poker, blackjack, slot machines and go-kart portal"></canvas>
         <div class="club-crosshair" aria-hidden="true">+</div>
         <div class="club-hud">
           <span id="clubZone">MAIN HALL</span>
@@ -54,7 +54,7 @@
           <p>Welcome to The Games Club! Enjoy the furnished lounge, bar and karaoke stage.</p>
           <p><strong>🀄 Mahjong:</strong> Playable now — invite friends to a private table.</p>
           <p><strong>♠ Poker:</strong> Multiplayer Texas Hold’em against people and computer players, Sana Coins for fun only.</p><p><strong>🃏 Blackjack & slots:</strong> Playable arcade-style games, no real money.</p>
-          <p><strong>🎤 Karaoke:</strong> Enter the stage area and turn on your microphone to speak with visitors in the main hall. Background music is currently off while we choose a better licensed soundtrack. There is no karaoke song catalogue yet.</p>
+          <p><strong>🏎 Go-kart circuit:</strong> Find the turquoise racing portal at the rear of the main hall, race one full lap and compete for the fastest time on the leaderboard.</p><p><strong>🎤 Karaoke:</strong> Enter the stage area and turn on your microphone to speak with visitors in the main hall. Background music is currently off while we choose a better licensed soundtrack. There is no karaoke song catalogue yet.</p>
           <p>Be kind and respect other players. Do not share private information in public chat.</p>
         </aside>
         <div id="clubPrompt" class="club-prompt">WASD to walk · Mouse to look · E to interact</div>
@@ -84,6 +84,46 @@
         <span><strong>🀄 Mahjong</strong> <em>PLAYABLE NOW</em></span>
         <span>♠ Hold’em · Blackjack <em>PLAYABLE</em></span>
         <span>🎰 Slots <em>PLAYABLE · FREE</em></span><span>🎤 Karaoke · 💬 Clubhouse chat · 🎙 Opt-in voice</span>
+      </div>
+    </section>
+    <section id="kartGame" class="kart-modal hidden" role="dialog" aria-modal="true" aria-labelledby="kartTitle">
+      <div class="kart-sheet">
+        <header class="kart-header">
+          <div><div class="kart-eyebrow">THE GAMES CLUB · GO-KART TIME TRIAL</div><h2 id="kartTitle">VELVET CIRCUIT</h2>
+            <p>One lap · Eight checkpoints · Personal bests · No Sana Coins required</p></div>
+          <button id="kartClose" type="button" aria-label="Return to clubhouse">✕ Back to clubhouse</button>
+        </header>
+        <div class="kart-layout">
+          <div class="kart-drive">
+            <div class="kart-stage">
+              <canvas id="kartCanvas" width="960" height="600" aria-label="Interactive 3D go-kart circuit"></canvas>
+              <div class="kart-overlay">
+                <div><small>LAP TIME</small><strong id="kartTime">00:00.000</strong></div>
+                <div><small>CHECKPOINT</small><strong id="kartGate">READY</strong></div>
+                <div><small>SPEED</small><strong id="kartSpeed">0 km/h</strong></div>
+              </div>
+            </div>
+            <div class="kart-actions">
+              <button type="button" id="kartStart" class="kart-primary">🏁 Start timed lap</button>
+              <strong id="kartBest">Personal best --:--.---</strong>
+            </div>
+            <p id="kartStatus" role="status">Drive with W / A / S / D, brake with Space, reset with R.</p>
+            <div class="kart-touch" aria-label="Touch driving controls">
+              <button data-kart-key="a" type="button" aria-label="Steer left">◀ Steer</button>
+              <button data-kart-key="w" type="button" aria-label="Accelerate">▲ Accelerate</button>
+              <button data-kart-key="s" type="button" aria-label="Brake">▼ Brake</button>
+              <button data-kart-key="d" type="button" aria-label="Steer right">Steer ▶</button>
+            </div>
+          </div>
+          <aside class="kart-leaderboard">
+            <div class="kart-board-head"><h3>🏆 FASTEST LAPS</h3><button id="kartRefresh" type="button">Refresh</button></div>
+            <p>One best lap per player, ranked by server-measured time.</p>
+            <ol id="kartLeaderboard" aria-live="polite"></ol>
+            <div class="kart-rules"><strong>HOW TO RACE</strong>
+              <p>Pass all seven glowing turquoise arches clockwise and return to the chequered start/finish line. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
+            </div>
+          </aside>
+        </div>
       </div>
     </section>
     <section id="salonGame" class="salon-modal hidden" role="dialog" aria-modal="true" aria-labelledby="salonTitle">
@@ -184,5 +224,6 @@
 <script src="/account.js"></script>
 <script type="module" src="/salon-games.js"></script>
 <script type="module" src="/avatar-editor.js"></script>
+<script type="module" src="/kart-racing.js"></script>
 <script type="module" src="/clubhouse.js"></script>
 </body></html>

@@ -2,6 +2,7 @@ import {AuthStore,sessionCookieName,emptySessionCookie} from "./auth.js";
 export {AuthStore};
 export {ClubSocial} from "./club-social.js";
 export {PokerTable} from "./poker-table.js";
+export {KartLeaderboard} from "./kart-leaderboard.js";
 
 const TILE_NAMES = [
   ...Array.from({length:9},(_,i)=>({id:`c${i+1}`,name:`${i+1} Characters`,short:`${i+1}萬`,suit:"characters",rank:i+1})),
@@ -186,6 +187,36 @@ export default {
     if(url.pathname.startsWith("/api/")){
       const viewer=await authenticate();
       if(!viewer)return Response.json({error:"Please sign in first"},{status:401});
+      if(url.pathname.startsWith("/api/kart/")){
+        if(request.method!=="GET"&&request.method!=="POST")
+          return Response.json({error:"Method not allowed"},{status:405});
+        const action=url.pathname.slice("/api/kart".length);
+        if(!["/leaderboard","/start","/checkpoint","/finish","/abort"].includes(action))
+          return Response.json({error:"Unknown kart endpoint"},{status:404});
+        const origin=request.headers.get("origin");
+        if(origin&&origin!==url.origin)return Response.json({error:"Invalid origin"},{status:403});
+        const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(viewer.email));
+        const userId=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+        const stub=env.KART.get(env.KART.idFromName("velvet-circuit-global"));
+        if(action==="/leaderboard"){
+          return stub.fetch("https://kart/leaderboard",{method:"GET"});
+        }
+        if(request.method!=="POST")return Response.json({error:"POST required"},{status:405});
+        if(Number(request.headers.get("content-length")||0)>2048)
+          return Response.json({error:"Invalid kart request"},{status:413});
+        let body={};try{body=await request.json();}catch{return Response.json({error:"Invalid JSON"},{status:400});}
+        if(action==="/start"){
+          const profileRes=await authStub.fetch("https://auth/profile",{
+            method:"POST",body:JSON.stringify({token})
+          });
+          const profile=profileRes.ok?await profileRes.json():{name:"Racer"};
+          body.name=profile.name;
+        }
+        return stub.fetch("https://kart"+action,{
+          method:"POST",body:JSON.stringify({user:userId,
+            raceId:body.raceId,index:body.index,x:body.x,z:body.z,name:body.name})
+        });
+      }
       if(["/api/sana/wallet","/api/sana/spin","/api/blackjack/join"].includes(url.pathname)){
         if(url.pathname!=="/api/sana/wallet"&&request.method!=="POST")
           return Response.json({error:"POST required"},{status:405});

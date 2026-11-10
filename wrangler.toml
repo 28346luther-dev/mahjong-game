@@ -7,7 +7,8 @@ bindings = [
   { name = "ROOMS", class_name = "MahjongRoom" },
   { name = "AUTH", class_name = "AuthStore" },
   { name = "CLUB", class_name = "ClubSocial" },
-  { name = "POKER", class_name = "PokerTable" }
+  { name = "POKER", class_name = "PokerTable" },
+  { name = "KART", class_name = "KartLeaderboard" }
 ]
 
 [[migrations]]
@@ -25,6 +26,10 @@ new_sqlite_classes = ["ClubSocial"]
 [[migrations]]
 tag = "v4"
 new_sqlite_classes = ["PokerTable"]
+
+[[migrations]]
+tag = "v5"
+new_sqlite_classes = ["KartLeaderboard"]
 
 [assets]
 directory = "./public"
