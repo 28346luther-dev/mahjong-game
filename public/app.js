@@ -4,32 +4,69 @@ const icons={characters:"萬",bamboo:"索",dots:"筒",wind:"風",dragon:"龍"};
 function tileLabel(t){return t.suit==="wind"?({w1:"東",w2:"南",w3:"西",w4:"北"}[t.id]):t.suit==="dragon"?({z1:"中",z2:"發",z3:"白"}[t.id]):`${t.rank}${icons[t.suit]}`;}
 async function post(path,data){const r=await fetch(path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw Error(j.error||"Something went wrong.");return j;}
 function showError(id,msg){$(id).textContent=msg||"";}
-function connect(code,id){roomCode=code;playerId=id;$("home").classList.add("hidden");$("room").classList.remove("hidden");$("roomCode").textContent=code;
- const scheme=location.protocol==="https:"?"wss:":"ws:";ws=new WebSocket(`${scheme}//${location.host}/ws?code=${code}&player=${id}`);
- window.MahjongReactionCam?.attach(ws,id,code);
- ws.onmessage=e=>{
-   const m=JSON.parse(e.data);
+let reconnectTimer=null,heartbeatTimer=null,reconnectAttempts=0,leavingRoom=false;
+function stopTransport(){
+ clearTimeout(reconnectTimer);clearInterval(heartbeatTimer);
+ reconnectTimer=null;heartbeatTimer=null;
+ const old=ws;ws=null;if(old){old.onclose=null;old.onerror=null;old.onmessage=null;try{old.close(1000,"Leaving table");}catch{}}
+ window.MahjongReactionCam?.stop();
+}
+function openSocket(){
+ if(!roomCode||!playerId||leavingRoom)return;
+ const code=roomCode,id=playerId;
+ const scheme=location.protocol==="https:"?"wss:":"ws:";
+ const socket=new WebSocket(`${scheme}//${location.host}/ws?code=${encodeURIComponent(code)}&player=${encodeURIComponent(id)}`);
+ ws=socket;
+ window.MahjongReactionCam?.attach(socket,id,code);
+ socket.onopen=()=>{
+   if(ws!==socket)return;
+   reconnectAttempts=0;showError("roomError","");
+   clearInterval(heartbeatTimer);
+   // A tiny app-level heartbeat keeps the connection observable and detects stalls.
+   heartbeatTimer=setInterval(()=>{
+     if(ws===socket&&socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify({action:"heartbeat"}));
+   },25000);
+ };
+ socket.onmessage=e=>{
+   if(ws!==socket)return;
+   let m;try{m=JSON.parse(e.data);}catch{return;}
    if(m.type==="state"){
      const initialState=!state;
      state=m.state;selected=state.players[state.myIndex]?.hand?.some(t=>t.key===selected)?selected:null;
      render();
      if(!initialState)window.MahjongReactionCam?.reaction(state.reaction);
-   }
-   else if(m.type==="error")showError("roomError",m.message);
-   else window.MahjongReactionCam?.handle(m);
+   }else if(m.type==="error")showError("roomError",m.message);
+   else if(m.type!=="heartbeatAck")window.MahjongReactionCam?.handle(m);
  };
- ws.onclose=()=>{window.MahjongReactionCam?.stop();showError("roomError","Connection closed. Refresh to reconnect if needed.");};
+ socket.onclose=e=>{
+   if(ws!==socket||leavingRoom)return;
+   ws=null;clearInterval(heartbeatTimer);heartbeatTimer=null;
+   window.MahjongReactionCam?.stop();
+   const delay=Math.min(15000,900*2**Math.min(reconnectAttempts++,4))+Math.floor(Math.random()*350);
+   showError("roomError","Connection interrupted — reconnecting to this room automatically…");
+   reconnectTimer=setTimeout(openSocket,delay);
+ };
+ socket.onerror=()=>{if(ws===socket)showError("roomError","Connection issue — attempting to restore the table…");};
+}
+function connect(code,id){
+ stopTransport();leavingRoom=false;roomCode=code;playerId=id;
+ state=null;selected=null;reconnectAttempts=0;
+ $("home").classList.add("hidden");$("room").classList.remove("hidden");$("roomCode").textContent=code;
+ openSocket();
  if(window.MahjongClubhouse)window.MahjongClubhouse.disconnect=()=>{
-   window.MahjongReactionCam?.stop();if(ws){ws.close();ws=null;}state=null;selected=null;playerId=null;roomCode=null;
+   leavingRoom=true;stopTransport();state=null;selected=null;playerId=null;roomCode=null;
    showError("roomError","");
  };
 }
-function send(action,extra={}){if(ws&&ws.readyState===1)ws.send(JSON.stringify({action,...extra}));}
+function send(action,extra={}){
+ if(ws&&ws.readyState===WebSocket.OPEN){ws.send(JSON.stringify({action,...extra}));return;}
+ showError("roomError","Reconnecting to the table — please try that move again in a moment.");
+}
 $("create").onclick=async()=>{try{showError("homeError","");const r=await post("/api/create",{name:$("name").value||"Player 1"});connect(r.code,r.playerId);}catch(e){showError("homeError",e.message);}};
 $("join").onclick=async()=>{try{showError("homeError","");const code=$("joinCode").value.toUpperCase();const r=await post("/api/join",{code,name:$("name").value||"Player"});connect(code,r.playerId);}catch(e){showError("homeError",e.message);}};
 $("joinCode").addEventListener("input",e=>e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""));
 $("copy").onclick=async()=>{await navigator.clipboard.writeText(`${location.origin}?room=${roomCode}`);$("copy").textContent="Copied!";setTimeout(()=>$("copy").textContent="Copy invite code",1400);};
-$("leave").onclick=()=>{if(window.MahjongClubhouse){window.MahjongClubhouse.returnToLobby();}else{if(ws)ws.close();location.href="/";}};
+$("leave").onclick=()=>{if(window.MahjongClubhouse){window.MahjongClubhouse.returnToLobby();}else{leavingRoom=true;stopTransport();location.href="/";}};
 function render(){
  if(!state)return;
  $("wallCount").textContent=`Wall: ${state.wallCount}`;
