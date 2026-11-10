@@ -69,3 +69,12 @@ test("camera and Worker source pass syntax checks and responsive style is linked
  assert.match(css,/reaction-camera-gallery/);
  assert.match(css,/max-width:700px/);
 });
+
+test("camera relay status and retry button are present after TURN setup",()=>{
+ const html=readFileSync("public/index.html","utf8");
+ const camera=readFileSync("public/reaction-camera.js","utf8");
+ assert.match(html,/id="reactionCameraRetry"/);
+ assert.match(camera,/TURN relay not configured/);
+ assert.match(camera,/function retry\(\)/);
+ assert.match(camera,/iceConfig=null;icePromise=null/);
+});
