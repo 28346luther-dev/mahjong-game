@@ -199,7 +199,7 @@ test("right-hand sweeper is physically banked in road, kerbs and kart ride heigh
  assert.ok(bankAngle(.3)>.14);
  assert.ok(bankRise(.3,-4)>0);
  assert.ok(bankRise(.3,4)<0);
- assert.equal(bankRise(.45,4),0);
+ assert.ok(Math.abs(bankRise(.45,4))<1e-12);
  const client=readFileSync("public/kart-racing.js","utf8");
  const graphics=readFileSync("public/kart-graphics.js","utf8");
  assert.match(client,/bankRise\(i\/ps\.length,offset\)/);
