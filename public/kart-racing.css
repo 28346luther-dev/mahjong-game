@@ -67,3 +67,10 @@ body.kart-open{overflow:hidden}
 #kartCameraLabel{font-size:clamp(10px,1.1vw,14px)}
 @media(max-width:930px){.kart-modal:fullscreen .kart-layout{height:auto;min-height:calc(100dvh - 110px)}.kart-modal:fullscreen .kart-stage{min-height:42dvh}}
 @media(max-width:600px){.kart-header-controls{justify-content:flex-start}.kart-header-controls button{font-size:10px;padding:7px 8px}}
+
+/* Accessible pit-lane limiter, independent of camera and fullscreen toggles. */
+#kartPitLimiter{background:#304b4c;border-color:#95b2a9}
+#kartPitLimiter[aria-pressed="true"]{background:#ebbd53;border-color:#fff0ac;color:#26242e}
+#kartPitStatus{white-space:nowrap;color:#f7d38b}
+.kart-header-controls{gap:7px}
+@media(max-width:650px){#kartPitLimiter{order:1;flex:1 1 130px}}
