@@ -5,7 +5,7 @@
 (()=>{
  const $=id=>document.getElementById(id);
  let ws=null,myId=null,room=null,localStream=null,enabled=false;
- const pcs=new Map(),remoteStreams=new Map(),names=new Map(),publishers=new Set(),recorders=new Map();
+ const pcs=new Map(),remoteStreams=new Map(),names=new Map(),publishers=new Set(),recorders=new Map(),iceQueue=new Map();
  let lastReactionId=null,overlayTimer=null,replayUrl=null;
  const canSend=()=>ws?.readyState===WebSocket.OPEN;
  const send=obj=>{if(canSend())ws.send(JSON.stringify(obj));};
@@ -83,7 +83,7 @@
  function closePeer(id){
   const pc=pcs.get(id);if(pc){pc.ontrack=null;pc.close();pcs.delete(id);}
   const stream=remoteStreams.get(id);if(stream)for(const t of stream.getTracks())t.stop();
-  remoteStreams.delete(id);stopRecording(id);
+  remoteStreams.delete(id);stopRecording(id);iceQueue.delete(id);
  }
  function clearOverlay(){
   clearTimeout(overlayTimer);
@@ -131,12 +131,23 @@
     if(data.kind==="offer"){
       pc=makePC(data.from,false);
       await pc.setRemoteDescription(new RTCSessionDescription(data.payload));
+      for(const candidate of iceQueue.get(data.from)||[])
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      iceQueue.delete(data.from);
       const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
       send({action:"cameraSignal",to:data.from,kind:"answer",payload:pc.localDescription.toJSON()});
     }else if(data.kind==="answer"&&pc){
       await pc.setRemoteDescription(new RTCSessionDescription(data.payload));
-    }else if(data.kind==="ice"&&pc){
-      if(pc.remoteDescription)await pc.addIceCandidate(new RTCIceCandidate(data.payload));
+      for(const candidate of iceQueue.get(data.from)||[])
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      iceQueue.delete(data.from);
+    }else if(data.kind==="ice"){
+      if(pc?.remoteDescription)await pc.addIceCandidate(new RTCIceCandidate(data.payload));
+      else{
+        const pending=iceQueue.get(data.from)||[];
+        if(pending.length<64)pending.push(data.payload);
+        iceQueue.set(data.from,pending);
+      }
     }
   }catch(err){console.warn("Reaction camera negotiation failed",err);closePeer(data.from);}
  }
