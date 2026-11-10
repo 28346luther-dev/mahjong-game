@@ -208,7 +208,19 @@ export default {
 };
 
 export class MahjongRoom {
-  constructor(ctx){this.ctx=ctx;this.state=null;this.sockets=new Map();this.cameras=new Set();this.cameraSignals=new Map();}
+  constructor(ctx){
+    this.ctx=ctx;this.state=null;this.sockets=new Map();this.cameras=new Set();this.cameraSignals=new Map();
+    // Hibernatable WebSockets are reattached to a new Durable Object instance on wake.
+    for(const ws of ctx.getWebSockets?.()||[]){
+      const attachment=ws.deserializeAttachment?.();
+      const playerId=attachment?.playerId;
+      if(!playerId)continue;
+      const older=this.sockets.get(playerId);
+      if(older&&older!==ws)try{older.close(4001,"Reconnected elsewhere");}catch{}
+      this.sockets.set(playerId,ws);
+      if(attachment.cameraEnabled)this.cameras.add(playerId);
+    }
+  }
   async fetch(request){
     const url=new URL(request.url);
     if(url.pathname==="/init"&&request.method==="POST"){
@@ -227,16 +239,34 @@ export class MahjongRoom {
     if(url.pathname==="/ws"){
       await this.load();if(!this.state)return new Response("Room not found",{status:404});
       const playerId=url.searchParams.get("player");if(!this.state.players.some(p=>p.id===playerId))return new Response("Player not found",{status:404});
-      const pair=new WebSocketPair(),client=pair[0],server=pair[1];server.accept();
-      const old=this.sockets.get(playerId);try{old?.close(4001,"Reconnected elsewhere");}catch{}
-      this.sockets.set(playerId,server);server.addEventListener("message",e=>this.onMessage(playerId,e.data));
-      server.addEventListener("close",()=>{if(this.sockets.get(playerId)===server){this.sockets.delete(playerId);this.disableCamera(playerId);}});
+      const pair=new WebSocketPair(),client=pair[0],server=pair[1];
+      const old=this.sockets.get(playerId);
+      // A reconnection replaces the previous socket without removing the player.
+      if(old)try{old.close(4001,"Reconnected elsewhere");}catch{}
+      this.ctx.acceptWebSocket(server);
+      server.serializeAttachment({playerId,cameraEnabled:false});
+      this.sockets.set(playerId,server);
+      this.disableCamera(playerId); // Do not restore camera consent after reconnect.
       server.send(JSON.stringify({type:"state",state:publicState(this.state,playerId)}));
       server.send(JSON.stringify({type:"cameraPeers",players:this.state.players.map(p=>({id:p.id,name:p.name,enabled:this.cameras.has(p.id)}))}));
       return new Response(null,{status:101,webSocket:client});
     }
     return new Response("Not found",{status:404});
   }
+  async webSocketMessage(ws,data){
+    const playerId=ws.deserializeAttachment?.()?.playerId;
+    if(!playerId||this.sockets.get(playerId)!==ws)return;
+    try{await this.onMessage(playerId,typeof data==="string"?data:new TextDecoder().decode(data));}
+    catch(error){
+      console.error("Mahjong socket message failed",error?.name,error?.message);
+      try{ws.send(JSON.stringify({type:"error",message:"Could not process that move. Please try again."}));}catch{}
+    }
+  }
+  async webSocketClose(ws){
+    const id=ws.deserializeAttachment?.()?.playerId;
+    if(id&&this.sockets.get(id)===ws){this.sockets.delete(id);this.disableCamera(id);}
+  }
+  async webSocketError(ws){await this.webSocketClose(ws);}
   async load(){if(!this.state)this.state=await this.ctx.storage.get("state");}
   async save(){await this.ctx.storage.put("state",this.state);}
   broadcast(){if(!this.state)return;for(const [id,ws] of this.sockets){try{ws.send(JSON.stringify({type:"state",state:publicState(this.state,id)}));}catch{}}}
@@ -254,9 +284,12 @@ export class MahjongRoom {
     await this.load();const s=this.state;if(!s)return;
     if(typeof raw!=="string"||raw.length>30000)return;
     let msg;try{msg=JSON.parse(raw);}catch{return;}
+    if(msg.action==="heartbeat"){this.send(playerId,{type:"heartbeatAck"});return;}
     if(msg.action==="cameraStatus"&&typeof msg.enabled==="boolean"){
       if(msg.enabled)this.cameras.add(playerId);
       else this.disableCamera(playerId);
+      const socket=this.sockets.get(playerId);
+      socket?.serializeAttachment?.({playerId,cameraEnabled:msg.enabled});
       if(msg.enabled)this.broadcastCamera({type:"cameraStatus",id:playerId,enabled:true});
       return;
     }
