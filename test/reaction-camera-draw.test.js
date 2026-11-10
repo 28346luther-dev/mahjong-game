@@ -64,29 +64,21 @@ test("only resolved Pong or Chow claims produce a reaction moment",()=>{
   assert.equal(room.state.players[0].melds.at(-1).type,action);
  }
 });
-test("reaction camera signaling requires a camera-enabled player and targets only table members",async()=>{
+test("reaction videos require a confirmed claim and never activate a live stream",async()=>{
  const room=makeRoom();
- const a=[],b=[];
- room.sockets.set("a",{send:s=>a.push(JSON.parse(s))});
- room.sockets.set("b",{send:s=>b.push(JSON.parse(s))});
- await room.onMessage("b",JSON.stringify({action:"cameraSubscribe",to:"a"}));
- assert.equal(a.length,0,"camera disabled by default");
- await room.onMessage("a",JSON.stringify({action:"cameraStatus",enabled:true}));
- assert.equal(b.at(-1).type,"cameraStatus");
- await room.onMessage("b",JSON.stringify({action:"cameraSubscribe",to:"a"}));
- assert.equal(a.at(-1).type,"cameraSubscribe");
- await room.onMessage("a",JSON.stringify({action:"cameraSignal",to:"b",kind:"offer",payload:{type:"offer",sdp:"example"}}));
- assert.equal(b.at(-1).type,"cameraSignal");
- room.disableCamera("a");
- const before=b.length;
- await room.onMessage("a",JSON.stringify({action:"cameraSignal",to:"b",kind:"offer",payload:{type:"offer",sdp:"example"}}));
- assert.equal(b.length,before,"camera negotiation stops once opted out");
+ room.state.lastReaction={id:"reaction-test",playerId:"a",playerName:"A",claim:"chow",at:Date.now()};
+ const other=[];
+ room.sockets.set("a",{send(){}});
+ room.sockets.set("b",{send:s=>other.push(JSON.parse(s))});
+ await room.onMessage("a",JSON.stringify({action:"reactionClipStart",eventId:"reaction-test",mime:"video/webm",chunks:1}));
+ assert.equal(other.at(-1).type,"reactionClipStart");
+ assert.equal(other.at(-1).claim,"chow");
 });
 test("Mahjong camera and drawn tile scripts pass syntax and are wired to the page",()=>{
  execFileSync(process.execPath,["--check","public/app.js"]);
  execFileSync(process.execPath,["--check","public/reaction-camera.js"]);
  const html=readFileSync("public/index.html","utf8");
- for(const id of ["reactionOverlay","reactionVideo","reactionCameraToggle","drawnTileArea","drawnTileFace"])
+ for(const id of ["reactionOverlay","reactionVideo","reactionAccept","drawnTileArea","drawnTileFace"])
   assert.match(html,new RegExp('id="'+id+'"'));
  const client=readFileSync("public/app.js","utf8");
  assert.match(client,/keepDrawn/);assert.match(client,/discardDrawn/);
