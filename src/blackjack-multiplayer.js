@@ -29,6 +29,10 @@ export function joinBlackjack(game,id,name){
 }
 export function readyBlackjack(game,id,wallets){
  if(game.phase==="playing")throw Error("Wait for the dealer to finish this round.");
+ if(game.phase==="finished"){
+  game.phase="waiting";
+  for(const old of game.players){old.bet=0;old.status="watching";}
+ }
  const p=game.players.find(p=>p.id===id);if(!p)throw Error("Join the table first.");
  if(p.status==="ready")throw Error("Already entered the next round.");
  const wallet=wallets[id];
@@ -75,6 +79,7 @@ export function settleBlackjack(game,wallets){
   let payout=0;
   if(p.status==="bust")p.result="Bust · −10 Sana";
   else if(natural&&!houseNatural){payout=25;p.result="Blackjack! +15 Sana";}
+  else if(houseNatural){p.result="Dealer blackjack · −10 Sana";}
   else if(house>21||own>house){payout=20;p.result="Win · +10 Sana";}
   else if(own===house){payout=10;p.result="Push · 10 Sana returned";}
   else p.result="Dealer wins · −10 Sana";
