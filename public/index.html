@@ -80,6 +80,10 @@
           <button type="submit" class="primary">Save avatar & name</button>
         </form>
       </div>
+      <section class="kart-club-board" aria-label="Go-kart global leaderboard">
+        <div class="kart-club-board-head"><strong>🏆 VELVET CIRCUIT · GLOBAL TOP 10</strong><span>Shared across all racers</span></div>
+        <ol id="kartClubLeaderboard" aria-live="polite"><li>Loading fastest laps…</li></ol>
+      </section>
       <div class="club-footer">
         <span><strong>🀄 Mahjong</strong> <em>PLAYABLE NOW</em></span>
         <span>♠ Hold’em · Blackjack <em>PLAYABLE</em></span>
@@ -90,7 +94,7 @@
       <div class="kart-sheet">
         <header class="kart-header">
           <div><div class="kart-eyebrow">THE GAMES CLUB · GO-KART TIME TRIAL</div><h2 id="kartTitle">VELVET CIRCUIT</h2>
-            <p>One lap · Chicanes, elevation and pit lane · No Sana Coins required</p></div>
+            <p>Unlimited laps · High-detail racing circuit · Global fastest-lap rankings</p></div>
           <button id="kartClose" type="button" aria-label="Return to clubhouse">✕ Back to clubhouse</button>
         </header>
         <div class="kart-layout">
@@ -98,14 +102,14 @@
             <div class="kart-stage">
               <canvas id="kartCanvas" width="960" height="600" aria-label="Interactive 3D go-kart circuit"></canvas>
               <div class="kart-overlay">
-                <div><small>LAP TIME</small><strong id="kartTime">00:00.000</strong></div>
+                <div><small>LAP</small><strong id="kartLap">1</strong></div><div><small>CURRENT LAP</small><strong id="kartTime">00:00.000</strong></div>
                 <div><small>LAP PROGRESS</small><strong id="kartProgress">0%</strong></div>
                 <div><small>SPEED</small><strong id="kartSpeed">0 km/h</strong></div>
               </div>
             </div>
             <div class="kart-actions">
               <button type="button" id="kartStart" class="kart-primary">🏁 Start timed lap</button>
-              <strong id="kartBest">Personal best --:--.---</strong>
+              <strong id="kartLast">LAST --:--.---</strong><strong id="kartBest">BEST --:--.---</strong>
             </div>
             <p id="kartStatus" role="status">Drive with W / A / S / D, brake with Space, reset with R.</p>
             <div class="kart-touch" aria-label="Touch driving controls">
@@ -117,10 +121,10 @@
           </div>
           <aside class="kart-leaderboard">
             <div class="kart-board-head"><h3>🏆 FASTEST LAPS</h3><button id="kartRefresh" type="button">Refresh</button></div>
-            <p>One best lap per player, ranked by server-measured time.</p>
+            <p>Global live ranking · updates every 15 seconds · fastest lap per player.</p>
             <ol id="kartLeaderboard" aria-live="polite"></ol>
             <div class="kart-rules"><strong>HOW TO RACE</strong>
-              <p>Follow the road through sweeping corners, chicanes and elevation changes, then cross the chequered start/finish line. The pit lane is available for exploring. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
+              <p>Race unlimited laps. Apex kerbs are red and white, with bright green paint and gravel runoff on the outside. Cross the chequered finish line to log each lap and immediately continue into the next. The pit lane is available for exploring. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
             </div>
           </aside>
         </div>
@@ -237,6 +241,7 @@
 <script src="/account.js"></script>
 <script type="module" src="/salon-games.js"></script>
 <script type="module" src="/avatar-editor.js"></script>
+<script type="module" src="/kart-global-board.js"></script>
 <script type="module" src="/kart-racing.js"></script>
 <script type="module" src="/clubhouse.js"></script>
 </body></html>

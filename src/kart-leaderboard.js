@@ -42,7 +42,7 @@ export class KartLeaderboard {
   const url=new URL(request.url);
   if(request.method==="GET"&&url.pathname==="/leaderboard"){
    const records=await this.read();
-   return Response.json({track:"Velvet Circuit Extended",laps:1,entries:leaderboardEntries(records)},
+   return Response.json({track:"Velvet Circuit Extended",laps:"unlimited",entries:leaderboardEntries(records)},
     {headers:{"cache-control":"no-store"}});
   }
   if(request.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
@@ -54,7 +54,7 @@ export class KartLeaderboard {
    const start=raceStart();
    const s={id:crypto.randomUUID(),name:sanitizeDriverName(body.name),
     start:now,lastAt:now,lastAtProgress:0,x:start.x,z:start.z,
-    progress:0,travel:0,valid:true};
+    progress:0,travel:0,valid:true,lap:1,crossed:false};
    await this.storage.put("kart-session-v3:"+id,s);
    return Response.json({ok:true,raceId:s.id,startedAt:s.start,
     trackLength:Math.round(ROAD.length),bestMs:(await this.read())[id]?.bestMs??null});
@@ -105,8 +105,17 @@ export class KartLeaderboard {
     records[id]={name:session.name,bestMs:elapsed,at:now,version:3};
     await txn.put("best-times-v3",records);
    }
-   await txn.delete(key);
-   return {personalBest,bestMs:personalBest?elapsed:previous,entries:leaderboardEntries(records)};
+   // Finish does NOT end the driving session. Start the next timed lap at this
+   // finish crossing and retain the same race ID, so players keep racing.
+   const completedLap=session.lap||1;
+   session.lap=completedLap+1;
+   session.start=now;session.lastAt=now;
+   session.travel=0;session.crossed=false;
+   session.progress=check.progress;
+   session.x=x;session.z=z;session.valid=true;
+   await txn.put(key,session);
+   return {lap:completedLap,nextLap:session.lap,personalBest,
+    bestMs:personalBest?elapsed:previous,entries:leaderboardEntries(records)};
   });
   return Response.json({ok:true,elapsedMs:elapsed,...result},
    {headers:{"cache-control":"no-store"}});

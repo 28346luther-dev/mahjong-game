@@ -61,7 +61,13 @@ test("continuous telemetry can complete an honest full-lap sequence and persist 
  assert.equal(completed.status,200,JSON.stringify(completed.result));
  assert.equal(completed.result.personalBest,true);
  assert.equal(completed.result.entries[0].name,"Road Racer");
- assert.equal(data.has("kart-session-v3:"+id),false);
+ assert.equal(data.has("kart-session-v3:"+id),true,"finished lap must preserve driving session");
+ const continued=data.get("kart-session-v3:"+id);
+ assert.equal(continued.lap,2);
+ assert.equal(continued.travel,0);
+ assert.equal(continued.crossed,false);
+ assert.equal(continued.id,raceId);
+ assert.equal(completed.result.nextLap,2);
 });
 test("new circuit leaderboard does not compare old oval records to new road course",()=>{
  const entries=leaderboardEntries({
@@ -94,8 +100,8 @@ test("kart UI removes checkpoint arches, uses progress, and shows pit-lane geome
  const html=readFileSync("public/index.html","utf8");
  const house=readFileSync("public/clubhouse.js","utf8");
  assert.match(client,/ribbon\(PIT/);
- assert.match(client,/for\(let row=0;row<2;row\+\+\)/);
- assert.match(client,/const kerb=box/);
+ assert.match(client,/addCircuitGraphics/);
+ assert.match(readFileSync("public/kart-graphics.js","utf8"),/const kerbVerts/);
  assert.match(client,/projectToRoute/);
  assert.doesNotMatch(client,/glowing turquoise checkpoint|GATE_COUNT|turquoise\.*/);
  assert.ok(html.includes('id="kartProgress"'));
@@ -103,7 +109,25 @@ test("kart UI removes checkpoint arches, uses progress, and shows pit-lane geome
  assert.match(house,/KartRacing\?\.open/);
  assert.match(html,/blackjackVsPerson/);
 });
+test("high-quality circuit renders curved corner kerbs, asphalt and painted runoff",()=>{
+ const graphics=readFileSync("public/kart-graphics.js","utf8");
+ const client=readFileSync("public/kart-racing.js","utf8");
+ const html=readFileSync("public/index.html","utf8");
+ const clubhouse=readFileSync("public/kart-global-board.js","utf8");
+ assert.match(graphics,/Math\.abs\(b\)<\.14/);
+ assert.match(graphics,/kerbVerts/);
+ assert.match(graphics,/greenMat/);
+ assert.match(graphics,/asphalt=texturedCanvas/);
+ assert.match(graphics,/InstancedMesh/);
+ assert.match(client,/lapCount=finish\.nextLap/);
+ assert.doesNotMatch(client,/playing=false;raceId=null;speed=0;\s*\$\("kartTime"\)/);
+ assert.match(classicCheck(html),/id="kartClubLeaderboard"/);
+ assert.match(classicCheck(html),/id="kartLap"/);
+ assert.match(classicCheck(html),/id="kartLast"/);
+ assert.match(clubhouse,/setInterval\(refresh,15000\)/);
+});
+function classicCheck(value){return value;}
 test("all kart, blackjack and worker modules pass syntax checks",()=>{
- for(const p of ["public/kart-track.js","src/kart-leaderboard.js","src/blackjack-multiplayer.js","src/poker-table.js","src/worker.js","public/kart-racing.js","public/salon-games.js"])
+ for(const p of ["public/kart-graphics.js","public/kart-global-board.js","public/kart-track.js","src/kart-leaderboard.js","src/blackjack-multiplayer.js","src/poker-table.js","src/worker.js","public/kart-racing.js","public/salon-games.js"])
   execFileSync(process.execPath,["--check",p]);
 });
