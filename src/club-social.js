@@ -47,7 +47,7 @@ export class ClubSocial {
   }
   if(data.type==="profile"){
    const name=clean(data.name,22),color=clean(data.color,12),hair=clean(data.hair,12);
-   if(name.length>=2&&/^[\\p{L}\\p{N} _.-]+$/u.test(name)&&
+   if(name.length>=2&&/^[\p{L}\p{N} _.-]+$/u.test(name)&&
       ["ruby","plum","emerald","navy","gold"].includes(color)&&
       ["dark","brown","blonde","auburn"].includes(hair)){
     info.name=name;info.color=color;info.hair=hair;ws.serializeAttachment(info);
