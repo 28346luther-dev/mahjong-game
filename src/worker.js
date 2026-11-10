@@ -191,7 +191,7 @@ export default {
         if(request.method!=="GET"&&request.method!=="POST")
           return Response.json({error:"Method not allowed"},{status:405});
         const action=url.pathname.slice("/api/kart".length);
-        if(!["/leaderboard","/start","/checkpoint","/finish","/abort"].includes(action))
+        if(!["/leaderboard","/start","/sample","/finish","/abort"].includes(action))
           return Response.json({error:"Unknown kart endpoint"},{status:404});
         const origin=request.headers.get("origin");
         if(origin&&origin!==url.origin)return Response.json({error:"Invalid origin"},{status:403});

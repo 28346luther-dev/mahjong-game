@@ -90,7 +90,7 @@
       <div class="kart-sheet">
         <header class="kart-header">
           <div><div class="kart-eyebrow">THE GAMES CLUB · GO-KART TIME TRIAL</div><h2 id="kartTitle">VELVET CIRCUIT</h2>
-            <p>One lap · Eight checkpoints · Personal bests · No Sana Coins required</p></div>
+            <p>One lap · Chicanes, elevation and pit lane · No Sana Coins required</p></div>
           <button id="kartClose" type="button" aria-label="Return to clubhouse">✕ Back to clubhouse</button>
         </header>
         <div class="kart-layout">
@@ -99,7 +99,7 @@
               <canvas id="kartCanvas" width="960" height="600" aria-label="Interactive 3D go-kart circuit"></canvas>
               <div class="kart-overlay">
                 <div><small>LAP TIME</small><strong id="kartTime">00:00.000</strong></div>
-                <div><small>CHECKPOINT</small><strong id="kartGate">READY</strong></div>
+                <div><small>LAP PROGRESS</small><strong id="kartProgress">0%</strong></div>
                 <div><small>SPEED</small><strong id="kartSpeed">0 km/h</strong></div>
               </div>
             </div>
@@ -120,7 +120,7 @@
             <p>One best lap per player, ranked by server-measured time.</p>
             <ol id="kartLeaderboard" aria-live="polite"></ol>
             <div class="kart-rules"><strong>HOW TO RACE</strong>
-              <p>Pass all seven glowing turquoise arches clockwise and return to the chequered start/finish line. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
+              <p>Follow the road through sweeping corners, chicanes and elevation changes, then cross the chequered start/finish line. The pit lane is available for exploring. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
             </div>
           </aside>
         </div>
@@ -135,7 +135,13 @@
           <strong id="slotScore" class="salon-score">Sana balance: 500</strong><button id="slotSpin" type="button" class="salon-action">🎰 SPIN THE REELS</button>
         </section>
         <section id="salon-blackjack" class="salon-game hidden">
-          <p class="salon-help">Blackjack against the house. Hit, stand, or deal again. Dealer stands on 17. Play with other club members at one dealer table. Join the next round for 10 Sana Coins. No real money.</p>
+          <p class="salon-help">Choose a computer dealer (up to six players) or challenge a real club member in a head-to-head blackjack duel. Each participant enters for 10 play-only Sana Coins.</p>
+          <div class="blackjack-opponent-picker" aria-label="Blackjack opponent">
+            <span>Choose who to face:</span>
+            <button id="blackjackVsComputer" type="button" class="secondary">🤖 Computer dealer</button>
+            <button id="blackjackVsPerson" type="button" class="secondary">👤 Real player duel</button>
+          </div>
+          <p id="blackjackOpponentInfo" class="salon-help">Choose computer or another club member. A real-player duel needs two players.</p>
           <div id="blackjackPlayers" class="blackjack-players" aria-label="Players sharing the blackjack table"></div>
           <div class="card-board"><h3 id="blackjackDealerScore">Dealer</h3><div id="blackjackDealer" class="card-row"></div>
             <div class="salon-result" id="blackjackMessage">Deal to begin.</div>
