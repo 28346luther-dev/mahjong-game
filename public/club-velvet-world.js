@@ -6,9 +6,9 @@ import {sideSkirtingSegments,chairFacing,couchSeatPlan,barSeatPlan,gameSeatPlan}
 
 export const STATIONS=[
  {id:"mahjong",label:"MAHJONG",x:-17,z:-11,r:2.65,enabled:true},
- {id:"poker",label:"POKER",x:17,z:-11,r:2.65,enabled:false},
- {id:"blackjack",label:"BLACKJACK",x:-17,z:9,r:2.65,enabled:false},
- {id:"slots",label:"SLOT MACHINES",x:17.4,z:8.7,r:2.8,enabled:false},
+ {id:"poker",label:"TEXAS HOLD’EM",x:17,z:-11,r:3.25,enabled:true},
+ {id:"blackjack",label:"BLACKJACK",x:-17,z:9,r:3.25,enabled:true},
+ {id:"slots",label:"SLOT MACHINES",x:17.4,z:8.7,r:4.3,enabled:true},
  {id:"board",label:"NOTICEBOARD",x:-8.6,z:-4.6,r:2.15},
  {id:"karaoke",label:"KARAOKE STAGE",x:0,z:-13,r:3.8},
  {id:"bar",label:"COCKTAIL BAR",x:5.7,z:-5.4,r:2.4},
@@ -219,7 +219,10 @@ export function buildVelvetClub(THREE,scene){
    for(let k=0;k<5;k++)soft(.19,.018,.31,cream,-.68+k*.33,1.32,-.14,g,.018);
    for(let k=0;k<3;k++)column(.14,.035,standard(k%2?0xa83547:0xefcf85),.5+k*.19,1.32,.5,g);
   }
-  framedText(st.id.toUpperCase(),st.enabled?"PRESS E TO PLAY MAHJONG":"GAME COMING SOON",st.x,4.15,st.z-3.36,4.7,0);
+  const caption=st.id==="poker"?"HUMANS · BOTS · SANA COINS":st.id==="blackjack"?"PLAY THE HOUSE · NO MONEY":"PRESS E TO PLAY";
+  // Room plaques are flush-mounted on real wall surfaces, never suspended above tables.
+  framedText(st.id==="poker"?"TEXAS HOLD'EM":st.id.toUpperCase(),caption,
+    st.x,4.15,st.z<0?-18.23:1.47,4.7,0);
  }
  function bottles(x,z){
   for(let k=0;k<12;k++){
@@ -246,7 +249,13 @@ export function buildVelvetClub(THREE,scene){
    torus(.29,.045,bright,0,.38,0,g).rotation.x=Math.PI/2;
    seats.push(seat);
   }
-  for(const y of [1.32,2.37,3.42])soft(4.16,.13,.52,walnut,5.56,y,-9.25,scene,.04);
+  // Full-height walnut backboard and upright framing physically support every shelf.
+  soft(4.38,3.6,.16,darkWalnut,5.56,2.42,-9.51,scene,.07);
+  for(const sx of [3.45,7.68])soft(.17,3.62,.64,walnut,sx,2.42,-9.24,scene,.05);
+  for(const y of [1.32,2.37,3.42]){
+   soft(4.16,.13,.52,walnut,5.56,y,-9.25,scene,.04);
+   soft(4.20,.035,.55,brass,5.56,y+.09,-9.25,scene,.02);
+  }
   bottles(5.56,-9.19);
   framedText("THE VELVET BAR","SIT · TALK · UNWIND",5.6,4.75,-9.6,4.8,0);
   for(const xx of [3.12,7.95])sconce(xx,3.1,-9.44);
@@ -280,10 +289,11 @@ export function buildVelvetClub(THREE,scene){
    const controls=soft(1.48,.17,.63,walnut,0,.94,.73,g,.07);controls.rotation.x=-.1;
    for(let n=0;n<4;n++)ball(.086,standard([0xc7955f,0x9e4e60,0x7c8f75,0xd4d6c7][n],.32,.3),-.53+n*.35,1.04,.94,g);
    soft(.91,.12,.08,standard(0x12131b),0,.48,.66,g,.02);
-   framedText(["ROYAL SEVEN","RUBY STAR","GOLD RUSH","NIGHT CLUB"][i],"SLOTS",x,3.55,z-.4,1.78,0);
+   // Marquee rests against its cabinet crown rather than floating above it.
+   framedText(["ROYAL SEVEN","RUBY STAR","GOLD RUSH","NIGHT CLUB"][i],"SLOTS",x,3.26,z+.44,1.58,0);
    obstacles.push({x,z,w:1.68,d:1.2});
   }
-  framedText("THE SLOT SALON","PLAYERS' ROOM · COMING SOON",17,5,-18.23,6.1,0);
+  framedText("THE SLOT SALON","FREE-PLAY ARCADE",17,4.35,1.47,5.5,0);
   // Extra velvet lounge in the slot room is not a duplicate gameplay station.
   sofa(17,13.3,Math.PI,"slots-settee");
   planter(12,13.8);planter(22,13.8);
@@ -327,7 +337,7 @@ export function buildVelvetClub(THREE,scene){
   const q=canvas.getContext("2d");q.fillStyle="#45283a";q.fillRect(0,0,560,420);
   q.fillStyle="#f5dab0";q.textAlign="center";q.font="bold 42px Georgia";q.fillText("NOTICEBOARD",280,77);
   q.fillStyle="#d9cbb6";q.font="25px system-ui";
-  ["MAHJONG TABLES OPEN","SOCIAL LOUNGE · BAR","KARAOKE STAGE · VOICE","POKER · BLACKJACK · SLOTS","COMING SOON","BE KIND TO OTHER VISITORS"].forEach((line,i)=>q.fillText(line,280,135+i*43));
+  ["MAHJONG TABLES OPEN","TEXAS HOLD’EM · SANA COINS","BLACKJACK & SLOTS OPEN","KARAOKE · OPT-IN VOICE","LOUNGE · CHAT · FRIENDS","BE KIND TO OTHER VISITORS"].forEach((line,i)=>q.fillText(line,280,135+i*43));
   const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
   const front=new THREE.Mesh(new THREE.PlaneGeometry(2.75,2.06),
    new THREE.MeshBasicMaterial({map:tex,side:THREE.FrontSide}));
@@ -402,9 +412,9 @@ export function buildVelvetClub(THREE,scene){
   for(const [x,z] of [[-9.73,12],[9.73,12]])picture("MEMBERS CLUB",x,z,x<0?Math.PI/2:-Math.PI/2);
   // Doors identify their actual rooms from INSIDE rather than mirrored backwards.
   framedText("MAHJONG SALON","PRIVATE GAME TABLES",-17,4.6,-18.23,5.6,0);
-  framedText("POKER ROOM","SOCIAL TABLES",17,4.6,-18.23,5.6,0);
-  framedText("BLACKJACK","TABLES COMING SOON",-17,4.6,18.22,5.4,Math.PI);
-  framedText("SLOT SALON","MACHINES COMING SOON",17,4.6,18.22,5.4,Math.PI);
+  framedText("TEXAS HOLD’EM","SANA COINS · PLAY FOR FUN",17,4.6,-18.23,5.6,0);
+  framedText("BLACKJACK","HIT · STAND · PLAY",-17,4.6,18.22,5.4,Math.PI);
+  framedText("SLOT SALON","FREE SPINS · FUN POINTS",17,4.6,18.22,5.4,Math.PI);
   // Entrance welcome plaque faces the incoming player (negative Z).
   framedText("WELCOME","THE GAMES CLUB",0,4.52,18.24,5.4,Math.PI);
  }
