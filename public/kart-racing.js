@@ -9,6 +9,24 @@ let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
 const PIT_LIMIT_MS=11.1; // 40 km/h
 let pitLimiter=false,inPitLane=false;
+let currentSector=1,sectorStarted=0;
+function resetSectors(){
+ currentSector=1;sectorStarted=performance.now();
+ for(let i=1;i<=3;i++){
+  const el=$("kartSector"+i);
+  if(el){el.textContent="--:--.---";el.classList.remove("sector-current");}
+ }
+ $("kartSector1")?.classList.add("sector-current");
+ const live=$("kartSectorLive");if(live)live.textContent="SECTOR 1";
+}
+function showSector(index,ms){
+ const el=$("kartSector"+index);
+ if(el){el.textContent=format(ms);el.classList.remove("sector-current");}
+ currentSector=Math.min(3,index+1);
+ sectorStarted=performance.now();
+ $("kartSector"+currentSector)?.classList.add("sector-current");
+ const live=$("kartSectorLive");if(live)live.textContent="SECTOR "+currentSector;
+}
 function updatePitHUD(){
  const button=$("kartPitLimiter"),label=$("kartPitStatus");
  if(button){button.textContent=pitLimiter?"🟡 PIT LIMITER ON · P":"🛠 PIT LIMITER OFF · P";button.setAttribute("aria-pressed",String(pitLimiter));}
@@ -316,11 +334,15 @@ async function transmit(){
   if(!active||raceId!==current)return;
   progress=result.progress;
   $("kartProgress").textContent=progress+"%";
+  if(result.sectorUpdate){
+   showSector(result.sectorUpdate.index,result.sectorUpdate.timeMs);
+   message("Sector "+result.sectorUpdate.index+": "+format(result.sectorUpdate.timeMs));
+  }
   if(result.pit){
    $("kartProgress").textContent="PIT";
-   if(result.pitEntry)message("In the pit lane — 40 km/h limiter active. Your current lap is not timed.");
+   if(result.pitEntry){resetSectors();message("In the pit lane — 40 km/h limiter active. Your current lap is not timed.");}
   }else if(result.pitExit){
-   started=performance.now();
+   started=performance.now();resetSectors();
    $("kartTime").textContent="00:00.000";
    message("Pit exit — rejoin the circuit. Your timed lap has restarted.");
   }
@@ -330,8 +352,13 @@ async function transmit(){
    if(raceId!==current)return;
    // Crossing the line records a lap and immediately starts the next one.
    // Keep the same race ID and driving velocity; never lock the controls.
+   // Display complete last-lap splits before the next sector starts.
+   if(Array.isArray(finish.sectorTimes)){
+    finish.sectorTimes.forEach((ms,i)=>{$("kartSector"+(i+1)).textContent=format(ms);});
+   }
    lapCount=finish.nextLap;
-   started=performance.now();
+   started=performance.now();currentSector=1;sectorStarted=started;
+   $("kartSectorLive").textContent="SECTOR 1";
    progress=0;reportedFinish=false;
    $("kartLap").textContent=String(lapCount);
    $("kartTime").textContent="00:00.000";
@@ -418,7 +445,7 @@ async function begin(){
  try{
   await init();
   const result=await api("start",{});
-  raceId=result.raceId;reset();lapCount=1;started=performance.now();sendAt=performance.now();playing=true;
+  raceId=result.raceId;reset();resetSectors();lapCount=1;started=performance.now();sendAt=performance.now();playing=true;
   $("kartLap").textContent="1";$("kartLast").textContent="LAST --:--.---";
   $("kartTime").textContent="00:00.000";
   $("kartProgress").textContent="0%";
