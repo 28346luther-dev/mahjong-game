@@ -77,10 +77,17 @@ export class AuthStore {
           return json({error:"Invalid outfit colour"},400);
         if(!["dark","brown","blonde","auburn"].includes(hair))
           return json({error:"Invalid hair colour"},400);
-        await this.ctx.storage.put(key,{name,color,hair});
+        const previous=await this.ctx.storage.get(key)||{};
+        let photo=previous.photo||"";
+        if(Object.prototype.hasOwnProperty.call(body,"photo")){
+          photo=String(body.photo||"");
+          if(photo&&(!/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(photo)||photo.length>18000))
+            return json({error:"Use a small JPG profile photo (under 13 KB)."},400);
+        }
+        await this.ctx.storage.put(key,{name,color,hair,photo});
       }
       return json(await this.ctx.storage.get(key)||{
-        name:session.email.split("@")[0].slice(0,22),color:"ruby",hair:"dark"
+        name:session.email.split("@")[0].slice(0,22),color:"ruby",hair:"dark",photo:""
       });
     }
     if(action==="/me"||action==="/logout"){

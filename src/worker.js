@@ -141,7 +141,7 @@ export default {
       let details={};if(request.method==="POST"){
         if(request.headers.get("origin")&&request.headers.get("origin")!==url.origin)
           return Response.json({error:"Invalid origin"},{status:403});
-        if(Number(request.headers.get("content-length")||0)>2048)return Response.json({error:"Too large"},{status:413});
+        if(Number(request.headers.get("content-length")||0)>25000)return Response.json({error:"Profile picture too large (maximum 18 KB)"},{status:413});
         try{details=await request.json();}catch{return Response.json({error:"Invalid JSON"},{status:400});}
         details.update=true;
       }
@@ -186,6 +186,23 @@ export default {
     if(url.pathname.startsWith("/api/")){
       const viewer=await authenticate();
       if(!viewer)return Response.json({error:"Please sign in first"},{status:401});
+      if(["/api/sana/wallet","/api/sana/spin","/api/blackjack/join"].includes(url.pathname)){
+        if(url.pathname!=="/api/sana/wallet"&&request.method!=="POST")
+          return Response.json({error:"POST required"},{status:405});
+        const origin=request.headers.get("origin");
+        if(origin&&origin!==url.origin)return Response.json({error:"Invalid origin"},{status:403});
+        const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(viewer.email));
+        const userId=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+        const target=url.pathname==="/api/sana/spin"?"/slots/spin":url.pathname==="/api/blackjack/join"?"/blackjack/join":"/wallet";
+        let name="Player";
+        if(target==="/blackjack/join"){
+          const r=await authStub.fetch("https://auth/profile",{method:"POST",body:JSON.stringify({token})});
+          if(r.ok)name=(await r.json()).name;
+        }
+        return env.POKER.get(env.POKER.idFromName("club-texas-holdem")).fetch("https://poker"+target,{
+          method:"POST",body:JSON.stringify({user:userId,name})
+        });
+      }
       if(url.pathname==="/api/poker/join"&&request.method==="POST"){
         const origin=request.headers.get("origin");
         if(origin&&origin!==url.origin)return Response.json({error:"Invalid request origin"},{status:403});
@@ -230,6 +247,17 @@ export default {
       }
       return new Response("Not found",{status:404});
     }
+    if(url.pathname==="/blackjack/ws"){
+      if(request.headers.get("upgrade")?.toLowerCase()!=="websocket")
+        return Response.json({error:"Upgrade required"},{status:426});
+      const viewer=await authenticate();
+      if(!viewer)return Response.json({error:"Sign in first"},{status:401});
+      const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(viewer.email));
+      const userId=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+      return env.POKER.get(env.POKER.idFromName("club-texas-holdem")).fetch(
+        new Request("https://poker/blackjack/ws?user="+userId,{headers:new Headers(request.headers)})
+      );
+    }
     if(url.pathname==="/poker/ws"){
       if(request.headers.get("upgrade")?.toLowerCase()!=="websocket")
         return Response.json({error:"Upgrade required"},{status:426});
@@ -254,6 +282,7 @@ export default {
       headers.set("x-club-name",profile.name);
       headers.set("x-club-color",profile.color);
       headers.set("x-club-hair",profile.hair);
+      if(profile.photo)headers.set("x-club-photo",profile.photo);
       const lobby=env.CLUB.get(env.CLUB.idFromName("main-lobby"));
       return lobby.fetch(new Request("https://club/ws",{method:"GET",headers}));
     }

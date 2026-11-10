@@ -63,8 +63,35 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
   const tag=textSprite(p.name,"#402539","#f5ddb5");
   tag.position.y=2.67;tag.scale.set(1.7,.43,1);g.add(tag);
   g.position.set(p.x,0,p.z);g.rotation.y=p.yaw||0;scene.add(g);
-  const info={...p,group:g,coat,hairMat,tag,bubble:null,bubbleUntil:0,targetX:p.x,targetZ:p.z,targetYaw:p.yaw??Math.PI};
-  peers.set(p.id,info);return info;
+  const info={...p,group:g,coat,hairMat,tag,face:null,faceNonce:0,bubble:null,bubbleUntil:0,targetX:p.x,targetZ:p.z,targetYaw:p.yaw??Math.PI};
+  peers.set(p.id,info);applyFacePhoto(info);return info;
+ }
+ function disposeFace(p){
+  if(!p.face)return;
+  p.group.remove(p.face);
+  p.face.material.map?.dispose();
+  p.face.material.dispose();
+  p.face.geometry.dispose();
+  p.face=null;
+ }
+ function applyFacePhoto(p){
+  const photo=typeof p.photo==="string"?p.photo:"";
+  const nonce=++p.faceNonce;
+  disposeFace(p);
+  if(!photo||photo.length>18000||!photo.startsWith("data:image/jpeg;base64,"))return;
+  const img=new Image();
+  img.onload=()=>{
+   if(nonce!==p.faceNonce||!peers.has(p.id))return;
+   const canvas=document.createElement("canvas");canvas.width=128;canvas.height=128;
+   const ctx=canvas.getContext("2d");
+   ctx.beginPath();ctx.arc(64,64,63,0,Math.PI*2);ctx.clip();
+   ctx.drawImage(img,0,0,128,128);
+   const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
+   const face=new THREE.Mesh(new THREE.CircleGeometry(.205,32),new THREE.MeshBasicMaterial({map:tex,transparent:true,side:THREE.DoubleSide,depthWrite:false}));
+   face.position.set(0,1.936,.233);face.renderOrder=2;
+   p.group.add(face);p.face=face;
+  };
+  img.src=photo;
  }
  function updateAvatar(p){
   const coatColours={ruby:0x872a45,plum:0x583354,emerald:0x286553,navy:0x2c476b,gold:0xb88d56};
@@ -74,11 +101,13 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
   p.group.remove(p.tag);p.tag.material.map.dispose();p.tag.material.dispose();
   p.tag=textSprite(p.name,"#402539","#f5ddb5");p.tag.position.y=2.67;p.tag.scale.set(1.7,.43,1);
   p.group.add(p.tag);
+  applyFacePhoto(p);
  }
  function remove(id){
   const p=peers.get(id);if(!p)return;
   if(p.bubble){p.group.remove(p.bubble);p.bubble.material.map.dispose();p.bubble.material.dispose();}
   p.tag.material.map.dispose();p.tag.material.dispose();
+  p.faceNonce++;disposeFace(p);
   scene.remove(p.group);peers.delete(id);closePeer(id);refreshCount();
  }
  function refreshCount(){if(count)count.textContent=(peers.size+1)+" online";}
@@ -214,7 +243,7 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
   if(data.type==="profile"){
    const p=peers.get(data.id);
    if(p){
-    p.name=data.name;p.color=data.color;p.hair=data.hair;
+    p.name=data.name;p.color=data.color;p.hair=data.hair;p.photo=data.photo||"";
     updateAvatar(p);
    }
   }
@@ -222,7 +251,7 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
  }
  window.addEventListener("salon-profile",event=>{
   if(active&&socket?.readyState===WebSocket.OPEN)
-   send({type:"profile",name:event.detail.name,color:event.detail.color,hair:event.detail.hair});
+   send({type:"profile",name:event.detail.name,color:event.detail.color,hair:event.detail.hair,photo:event.detail.photo||""});
  });
  function connect(){
   if(!active||socket&&[WebSocket.CONNECTING,WebSocket.OPEN].includes(socket.readyState))return;

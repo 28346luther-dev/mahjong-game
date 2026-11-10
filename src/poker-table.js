@@ -1,30 +1,57 @@
 import {deck,shuffle,evaluateSeven,distributePots,botDecision} from "./poker-rules.js";
-const START_STACK=1000,SMALL_BLIND=10,BIG_BLIND=20,MAX_PLAYERS=4;
+import {INITIAL_SANA,POKER_BUYIN,SLOT_PRICE,newBlackjack,blackjackView,joinBlackjack,readyBlackjack,beginBlackjack,moveBlackjack} from "./blackjack-multiplayer.js";
+import {spinSlots} from "../public/salon-rules.js";
+const START_STACK=POKER_BUYIN,SMALL_BLIND=10,BIG_BLIND=20,MAX_PLAYERS=4;
 const cleanName=name=>String(name||"Guest").replace(/[^\p{L}\p{N} ._-]/gu,"").slice(0,22)||"Guest";
 const uid=()=>crypto.randomUUID();
 const bot=p=>p.kind==="bot";
 export class PokerTable{
  constructor(ctx){
-  this.ctx=ctx;this.data=null;this.sockets=new Map();
+  this.ctx=ctx;this.data=null;this.sockets=new Map();this.blackjackSockets=new Map();
   for(const ws of ctx.getWebSockets?.()||[]){
-   const info=ws.deserializeAttachment?.();if(info?.user)this.sockets.set(info.user,ws);
+   const info=ws.deserializeAttachment?.();if(info?.user&&info.kind==="blackjack")this.blackjackSockets.set(info.user,ws);
+   else if(info?.user)this.sockets.set(info.user,ws);
   }
  }
  async load(){
   if(this.data)return;
   this.data=await this.ctx.storage.get("poker")||{
    players:[],dealer:0,hand:0,phase:"waiting",street:"preflop",community:[],shoe:[],
-   currentBet:0,minRaise:BIG_BLIND,toAct:-1,message:"Texas Hold'em. Sana Coins are for fun only."
+   currentBet:0,minRaise:BIG_BLIND,toAct:-1,message:"Texas Hold'em. Sana Coins are for fun only.",wallets:{},blackjack:newBlackjack(),casinoVersion:2
   };
+  if(!this.data.wallets)this.data.wallets={};
+  if(!this.data.blackjack)this.data.blackjack=newBlackjack();
+  if(!this.data.casinoVersion||this.data.casinoVersion<2){
+   for(const p of this.data.players.filter(p=>p.kind==="human")){
+    this.data.wallets[p.id]={balance:INITIAL_SANA-POKER_BUYIN};
+    p.stack=POKER_BUYIN;p.street=0;p.contributed=0;p.hole=[];
+    p.folded=false;p.allIn=false;p.acted=false;
+   }
+   this.data.phase="waiting";this.data.players=this.data.players.filter(p=>p.kind==="human");
+   this.data.casinoVersion=2;await this.save();
+  }
  }
  async save(){await this.ctx.storage.put("poker",this.data);}
+ wallet(id){
+  if(!this.data.wallets)this.data.wallets={};
+  if(!this.data.wallets[id])this.data.wallets[id]={balance:INITIAL_SANA};
+  return this.data.wallets[id];
+ }
+ walletView(id){
+  const w=this.wallet(id),seat=this.data.players.find(p=>p.id===id&&p.kind==="human");
+  return {balance:w.balance,pokerStack:seat?.stack||0,total:w.balance+(seat?.stack||0)};
+ }
+ blackjackBroadcast(){
+  for(const [id,ws] of this.blackjackSockets)
+   this.send(ws,blackjackView(this.data.blackjack,id,this.walletView(id)));
+ }
  send(ws,data){try{ws.send(JSON.stringify(data));}catch{}}
  stateFor(user){
   const s=this.data;return {
    type:"pokerState",hand:s.hand,phase:s.phase,street:s.street,
    dealer:s.dealer,toAct:s.toAct,pot:s.players.reduce((n,p)=>n+p.contributed,0),
    currentBet:s.currentBet,minRaise:s.minRaise,community:s.community,message:s.message,
-   ownId:user,turnName:s.players[s.toAct]?.name||"",
+   ownId:user,wallet:this.walletView(user),turnName:s.players[s.toAct]?.name||"",
    players:s.players.map((p,i)=>({
     id:p.id,name:p.name,kind:p.kind,stack:p.stack,street:p.street,contributed:p.contributed,
     folded:p.folded,allIn:p.allIn,hole:p.id===user||s.phase==="showdown"?p.hole:["??","??"],
@@ -49,7 +76,11 @@ export class PokerTable{
  resetSeats(){
   const s=this.data;
   s.players=s.players.filter(p=>p.kind==="human"||p.stack>0);
-  for(const p of s.players)if(p.stack<=0)p.stack=START_STACK;
+  for(const p of s.players.filter(p=>p.kind==="bot"))if(p.stack<=0)p.stack=START_STACK;
+  for(const p of s.players.filter(p=>p.kind==="human"&&p.stack<SMALL_BLIND)){
+   const amount=Math.min(POKER_BUYIN,this.wallet(p.id).balance);
+   if(amount>=SMALL_BLIND){this.wallet(p.id).balance-=amount;p.stack+=amount;}
+  }
   this.ensureBots();
  }
  post(index,amount){
@@ -59,6 +90,8 @@ export class PokerTable{
  }
  start(){
   const s=this.data;this.resetSeats();
+  if(s.players.filter(p=>p.kind==="human"&&p.stack>=SMALL_BLIND).length<1)
+   throw Error("Not enough Sana Coins for poker.");
   s.hand++;s.dealer=s.hand===1?0:(s.dealer+1)%s.players.length;
   s.phase="playing";s.street="preflop";s.community=[];s.shoe=shuffle(deck());
   s.currentBet=0;s.minRaise=BIG_BLIND;
@@ -157,6 +190,41 @@ export class PokerTable{
  }
  async fetch(request){
   const url=new URL(request.url);await this.load();
+  if(url.pathname==="/wallet"&&request.method==="POST"){
+   const {user}=await request.json();
+   if(!user)return Response.json({error:"Sign in first"},{status:401});
+   return Response.json(this.walletView(user));
+  }
+  if(url.pathname==="/slots/spin"&&request.method==="POST"){
+   const {user}=await request.json();
+   if(!user)return Response.json({error:"Sign in first"},{status:401});
+   const wallet=this.wallet(user);
+   if(wallet.balance<SLOT_PRICE)return Response.json({error:"You need 5 Sana Coins to spin."},{status:409});
+   wallet.balance-=SLOT_PRICE;
+   const spin=spinSlots();
+   const won=spin.reward===100?125:spin.reward===50?65:spin.reward===25?35:spin.reward===5?10:0;
+   wallet.balance+=won;await this.save();
+   return Response.json({...spin,cost:SLOT_PRICE,won,net:won-SLOT_PRICE,wallet:this.walletView(user)});
+  }
+  if(url.pathname==="/blackjack/join"&&request.method==="POST"){
+   const {user,name}=await request.json();
+   if(!user)return Response.json({error:"Sign in first"},{status:401});
+   try{
+    this.wallet(user);joinBlackjack(this.data.blackjack,user,name);
+    await this.save();this.blackjackBroadcast();
+    return Response.json({ok:true,state:blackjackView(this.data.blackjack,user,this.walletView(user))});
+   }catch(error){return Response.json({error:error.message},{status:409});}
+  }
+  if(url.pathname==="/blackjack/ws"){
+   const user=url.searchParams.get("user");
+   if(!this.data.blackjack.players.some(p=>p.id===user))return new Response("Join blackjack first",{status:403});
+   const pair=new WebSocketPair(),client=pair[0],server=pair[1];
+   const old=this.blackjackSockets.get(user);if(old)try{old.close(4001,"Reconnected");}catch{}
+   this.ctx.acceptWebSocket(server);server.serializeAttachment({user,kind:"blackjack"});
+   this.blackjackSockets.set(user,server);
+   this.send(server,blackjackView(this.data.blackjack,user,this.walletView(user)));
+   return new Response(null,{status:101,webSocket:client});
+  }
   if(url.pathname==="/join"&&request.method==="POST"){
    const {user,name}=await request.json();
    if(!user)return Response.json({error:"Sign in to play."},{status:401});
@@ -168,7 +236,11 @@ export class PokerTable{
      if(botIndex>=0)this.data.players.splice(botIndex,1);
      else return Response.json({error:"Poker table full (4 players)."},{status:409});
     }
-    seat={id:user,name:cleanName(name),kind:"human",stack:START_STACK,hole:[],street:0,contributed:0,folded:false,allIn:false,acted:false};
+    const wallet=this.wallet(user);
+    if(wallet.balance<SMALL_BLIND)return Response.json({error:"Not enough Sana Coins for poker."},{status:409});
+    const buyin=Math.min(POKER_BUYIN,wallet.balance);
+    wallet.balance-=buyin;
+    seat={id:user,name:cleanName(name),kind:"human",stack:buyin,hole:[],street:0,contributed:0,folded:false,allIn:false,acted:false};
     this.data.players.push(seat);
    }
    await this.save();this.broadcast();
@@ -180,7 +252,7 @@ export class PokerTable{
    const pair=new WebSocketPair(),client=pair[0],server=pair[1];
    const previous=this.sockets.get(user);
    if(previous)try{previous.close(4001,"Reconnected");}catch{}
-   this.ctx.acceptWebSocket(server);server.serializeAttachment({user});this.sockets.set(user,server);
+   this.ctx.acceptWebSocket(server);server.serializeAttachment({user,kind:"poker"});this.sockets.set(user,server);
    this.send(server,this.stateFor(user));
    return new Response(null,{status:101,webSocket:client});
   }
@@ -192,6 +264,26 @@ export class PokerTable{
   if(typeof raw==="string"&&raw.length>8192)return;
   let msg;try{msg=JSON.parse(typeof raw==="string"?raw:new TextDecoder().decode(raw));}catch{return;}
   try{
+   if(ws.deserializeAttachment?.()?.kind==="blackjack"){
+    const g=this.data.blackjack;
+    if(msg.action==="ready")readyBlackjack(g,user,this.data.wallets);
+    else if(msg.action==="deal")beginBlackjack(g,this.data.wallets);
+    else if(["hit","stand"].includes(msg.action))moveBlackjack(g,user,msg.action,this.data.wallets);
+    else if(msg.action==="heartbeat"){this.send(ws,{type:"heartbeatAck"});return;}
+    else return;
+    await this.save();this.blackjackBroadcast();return;
+   }
+   if(msg.action==="cashOut"){
+    if(this.data.phase==="playing")throw Error("Finish the poker hand first.");
+    const index=this.data.players.findIndex(p=>p.id===user&&p.kind==="human");
+    if(index>=0){
+     const seat=this.data.players.splice(index,1)[0];
+     this.wallet(user).balance+=seat.stack;this.data.phase="waiting";
+     await this.save();this.broadcast();
+     this.send(ws,{type:"pokerCashOut",wallet:this.walletView(user)});
+    }
+    return;
+   }
    if(msg.action==="newHand"){
     if(this.data.phase==="playing")throw Error("Finish this hand first.");
     if(this.data.players.filter(p=>p.kind==="human").length<1)throw Error("A human player must join.");
@@ -208,6 +300,10 @@ export class PokerTable{
    await this.save();this.broadcast();
   }catch(error){this.send(ws,{type:"pokerError",message:error.message});}
  }
- webSocketClose(ws){const user=ws.deserializeAttachment?.()?.user;if(this.sockets.get(user)===ws)this.sockets.delete(user);}
+ webSocketClose(ws){
+  const info=ws.deserializeAttachment?.(),user=info?.user;
+  if(info?.kind==="blackjack"){if(this.blackjackSockets.get(user)===ws)this.blackjackSockets.delete(user);}
+  else if(this.sockets.get(user)===ws)this.sockets.delete(user);
+ }
  webSocketError(ws){this.webSocketClose(ws);}
 }
