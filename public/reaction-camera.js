@@ -4,7 +4,7 @@
  const $=id=>document.getElementById(id);
  const peers=new Map(),names=new Map(),publishers=new Set();
  let socket=null,myId=null,localStream=null,enabled=false,iceConfig=null,icePromise=null,epoch=0;
- let lastReactionId=null,overlayTimer=null,replayUrl=null,expanded=false;
+ let lastReactionId=null,overlayTimer=null,replayUrl=null,expanded=false,failedPeers=new Set();
  const fallbackIce=[{urls:["stun:stun.cloudflare.com:3478","stun:stun.l.google.com:19302"]}];
  const open=()=>socket?.readyState===WebSocket.OPEN;
  const send=obj=>{if(open())socket.send(JSON.stringify(obj));};
@@ -153,7 +153,7 @@
   pc.onicecandidate=e=>{if(e.candidate)send({action:"cameraSignal",to:id,kind:"ice",payload:e.candidate.toJSON()});};
   pc.ontrack=e=>{
    peer.stream=e.streams[0]||new MediaStream([e.track]);
-   peer.status="Live";record(peer,peer.stream);updateGallery();
+   peer.status="Live";failedPeers.delete(id);record(peer,peer.stream);updateGallery();
    if($("reactionOverlay")?.dataset.playerId===id&&!$("reactionOverlay").classList.contains("hidden"))showFeed(id);
   };
   pc.onconnectionstatechange=()=>{
@@ -161,10 +161,11 @@
    peer.status=pc.connectionState==="connected"?"Live":pc.connectionState;
    updateGallery();
    if(pc.connectionState==="failed"){
-    peer.status=config.relayAvailable?"Connection failed":"Relay needed on this network";
-    updateGallery();note(config.relayAvailable?"Video connection failed. Try switching networks.":"Direct video blocked on this network. Configure Cloudflare TURN relay.");
+    peer.status=config.relayAvailable?"Video connection failed":"TURN relay not configured";
+    failedPeers.add(id);
+    updateGallery();note(config.relayAvailable?"Video connection failed. Tap Retry cameras.":"Live video needs the Cloudflare TURN relay enabled. After setup, tap Retry cameras.");
     removePeer(id);
-    if(publishers.has(id)&&open())setTimeout(()=>send({action:"cameraSubscribe",to:id}),2500);
+    if(config.relayAvailable&&publishers.has(id)&&open())setTimeout(()=>send({action:"cameraSubscribe",to:id}),3500);
    }
   };
   if(publish&&localStream){
@@ -262,6 +263,13 @@
   overlay.classList.remove("hidden");showFeed(event.playerId);
   requestReplay(event.playerId);clearTimeout(overlayTimer);overlayTimer=setTimeout(hideOverlay,9500);
  }
+ function retry(){
+  if(!open()){note("Reconnect to the Mahjong room first.");return;}
+  iceConfig=null;icePromise=null;failedPeers.clear();
+  for(const id of [...peers.keys()])removePeer(id);
+  for(const id of publishers)if(id!==myId)send({action:"cameraSubscribe",to:id});
+  note("Trying camera connections again with the current relay configuration…");
+ }
  function attach(ws,id){
   // A reconnect does not silently re-enable the local webcam.
   disable();epoch++;socket=ws;myId=id;iceConfig=null;icePromise=null;lastReactionId=null;
@@ -270,6 +278,7 @@
  function stop(){disable();epoch++;socket=null;myId=null;names.clear();expanded=false;updateGallery();}
  $("reactionCameraToggle")?.addEventListener("click",enable);
  $("reactionClose")?.addEventListener("click",hideOverlay);
+ $("reactionCameraRetry")?.addEventListener("click",retry);
  $("reactionCameraGalleryToggle")?.addEventListener("click",()=>{
   expanded=!expanded;
   $("reactionCameraGalleryToggle").setAttribute("aria-expanded",String(expanded));
