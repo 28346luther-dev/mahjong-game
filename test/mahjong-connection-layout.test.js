@@ -25,20 +25,18 @@ test("Mahjong Durable Object restores active WebSocket players when the instance
  h.sockets.push(fakeSocket("alice",true),fakeSocket("bob"));
  const resumed=new MahjongRoom(h.ctx);
  assert.equal(resumed.sockets.size,2);
- assert.equal(resumed.cameras.has("alice"),true);
- assert.equal(resumed.cameras.has("bob"),false);
+ assert.equal(resumed.reactionTransfers.size,0);
+ assert.equal(resumed.submittedReactions.size,0);
 });
-test("hibernated WebSocket messages use attachment identity for heartbeat and camera control",async()=>{
+test("hibernated WebSocket messages use attachment identity for heartbeat and cleanup",async()=>{
  const h=harness();
  h.room.state={players:[player("alice")],phase:"lobby",wall:[],claimWindow:null,message:""};
  const alice=fakeSocket("alice");h.room.sockets.set("alice",alice);
  await h.room.webSocketMessage(alice,JSON.stringify({action:"heartbeat"}));
  assert.equal(alice.messages.at(-1).type,"heartbeatAck");
- await h.room.webSocketMessage(alice,JSON.stringify({action:"cameraStatus",enabled:true}));
- assert.equal(alice.attachment.cameraEnabled,true);
  await h.room.webSocketClose(alice);
  assert.equal(h.room.sockets.size,0);
- assert.equal(h.room.cameras.has("alice"),false);
+ assert.equal(h.room.reactionTransfers.has("alice"),false);
 });
 test("room ignores events from replaced sockets without losing the current player",async()=>{
  const h=harness();
@@ -46,8 +44,8 @@ test("room ignores events from replaced sockets without losing the current playe
  h.room.sockets.set("alice",current);
  await h.room.webSocketClose(old);
  assert.equal(h.room.sockets.get("alice"),current);
- await h.room.webSocketMessage(old,JSON.stringify({action:"cameraStatus",enabled:true}));
- assert.equal(h.room.cameras.size,0);
+ await h.room.webSocketMessage(old,JSON.stringify({action:"reactionClipStart",eventId:"fake",mime:"video/webm",chunks:1}));
+ assert.equal(h.room.reactionTransfers.size,0);
 });
 test("client reconnects and restores the same player identity instead of requiring a refresh",()=>{
  const client=readFileSync("public/app.js","utf8");

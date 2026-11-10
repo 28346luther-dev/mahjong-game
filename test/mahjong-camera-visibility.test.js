@@ -2,79 +2,74 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {execFileSync} from "node:child_process";
-import worker,{MahjongRoom} from "../src/worker.js";
+import {MahjongRoom} from "../src/worker.js";
 
 const person=id=>({id,name:id,ready:true,hand:[],melds:[],discards:[]});
-function fakeSocket(id){
- const messages=[];
- return {messages,attachment:{playerId:id,cameraEnabled:false},
-  deserializeAttachment(){return this.attachment;},
-  serializeAttachment(a){this.attachment=a;},
-  send(s){messages.push(JSON.parse(s));},close(){}};
-}
-function roomFixture(){
+const fakeSocket=()=>{const messages=[];return {messages,send:data=>messages.push(JSON.parse(data))};};
+function fixture(){
  const storage={async get(){return null;},async put(){}};
  const room=new MahjongRoom({storage,getWebSockets:()=>[]});
- room.state={players:[person("a"),person("b")],phase:"lobby",wall:[],claimWindow:null,message:""};
- const a=fakeSocket("a"),b=fakeSocket("b");
- room.sockets.set("a",a);room.sockets.set("b",b);
- return {room,a,b};
+ room.state={players:[person("a"),person("b"),person("c")],phase:"playing",wall:[],claimWindow:null,
+   message:"",lastReaction:{id:"claim-123",playerId:"a",playerName:"Alice",claim:"pong",at:Date.now()}};
+ const a=fakeSocket(),b=fakeSocket(),c=fakeSocket();
+ room.sockets.set("a",a);room.sockets.set("b",b);room.sockets.set("c",c);
+ return {room,a,b,c};
 }
-test("joining table cannot subscribe to an unconsenting camera",async()=>{
- const {room,a,b}=roomFixture();
- await room.onMessage("b",JSON.stringify({action:"cameraSubscribe",to:"a"}));
+test("only winner of confirmed Pong Chow or Mahjong may upload event reaction",async()=>{
+ const {room,a,b,c}=fixture();
+ await room.onMessage("b",JSON.stringify({action:"reactionClipStart",eventId:"claim-123",mime:"video/webm",chunks:1}));
+ assert.equal(a.messages.length,0);assert.equal(c.messages.length,0);
+ await room.onMessage("a",JSON.stringify({action:"reactionClipStart",eventId:"wrong-id",mime:"video/webm",chunks:1}));
+ assert.equal(b.messages.length,0);
+ await room.onMessage("a",JSON.stringify({action:"reactionClipStart",eventId:"claim-123",mime:"video/webm",chunks:1}));
+ assert.equal(b.messages.at(-1).type,"reactionClipStart");
+ assert.equal(c.messages.at(-1).name,"Alice");
  assert.equal(a.messages.length,0);
- await room.onMessage("a",JSON.stringify({action:"cameraStatus",enabled:true}));
- assert.equal(b.messages.at(-1).type,"cameraStatus");
- assert.equal(b.messages.at(-1).enabled,true);
- await room.onMessage("b",JSON.stringify({action:"cameraSubscribe",to:"a"}));
- assert.deepEqual(a.messages.at(-1),{type:"cameraSubscribe",from:"b"});
 });
-test("offer answer and rapid ICE candidates reach subscribed camera viewers",async()=>{
- const {room,a,b}=roomFixture();
- await room.onMessage("a",JSON.stringify({action:"cameraStatus",enabled:true}));
- for(const kind of ["offer","ice","ice","answer"]){
-  await room.onMessage(kind==="answer"?"b":"a",JSON.stringify({
-    action:"cameraSignal",to:kind==="answer"?"a":"b",kind,payload:{type:kind,candidate:"test"}
-  }));
- }
- const received=b.messages.filter(m=>m.type==="cameraSignal").map(m=>m.kind);
- assert.deepEqual(received,["offer","ice","ice"]);
- assert.equal(a.messages.at(-1).kind,"answer");
- await room.onMessage("a",JSON.stringify({action:"cameraStatus",enabled:false}));
+test("three-second clip chunks fan out to all other room players without storage",async()=>{
+ const {room,a,b,c}=fixture();
+ const msg=obj=>room.onMessage("a",JSON.stringify(obj));
+ await msg({action:"reactionClipStart",eventId:"claim-123",mime:"video/webm",chunks:2});
+ await msg({action:"reactionClipChunk",eventId:"claim-123",index:0,data:"AQID"});
+ await msg({action:"reactionClipChunk",eventId:"claim-123",index:1,data:"BAUG"});
+ await msg({action:"reactionClipEnd",eventId:"claim-123"});
+ assert.deepEqual(b.messages.map(x=>x.type),["reactionClipStart","reactionClipChunk","reactionClipChunk","reactionClipEnd"]);
+ assert.deepEqual(c.messages.map(x=>x.type),["reactionClipStart","reactionClipChunk","reactionClipChunk","reactionClipEnd"]);
+ assert.equal(a.messages.at(-1).type,"reactionClipAccepted");
  const before=b.messages.length;
- await room.onMessage("a",JSON.stringify({action:"cameraSignal",to:"b",kind:"offer",payload:{type:"offer"}}));
- assert.equal(b.messages.length,before);
+ await msg({action:"reactionClipStart",eventId:"claim-123",mime:"video/webm",chunks:1});
+ assert.equal(b.messages.length,before,"only one reaction per claim");
+ assert.equal(room.state.lastReaction.id,"claim-123","video data never written to game state");
 });
-test("ICE endpoint requires authentication before showing any configuration",async()=>{
- const response=await worker.fetch(new Request("https://study-plus.online/api/rtc/ice"),{
-  AUTH:{idFromName:()=>({}),get:()=>({fetch:()=>new Response("{}",{status:401})})}
- });
- assert.equal(response.status,401);
+test("server rejects malformed, oversized, or out-of-order clip chunks",async()=>{
+ const {room,b}=fixture();const msg=obj=>room.onMessage("a",JSON.stringify(obj));
+ await msg({action:"reactionClipStart",eventId:"claim-123",mime:"text/html",chunks:1});
+ assert.equal(b.messages.length,0);
+ await msg({action:"reactionClipStart",eventId:"claim-123",mime:"video/mp4",chunks:1});
+ await msg({action:"reactionClipChunk",eventId:"claim-123",index:12,data:"AAAA"});
+ assert.equal(b.messages.at(-1).type,"reactionClipAbort");
+ assert.equal(room.reactionTransfers.size,0);
+ await msg({action:"reactionClipStart",eventId:"claim-123",mime:"video/webm",chunks:1});
+ await msg({action:"reactionClipChunk",eventId:"claim-123",index:0,data:"<>script"});
+ assert.equal(room.reactionTransfers.size,0);
 });
-test("camera UI provides a collapsed live gallery and keeps separate popup reaction",()=>{
- const html=readFileSync("public/index.html","utf8"),js=readFileSync("public/reaction-camera.js","utf8");
- for(const id of ["reactionCameraGallery","reactionCameraGalleryToggle","reactionCameraCount","reactionOverlay"])
+test("new prompt replaces old always-on webcam and the app still handles reactions",()=>{
+ const html=readFileSync("public/index.html","utf8"),client=readFileSync("public/reaction-camera.js","utf8");
+ for(const id of ["reactionConsent","reactionAccept","reactionSkip","reactionOverlay","reactionVideo"])
   assert.ok(html.includes('id="'+id+'"'),"Missing "+id);
- assert.match(js,/cameraSubscribe/);assert.match(js,/RTCPeerConnection/);
- assert.match(js,/updateGallery/);assert.match(js,/requestReplay/);
- assert.match(js,/iceServers/);assert.match(js,/relayAvailable/);
+ for(const removed of ["reactionCameraToggle","reactionCameraGalleryToggle","reactionCameraRetry"])
+  assert.ok(!html.includes('id="'+removed+'"'),"Obsolete live camera control remains");
+ assert.match(client,/RECORD_MS=3000/);
+ assert.match(client,/getUserMedia/);
+ assert.match(client,/MediaRecorder/);
+ assert.match(client,/reactionClipStart/);
+ assert.doesNotMatch(client,/RTCPeerConnection|cameraSubscribe|cameraSignal/);
 });
-test("camera and Worker source pass syntax checks and responsive style is linked",()=>{
- for(const path of ["public/reaction-camera.js","src/worker.js"])
+test("client and Worker syntax pass and clip-specific CSS is linked",()=>{
+ for(const path of ["public/reaction-camera.js","src/worker.js","public/app.js"])
   execFileSync(process.execPath,["--check",path]);
  const html=readFileSync("public/index.html","utf8");
- assert.ok(html.includes("/reaction-gallery-layout.css"));
- const css=readFileSync("public/reaction-gallery-layout.css","utf8");
- assert.match(css,/reaction-camera-gallery/);
- assert.match(css,/max-width:700px/);
-});
-
-test("camera relay status and retry button are present after TURN setup",()=>{
- const html=readFileSync("public/index.html","utf8");
- const camera=readFileSync("public/reaction-camera.js","utf8");
- assert.match(html,/id="reactionCameraRetry"/);
- assert.match(camera,/TURN relay not configured/);
- assert.match(camera,/function retry\(\)/);
- assert.match(camera,/iceConfig=null;icePromise=null/);
+ assert.match(html,/reaction-clip.css/);
+ const css=readFileSync("public/reaction-clip.css","utf8");
+ assert.match(css,/reaction-consent/);
 });
