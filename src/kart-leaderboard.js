@@ -1,4 +1,4 @@
-import {ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,raceStart} from "../public/kart-track.js";
+import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,raceStart} from "../public/kart-track.js";
 
 // Continuous on-road progress verification. No checkpoint gates or checkpoints UI.
 // Times use server wall-clock, and accepted samples must stay near the circuit
@@ -73,6 +73,39 @@ export class KartLeaderboard {
   if(url.pathname!=="/sample"&&url.pathname!=="/finish")
    return Response.json({error:"Unknown kart route"},{status:404});
   const x=Number(body.x),z=Number(body.z);
+  // The marked pit lane is a legitimate separate road, but is never a shortcut
+  // for a leaderboard lap. A pit visit discards the current lap and a fresh
+  // timed circuit begins only once the driver rejoins the main asphalt.
+  const pit=body.pit===true;
+  if(pit&&url.pathname==="/sample"){
+   const projected=projectToRoute(x,z,PIT);
+   const dt=now-session.lastAt;
+   const displacement=Math.hypot(x-session.x,z-session.z);
+   if(!Number.isFinite(x)||!Number.isFinite(z)||projected.distance>PIT_HALF_WIDTH+.8||
+      dt<0||displacement>13*dt/1000+4){
+    session.valid=false;await this.storage.put(key,session);
+    return Response.json({error:"Pit lane requires the limiter and a valid entry."},{status:422});
+   }
+   const entered=!session.pitMode;
+   session.pitMode=true;session.pitVisited=true;
+   session.x=x;session.z=z;session.lastAt=now;
+   session.travel=0;session.crossed=false;
+   await this.storage.put(key,session);
+   return Response.json({ok:true,pit:true,pitEntry:entered,progress:0,readyToFinish:false});
+  }
+  if(session.pitMode&&url.pathname==="/sample"){
+   const road=projectToRoute(x,z,ROAD);
+   const dt=now-session.lastAt;
+   if(road.distance>ROAD_HALF_WIDTH+1.23||
+      Math.hypot(x-session.x,z-session.z)>MAX_SPEED_MPS*dt/1000+7){
+    return Response.json({error:"Rejoin the main track safely at pit exit."},{status:422});
+   }
+   session.pitMode=false;session.pitVisited=false;
+   session.progress=road.progress;session.x=x;session.z=z;session.lastAt=now;
+   session.start=now;session.travel=0;session.crossed=false;session.valid=true;
+   await this.storage.put(key,session);
+   return Response.json({ok:true,pitExit:true,progress:0,readyToFinish:false});
+  }
   const check=validateSample(session,x,z,now);
   if(check.error){
    session.valid=false;await this.storage.put(key,session);
