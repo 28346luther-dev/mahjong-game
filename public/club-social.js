@@ -1,14 +1,14 @@
 // Shared player avatars, chat bubbles, room-scoped voice via WebRTC.
 // Browser microphone access is opt-in and only available in secure contexts.
 export function createClubSocial(THREE,scene,camera,zoneAt){
- const peers=new Map(),calls=new Map();
+ const peers=new Map(),calls=new Map(),iceQueue=new Map(),signalQueue=new Map();
  const history=document.getElementById("clubChatHistory");
  const count=document.getElementById("clubPlayerCount");
  const form=document.getElementById("clubChatForm"),input=document.getElementById("clubChatInput");
  const micButton=document.getElementById("clubMic");
  const chatToggle=document.getElementById("clubChatToggle");
  const pane=document.getElementById("clubSocialPanel");
- let socket=null,selfId="",stream=null,micEnabled=false,active=false,lastSend=0,reconnectHandle=null;
+ let socket=null,selfId="",stream=null,micEnabled=false,active=false,lastSend=0,reconnectHandle=null,iceCache=null,icePromise=null;
  const color=(id)=>new THREE.Color().setHSL((Array.from(id).reduce((n,c)=>n+c.charCodeAt(0),0)%360)/360,.38,.57);
  const send=(data)=>{if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify(data));};
  function textSprite(text,bg="#14372d",fg="#f7e4be",maxWidth=280){
@@ -76,41 +76,105 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
   if(p.bubble){p.group.remove(p.bubble);p.bubble.material.map.dispose();p.bubble.material.dispose();}
   p.bubble=textSprite(text);p.bubble.position.y=3.28;p.group.add(p.bubble);p.bubbleUntil=performance.now()+6500;
  }
- function closePeer(id){const pc=calls.get(id);if(pc){pc.close();calls.delete(id);}const el=document.getElementById("voice-"+id);if(el)el.remove();}
+ function closePeer(id){
+  const pc=calls.get(id);if(pc){pc.onicecandidate=null;pc.ontrack=null;pc.onconnectionstatechange=null;pc.close();calls.delete(id);}
+  iceQueue.delete(id);signalQueue.delete(id);
+  const el=document.getElementById("voice-"+id);if(el){el.pause();el.srcObject=null;el.remove();}
+ }
  function stopAllCalls(){for(const id of [...calls.keys()])closePeer(id);}
+ function voiceNote(msg){const el=document.querySelector(".club-voice-note");if(el)el.textContent=msg;}
  function updateMicButton(){
-  micButton.textContent=micEnabled?"🎤 Mic on — click to mute":"🎙 Enable microphone";
+  micButton.textContent=micEnabled?"🎤 Mic on · click to mute":"🎙 Enable microphone";
   micButton.setAttribute("aria-pressed",String(micEnabled));
  }
+ async function getIce(){
+  if(iceCache)return iceCache;
+  if(icePromise)return icePromise;
+  icePromise=(async()=>{
+   try{
+    const res=await fetch("/api/rtc/ice",{credentials:"same-origin",cache:"no-store"});
+    if(!res.ok)throw Error("ICE configuration unavailable");
+    const payload=await res.json();
+    if(!Array.isArray(payload.iceServers)||!payload.iceServers.length)throw Error("No ICE servers");
+    iceCache=payload;
+   }catch(error){
+    iceCache={relayAvailable:false,iceServers:[{urls:"stun:stun.cloudflare.com:3478"}]};
+   }
+   if(!iceCache.relayAvailable)voiceNote("TURN relay unavailable. Some networks may block voice; check Cloudflare Worker TURN secrets.");
+   else voiceNote("Microphone on. Private room voice uses Cloudflare TURN when direct audio is blocked.");
+   return iceCache;
+  })();
+  return icePromise;
+ }
  async function ensureCall(p,initiator){
-  if(!micEnabled||!stream||!p?.voice||p.zone!==zoneAt(camera.position.x,camera.position.z)||calls.has(p.id))return;
-  const pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+  if(!micEnabled||!stream||!p?.voice||p.zone!==zoneAt(camera.position.x,camera.position.z))return null;
+  const existing=calls.get(p.id);
+  if(existing&&existing.signalingState!=="closed")return existing;
+  const config=await getIce();
+  if(!micEnabled||!stream||!peers.has(p.id)||p.zone!==zoneAt(camera.position.x,camera.position.z))return null;
+  const pc=new RTCPeerConnection({iceServers:config.iceServers});
   calls.set(p.id,pc);
-  stream.getTracks().forEach(t=>pc.addTrack(t,stream));
-  pc.onicecandidate=e=>{if(e.candidate)send({type:"signal",to:p.id,kind:"ice",payload:e.candidate.toJSON()});};
+  for(const track of stream.getAudioTracks())pc.addTrack(track,stream);
+  pc.onicecandidate=e=>{
+   if(e.candidate)send({type:"signal",to:p.id,kind:"ice",payload:e.candidate.toJSON()});
+  };
   pc.ontrack=e=>{
    let audio=document.getElementById("voice-"+p.id);
-   if(!audio){audio=document.createElement("audio");audio.id="voice-"+p.id;audio.autoplay=true;audio.playsInline=true;document.getElementById("clubAudioStreams").append(audio);}
-   audio.srcObject=e.streams[0];audio.play().catch(()=>{});
+   if(!audio){
+    audio=document.createElement("audio");audio.id="voice-"+p.id;
+    audio.autoplay=true;audio.playsInline=true;
+    document.getElementById("clubAudioStreams").append(audio);
+   }
+   audio.srcObject=e.streams[0]||new MediaStream([e.track]);
+   audio.play().catch(()=>voiceNote("Tap Enable microphone to allow room audio playback."));
   };
-  pc.onconnectionstatechange=()=>{if(["failed","closed","disconnected"].includes(pc.connectionState))closePeer(p.id);};
-  if(initiator){const offer=await pc.createOffer();await pc.setLocalDescription(offer);send({type:"signal",to:p.id,kind:"offer",payload:pc.localDescription.toJSON()});}
+  pc.onconnectionstatechange=()=>{
+   if(calls.get(p.id)!==pc)return;
+   if(pc.connectionState==="connected")voiceNote("Voice connected to "+p.name+". Only people in your room can hear you.");
+   if(["failed","closed"].includes(pc.connectionState)){
+    closePeer(p.id);
+    voiceNote("Voice connection failed. TURN relay may be unavailable; toggle microphone to retry.");
+   }
+  };
+  if(initiator){
+   const offer=await pc.createOffer();
+   await pc.setLocalDescription(offer);
+   send({type:"signal",to:p.id,kind:"offer",payload:pc.localDescription.toJSON()});
+  }
   return pc;
  }
- async function handleSignal(data){
-  if(!micEnabled||!stream)return;const p=peers.get(data.from);
+ async function flushIce(id,pc){
+  if(!pc?.remoteDescription)return;
+  const list=iceQueue.get(id)||[];iceQueue.delete(id);
+  for(const c of list)try{await pc.addIceCandidate(new RTCIceCandidate(c));}catch{}
+ }
+ function handleSignal(data){
+  if(!micEnabled||!stream)return;
+  const p=peers.get(data.from);
   if(!p||!p.voice||p.zone!==zoneAt(camera.position.x,camera.position.z))return;
-  try{
+  const previous=signalQueue.get(p.id)||Promise.resolve();
+  const next=previous.then(async()=>{
+   if(!micEnabled||!stream)return;
    let pc=calls.get(p.id);
-   if(data.kind==="offer"){
+   if(data.kind==="ice"){
+    if(pc?.remoteDescription)await pc.addIceCandidate(new RTCIceCandidate(data.payload));
+    else{
+     const arr=iceQueue.get(p.id)||[];
+     if(arr.length<75){arr.push(data.payload);iceQueue.set(p.id,arr);}
+    }
+   }else if(data.kind==="offer"){
     if(pc)closePeer(p.id);
     pc=await ensureCall(p,false);if(!pc)return;
     await pc.setRemoteDescription(new RTCSessionDescription(data.payload));
+    await flushIce(p.id,pc);
     const answer=await pc.createAnswer();await pc.setLocalDescription(answer);
     send({type:"signal",to:p.id,kind:"answer",payload:pc.localDescription.toJSON()});
-   }else if(data.kind==="answer"&&pc){await pc.setRemoteDescription(new RTCSessionDescription(data.payload));}
-   else if(data.kind==="ice"&&pc&&pc.remoteDescription){await pc.addIceCandidate(new RTCIceCandidate(data.payload));}
-  }catch(e){console.warn("Voice connection error",e);closePeer(data.from);}
+   }else if(data.kind==="answer"&&pc){
+    await pc.setRemoteDescription(new RTCSessionDescription(data.payload));
+    await flushIce(p.id,pc);
+   }
+  }).catch(e=>{console.warn("Voice signalling",e);voiceNote("Voice connection issue. Toggle your microphone to retry.");});
+  signalQueue.set(p.id,next);
  }
  function handle(data){
   if(data.type==="welcome"){
@@ -124,6 +188,13 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
   if(data.type==="move"){const p=peers.get(data.id);if(p){p.targetX=data.x;p.targetZ=data.z;p.targetYaw=data.yaw;p.zone=data.zone;if(p.zone!==zoneAt(camera.position.x,camera.position.z))closePeer(p.id);}}
   if(data.type==="chat"){append(data.name,data.text);bubble(peers.get(data.id),data.text);}
   if(data.type==="voice"){const p=peers.get(data.id);if(p){p.voice=data.enabled;if(!p.voice)closePeer(p.id);else if(micEnabled&&selfId<p.id)ensureCall(p,true).catch(console.warn);}}
+  if(data.type==="profile"){
+   const p=peers.get(data.id);
+   if(p){
+    p.name=data.name;p.color=data.color;p.hair=data.hair;
+    updateAvatar(p);
+   }
+  }
   if(data.type==="signal")handleSignal(data);
  }
  function connect(){
@@ -154,14 +225,14 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
   if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection){append("","Microphone voice is unavailable in this browser",true);return;}
   try{
    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});
-   micEnabled=true;updateMicButton();send({type:"voice",enabled:true});
+   micEnabled=true;updateMicButton();await getIce();send({type:"voice",enabled:true});
    for(const p of peers.values())if(p.voice&&selfId<p.id)ensureCall(p,true).catch(console.warn);
-   append("","Microphone enabled for players in the same room",true);
+   append("","Microphone enabled. Cloudflare TURN will relay audio if needed.",true);
   }catch(err){append("","Microphone permission denied or unavailable",true);}
  });
  function stopMic(){
   micEnabled=false;send({type:"voice",enabled:false});stopAllCalls();
-  stream?.getTracks().forEach(t=>t.stop());stream=null;updateMicButton();
+  stream?.getTracks().forEach(t=>t.stop());stream=null;iceCache=null;icePromise=null;updateMicButton();voiceNote("Voice is optional and shared only with consenting players in your room.");
  }
  return {
   start(){active=true;connect();},
