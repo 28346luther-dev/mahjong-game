@@ -5,8 +5,8 @@
 (()=>{
  const $=id=>document.getElementById(id);
  let ws=null,myId=null,room=null,localStream=null,enabled=false;
- const pcs=new Map(),remoteStreams=new Map(),names=new Map(),publishers=new Set();
- let lastReactionId=null,overlayTimer=null;
+ const pcs=new Map(),remoteStreams=new Map(),names=new Map(),publishers=new Set(),recorders=new Map();
+ let lastReactionId=null,overlayTimer=null,replayUrl=null;
  const canSend=()=>ws?.readyState===WebSocket.OPEN;
  const send=obj=>{if(canSend())ws.send(JSON.stringify(obj));};
  function message(text){const note=$("reactionCameraNote");if(note)note.textContent=text;}
@@ -17,23 +17,87 @@
   const preview=$("reactionCameraPreview");
   if(preview){preview.classList.toggle("hidden",!enabled);preview.srcObject=enabled?localStream:null;}
  }
+ function stopRecording(id){
+   const item=recorders.get(id);if(!item)return;
+   item.active=false;clearTimeout(item.timer);recorders.delete(id);
+   if(item.recorder.state!=="inactive")try{item.recorder.stop();}catch{}
+   item.lastClip=null;item.chunks=[];
+ }
+ function startRecording(id,stream){
+   stopRecording(id);
+   // Each recording is at most four seconds and exists only in browser memory.
+   if(!window.MediaRecorder||!stream?.getVideoTracks().length)return;
+   const item={active:true,stream,recorder:null,chunks:[],lastClip:null,timer:null,startedAt:0};
+   recorders.set(id,item);
+   function cycle(){
+     if(!item.active||!item.stream.getVideoTracks().some(t=>t.readyState==="live"))return;
+     try{
+       const mime=["video/webm;codecs=vp8","video/webm","video/mp4"].find(t=>MediaRecorder.isTypeSupported(t));
+       const rec=new MediaRecorder(item.stream,mime?{mimeType:mime,videoBitsPerSecond:350000}:undefined);
+       item.recorder=rec;item.chunks=[];item.startedAt=Date.now();
+       rec.ondataavailable=e=>{if(e.data?.size)item.chunks.push(e.data);};
+       rec.onstop=()=>{
+         const clip=item.chunks.length?new Blob(item.chunks,{type:rec.mimeType}):null;
+         if(item.active&&clip?.size>600)item.lastClip=clip;
+         if(item.active){
+           if($("reactionOverlay")?.dataset.playerId===id&&
+              !$("reactionOverlay").classList.contains("hidden")&&item.replayRequested){
+             item.replayRequested=false;
+             playClip(id,clip?.size>600?clip:item.lastClip);
+           }
+           cycle();
+         }
+       };
+       rec.start();
+       item.timer=setTimeout(()=>{if(rec.state==="recording")rec.stop();},4000);
+     }catch(err){item.active=false;recorders.delete(id);}
+   }
+   cycle();
+ }
+ function releaseReplay(){
+   const v=$("reactionVideo");
+   v.onended=null;
+   if(replayUrl){URL.revokeObjectURL(replayUrl);replayUrl=null;}
+   v.removeAttribute("src");
+ }
+ function playClip(id,blob){
+   if(!blob||$("reactionOverlay")?.dataset.playerId!==id||
+      $("reactionOverlay").classList.contains("hidden"))return;
+   const video=$("reactionVideo");
+   releaseReplay();
+   video.pause();video.srcObject=null;replayUrl=URL.createObjectURL(blob);
+   video.src=replayUrl;video.classList.remove("hidden");$("reactionFallback").classList.add("hidden");
+   $("reactionFeedLabel").textContent="REACTION REPLAY · last moments";
+   video.onended=()=>{releaseReplay();showStream(id);};
+   video.play().catch(()=>{releaseReplay();showStream(id);});
+ }
+ function requestReplay(id){
+   const item=recorders.get(id);
+   if(!item)return;
+   if(item.recorder?.state==="recording"){
+     item.replayRequested=true;
+     clearTimeout(item.timer);
+     try{item.recorder.stop();}catch{item.replayRequested=false;}
+   }else playClip(id,item.lastClip);
+ }
  function closePeer(id){
   const pc=pcs.get(id);if(pc){pc.ontrack=null;pc.close();pcs.delete(id);}
   const stream=remoteStreams.get(id);if(stream)for(const t of stream.getTracks())t.stop();
-  remoteStreams.delete(id);
+  remoteStreams.delete(id);stopRecording(id);
  }
  function clearOverlay(){
   clearTimeout(overlayTimer);
   const overlay=$("reactionOverlay");
   if(!overlay)return;
   overlay.classList.add("hidden");
-  const video=$("reactionVideo");video.pause();video.srcObject=null;
+  const video=$("reactionVideo");video.pause();video.srcObject=null;releaseReplay();
  }
  function stopCamera(){
   if(enabled)send({action:"cameraStatus",enabled:false});
   enabled=false;
   localStream?.getTracks().forEach(track=>track.stop());localStream=null;
   for(const id of [...pcs.keys()])closePeer(id);
+  for(const id of [...recorders.keys()])stopRecording(id);
   publishers.clear();refreshButton();clearOverlay();message("Your camera is off. Turn it on only if you want other players to see your reactions.");
  }
  function makePC(id,publisher){
@@ -45,7 +109,7 @@
   if(!publisher)pc.addTransceiver("video",{direction:"recvonly"});
   pc.ontrack=e=>{
     const stream=e.streams[0]||new MediaStream([e.track]);
-    remoteStreams.set(id,stream);
+    remoteStreams.set(id,stream);startRecording(id,stream);
     if($("reactionOverlay")?.dataset.playerId===id&& !$("reactionOverlay").classList.contains("hidden"))
       showStream(id);
   };
@@ -77,6 +141,7 @@
   }catch(err){console.warn("Reaction camera negotiation failed",err);closePeer(data.from);}
  }
  function showStream(id){
+  releaseReplay();$("reactionFeedLabel").textContent="LIVE TABLE REACTION";
   const v=$("reactionVideo"),fallback=$("reactionFallback");
   const stream=id===myId?localStream:remoteStreams.get(id);
   if(stream&&stream.getVideoTracks().some(t=>t.readyState==="live")){
@@ -100,6 +165,7 @@
   $("reactionName").textContent=event.playerName||names.get(event.playerId)||"Player";
   overlay.classList.remove("hidden");
   showStream(event.playerId);
+  requestReplay(event.playerId);
   clearTimeout(overlayTimer);
   overlayTimer=setTimeout(clearOverlay,9500);
  }
@@ -109,11 +175,11 @@
   if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection){message("This browser does not support camera sharing.");return;}
   try{
     const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480},frameRate:{ideal:20,max:24}},audio:false});
-    localStream=stream;enabled=true;
+    localStream=stream;enabled=true;startRecording(myId,stream);
     for(const track of stream.getVideoTracks())track.onended=stopCamera;
     send({action:"cameraStatus",enabled:true});
     refreshButton();
-    message("Camera on. Other people at this table can see your live video. Turn it off any time.");
+    message("Camera on. Others at this table can see your live video and a short temporary reaction replay. Turn it off any time; no files are saved.");
   }catch(err){message("Camera permission was declined or your camera is unavailable.");}
  }
  function handle(data){
