@@ -153,6 +153,45 @@ test("racing kerbs do not slow down, while gravel and grass do",()=>{
  assert.match(client,/if\(grip\.drag>0\)speed\*=Math\.exp\(-grip\.drag\*dt\)/);
  assert.doesNotMatch(client,/onRunoff=projected\.distance>ROAD_HALF_WIDTH-\.2/);
 });
+test("first-person camera stays forward of driver head with a fixed FOV",()=>{
+ const client=readFileSync("public/kart-racing.js","utf8");
+ assert.match(client,/camera\.position\.set\(pos\.x\+forwardX\*1\.08,pos\.y\+1\.44,pos\.z\+forwardZ\*1\.08\)/);
+ assert.match(client,/camera\.fov!==73/);
+ assert.doesNotMatch(client,/camera\.position\.lerp\(eye/);
+ assert.match(client,/cockpitOccluders\.push\(helmet\)/);
+});
+test("P toggles pit speed limiter, exposes pit HUD and forwards session telemetry",()=>{
+ const client=readFileSync("public/kart-racing.js","utf8");
+ const worker=readFileSync("src/worker.js","utf8");
+ const html=readFileSync("public/index.html","utf8");
+ assert.match(client,/const PIT_LIMIT_MS=11\.1/);
+ assert.match(client,/if\(k==="p"\)\{togglePitLimiter\(\)/);
+ assert.match(client,/Math\.min\(pitLimiter\?PIT_LIMIT_MS:29,speed\)/);
+ assert.match(client,/pit:inPitLane/);
+ assert.match(worker,/pit:body\.pit===true/);
+ assert.match(html,/id="kartPitLimiter"/);
+ assert.match(html,/id="kartPitStatus"/);
+});
+test("pit entry is recognized as legitimate, discards shortcut lap and resets timer on exit",async()=>{
+ const {race,data}=fixture(),id=user("c");
+ const started=await post(race,"/start",{user:id,name:"Pit Driver"});
+ assert.equal(started.status,200);
+ const raceId=started.result.raceId;
+ const {PIT}=await import("../public/kart-track.js");
+ const pitStart=PIT.samples[0];
+ const entry=await post(race,"/sample",{user:id,raceId,pit:true,x:pitStart.x,z:pitStart.z});
+ assert.equal(entry.status,200,JSON.stringify(entry.result));
+ assert.equal(entry.result.pitEntry,true);
+ assert.equal(data.get("kart-session-v3:"+id).pitMode,true);
+ const roadStart=raceStart();
+ const exit=await post(race,"/sample",{user:id,raceId,pit:false,x:roadStart.x,z:roadStart.z});
+ assert.equal(exit.status,200,JSON.stringify(exit.result));
+ assert.equal(exit.result.pitExit,true);
+ const after=data.get("kart-session-v3:"+id);
+ assert.equal(after.pitMode,false);
+ assert.equal(after.travel,0);
+ assert.equal(after.crossed,false);
+});
 test("all kart, blackjack and worker modules pass syntax checks",()=>{
  for(const p of ["public/kart-safety.js","public/kart-graphics.js","public/kart-global-board.js","public/kart-track.js","src/kart-leaderboard.js","src/blackjack-multiplayer.js","src/poker-table.js","src/worker.js","public/kart-racing.js","public/salon-games.js"])
   execFileSync(process.execPath,["--check",p]);
