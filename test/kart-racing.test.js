@@ -61,7 +61,10 @@ test("continuous telemetry can complete an honest full-lap sequence and persist 
  assert.equal(completed.status,200,JSON.stringify(completed.result));
  assert.equal(completed.result.personalBest,true);
  assert.equal(completed.result.entries[0].name,"Road Racer");
- assert.equal(data.has("kart-session-v3:"+id),false);
+ assert.equal(data.has("kart-session-v3:"+id),true,"session remains active for lap two");
+ assert.equal(data.get("kart-session-v3:"+id).laps,1);
+ assert.equal(completed.result.nextLap,2);
+ assert.equal(data.get("kart-session-v3:"+id).travel,0);
 });
 test("new circuit leaderboard does not compare old oval records to new road course",()=>{
  const entries=leaderboardEntries({
@@ -95,7 +98,11 @@ test("kart UI removes checkpoint arches, uses progress, and shows pit-lane geome
  const house=readFileSync("public/clubhouse.js","utf8");
  assert.match(client,/ribbon\(PIT/);
  assert.match(client,/for\(let row=0;row<2;row\+\+\)/);
- assert.match(client,/const kerb=box/);
+ assert.match(client,/enhanceCircuit\(THREE,scene\)/);
+ const graphics=readFileSync("public/kart-graphics.js","utf8");
+ assert.match(graphics,/cornerKerbs/);
+ assert.match(graphics,/addQuads|quads\(/);
+ assert.match(graphics,/road|asphalt/);
  assert.match(client,/projectToRoute/);
  assert.doesNotMatch(client,/glowing turquoise checkpoint|GATE_COUNT|turquoise\.*/);
  assert.ok(html.includes('id="kartProgress"'));
@@ -104,6 +111,6 @@ test("kart UI removes checkpoint arches, uses progress, and shows pit-lane geome
  assert.match(html,/blackjackVsPerson/);
 });
 test("all kart, blackjack and worker modules pass syntax checks",()=>{
- for(const p of ["public/kart-track.js","src/kart-leaderboard.js","src/blackjack-multiplayer.js","src/poker-table.js","src/worker.js","public/kart-racing.js","public/salon-games.js"])
+ for(const p of ["public/kart-graphics.js","public/kart-track.js","src/kart-leaderboard.js","src/blackjack-multiplayer.js","src/poker-table.js","src/worker.js","public/kart-racing.js","public/salon-games.js"])
   execFileSync(process.execPath,["--check",p]);
 });

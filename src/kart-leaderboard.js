@@ -42,7 +42,7 @@ export class KartLeaderboard {
   const url=new URL(request.url);
   if(request.method==="GET"&&url.pathname==="/leaderboard"){
    const records=await this.read();
-   return Response.json({track:"Velvet Circuit Extended",laps:1,entries:leaderboardEntries(records)},
+   return Response.json({track:"Velvet Circuit Extended",unlimitedLaps:true,entries:leaderboardEntries(records)},
     {headers:{"cache-control":"no-store"}});
   }
   if(request.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
@@ -53,16 +53,16 @@ export class KartLeaderboard {
   if(url.pathname==="/start"){
    const start=raceStart();
    const s={id:crypto.randomUUID(),name:sanitizeDriverName(body.name),
-    start:now,lastAt:now,lastAtProgress:0,x:start.x,z:start.z,
-    progress:0,travel:0,valid:true};
+    start:now,lapStart:now,laps:0,lastAt:now,lastAtProgress:0,x:start.x,z:start.z,
+    progress:0,travel:0,valid:true,crossed:false};
    await this.storage.put("kart-session-v3:"+id,s);
-   return Response.json({ok:true,raceId:s.id,startedAt:s.start,
+   return Response.json({ok:true,raceId:s.id,startedAt:s.lapStart,lapNumber:1,
     trackLength:Math.round(ROAD.length),bestMs:(await this.read())[id]?.bestMs??null});
   }
   const key="kart-session-v3:"+id,session=await this.storage.get(key);
   if(!session||session.id!==body.raceId)
    return Response.json({error:"No active lap. Start a new race."},{status:409});
-  if(now-session.start>MAX_LAP_MS){
+  if(now-(session.lapStart??session.start)>MAX_LAP_MS){
    await this.storage.delete(key);
    return Response.json({error:"The race timer expired."},{status:410});
   }
@@ -94,7 +94,7 @@ export class KartLeaderboard {
   }
   if(!check.complete&&!session.crossed)
    return Response.json({error:"Cross the start/finish line after a full lap."},{status:422});
-  const elapsed=now-session.start;
+  const elapsed=now-(session.lapStart??session.start);
   if(elapsed<MIN_LAP_MS||session.travel<.93||session.travel>1.2)
    return Response.json({error:"Lap must complete the circuit at racing speed."},{status:422});
   const result=await this.storage.transaction(async txn=>{
@@ -105,8 +105,18 @@ export class KartLeaderboard {
     records[id]={name:session.name,bestMs:elapsed,at:now,version:3};
     await txn.put("best-times-v3",records);
    }
-   await txn.delete(key);
-   return {personalBest,bestMs:personalBest?elapsed:previous,entries:leaderboardEntries(records)};
+   // Do not end the session: drivers can continue straight into the next lap.
+   session.laps=(session.laps||0)+1;
+   session.lapStart=now;
+   session.start=now;
+   session.travel=0;
+   session.progress=check.progress;
+   session.lastAt=now;
+   session.crossed=false;
+   session.valid=true;
+   await txn.put(key,session);
+   return {personalBest,bestMs:personalBest?elapsed:previous,lapNumber:session.laps,
+     nextLap:session.laps+1,nextLapStartedAt:now,entries:leaderboardEntries(records)};
   });
   return Response.json({ok:true,elapsedMs:elapsed,...result},
    {headers:{"cache-control":"no-store"}});

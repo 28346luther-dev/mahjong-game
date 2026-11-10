@@ -90,7 +90,7 @@
       <div class="kart-sheet">
         <header class="kart-header">
           <div><div class="kart-eyebrow">THE GAMES CLUB · GO-KART TIME TRIAL</div><h2 id="kartTitle">VELVET CIRCUIT</h2>
-            <p>One lap · Chicanes, elevation and pit lane · No Sana Coins required</p></div>
+            <p>Unlimited laps · Curved apex kerbs, chicanes and pit lane · Global best-lap rankings</p></div>
           <button id="kartClose" type="button" aria-label="Return to clubhouse">✕ Back to clubhouse</button>
         </header>
         <div class="kart-layout">
@@ -98,14 +98,14 @@
             <div class="kart-stage">
               <canvas id="kartCanvas" width="960" height="600" aria-label="Interactive 3D go-kart circuit"></canvas>
               <div class="kart-overlay">
-                <div><small>LAP TIME</small><strong id="kartTime">00:00.000</strong></div>
+                <div><small id="kartLap">LAP 1</small><strong id="kartTime">00:00.000</strong></div>
                 <div><small>LAP PROGRESS</small><strong id="kartProgress">0%</strong></div>
                 <div><small>SPEED</small><strong id="kartSpeed">0 km/h</strong></div>
               </div>
             </div>
             <div class="kart-actions">
               <button type="button" id="kartStart" class="kart-primary">🏁 Start timed lap</button>
-              <strong id="kartBest">Personal best --:--.---</strong>
+              <strong id="kartBest">Personal best --:--.---</strong><span id="kartLast">Last lap --:--.---</span>
             </div>
             <p id="kartStatus" role="status">Drive with W / A / S / D, brake with Space, reset with R.</p>
             <div class="kart-touch" aria-label="Touch driving controls">
@@ -117,10 +117,10 @@
           </div>
           <aside class="kart-leaderboard">
             <div class="kart-board-head"><h3>🏆 FASTEST LAPS</h3><button id="kartRefresh" type="button">Refresh</button></div>
-            <p>One best lap per player, ranked by server-measured time.</p>
+            <p>Global live leaderboard for everyone on the circuit. Your fastest lap is saved automatically; the board refreshes every 12 seconds.</p>
             <ol id="kartLeaderboard" aria-live="polite"></ol>
             <div class="kart-rules"><strong>HOW TO RACE</strong>
-              <p>Follow the road through sweeping corners, chicanes and elevation changes, then cross the chequered start/finish line. The pit lane is available for exploring. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
+              <p>Follow the road through sweeping corners, chicanes and elevation changes, then cross the chequered start/finish line. Keep driving for lap 2, 3 and beyond; only your fastest lap counts. The pit lane is available for exploring. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
             </div>
           </aside>
         </div>
