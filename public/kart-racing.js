@@ -30,6 +30,32 @@ async function api(path,body){
  const result=await r.json();if(!r.ok)throw Error(result.error||"Race service unavailable");
  return result;
 }
+function gripForDistance(distance,isPit=false){
+ // Painted racing kerbs and adjoining green paint have full road grip.
+ // Sand and grass alone drag the kart down.
+ if(isPit||distance<=ROAD_HALF_WIDTH+1.23)return {drag:0,surface:"kerb"};
+ if(distance<=ROAD_HALF_WIDTH+3.9)return {drag:2.1,surface:"gravel"};
+ if(distance<=ROAD_HALF_WIDTH+RUNOFF_WIDTH)return {drag:3.3,surface:"grass"};
+ return {drag:7.5,surface:"barrier"};
+}
+async function toggleFullscreen(){
+ const root=$("kartGame");
+ try{
+  if(document.fullscreenElement===root){
+   await document.exitFullscreen();
+  }else{
+   if(!root.requestFullscreen)throw Error("Fullscreen unavailable in this browser");
+   await root.requestFullscreen();
+  }
+ }catch(error){message("Could not enter fullscreen: "+error.message);}
+}
+function syncFullscreen(){
+ const full=document.fullscreenElement===$("kartGame");
+ const btn=$("kartFullscreen");
+ btn.textContent=full?"⛶ Exit fullscreen":"⛶ Fullscreen";
+ btn.setAttribute("aria-pressed",String(full));
+}
+document.addEventListener("fullscreenchange",syncFullscreen);
 function message(t){$("kartStatus").textContent=t;}
 function standings(records){
  const list=$("kartLeaderboard");list.replaceChildren();
@@ -302,12 +328,15 @@ function update(dt){
  yaw-=steer*dt*steeringRate*Math.min(1,Math.abs(speed)/3)*(speed>=0?1:-1);
  const x=pos.x+Math.sin(yaw)*speed*dt,z=pos.z+Math.cos(yaw)*speed*dt;
  const projected=positionOnTrack(x,z);
- const onRunoff=projected.distance>ROAD_HALF_WIDTH-.2&&!projected.isPit;
- if(onRunoff){
-  speed*=Math.max(.65,1-1.7*dt);
-  if(projected.distance>ROAD_HALF_WIDTH+RUNOFF_WIDTH) speed*=.35;
-  else{pos.x=x;pos.z=z;pos.y=projected.y;}
- }else{pos.x=x;pos.z=z;pos.y=projected.y;}
+ const grip=gripForDistance(projected.distance,projected.isPit);
+ // Kerbs are fully driveable at racing speed; slowdown begins ONLY past
+ // green paint, in the gravel trap or grass beyond it.
+ if(grip.drag>0)speed*=Math.exp(-grip.drag*dt);
+ if(grip.surface!=="barrier"){
+  pos.x=x;pos.z=z;pos.y=projected.y;
+ }else{
+  speed*=.23; // Armco / outside barrier prevents an off-track shortcut.
+ }
  kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;
  if(performance.now()-sendAt>600&&!telemetryPending){sendAt=performance.now();transmit();}
  $("kartTime").textContent=format(performance.now()-started);
@@ -359,6 +388,7 @@ function open(){
  leaderboard();lastLeaderboardRefresh=performance.now();init().catch(error=>message("Track unavailable: "+error.message));
 }
 function close(){
+ if(document.fullscreenElement===$("kartGame"))document.exitFullscreen().catch(()=>{});
  active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;
  $("kartGame").classList.add("hidden");document.body.classList.remove("kart-open");
 }
@@ -369,6 +399,7 @@ window.addEventListener("keydown",e=>{
   keys.add(k);e.preventDefault();
  }
  if(k==="c"){setCameraMode(cameraMode==="chase"?"cockpit":"chase");e.preventDefault();}
+ if(k==="f"){toggleFullscreen();e.preventDefault();}
  if(k==="r"){reset();playing=false;message("Kart reset. Start a new timed lap to record a result.");}
  if(k==="escape"){e.preventDefault();close();}
 });
@@ -380,6 +411,7 @@ document.querySelectorAll("[data-kart-key]").forEach(button=>{
  for(const event of ["pointerup","pointercancel","lostpointercapture"])button.addEventListener(event,()=>touch.delete(k));
 });
 $("kartCameraToggle").addEventListener("click",()=>setCameraMode(cameraMode==="chase"?"cockpit":"chase"));
+$("kartFullscreen").addEventListener("click",toggleFullscreen);
 $("kartStart").addEventListener("click",begin);
 $("kartClose").addEventListener("click",close);
 $("kartRefresh").addEventListener("click",leaderboard);
