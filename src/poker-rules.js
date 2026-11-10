@@ -3,7 +3,8 @@
 export const RANKS="23456789TJQKA";
 export const SUITS="shdc";
 export function deck(){return [...SUITS].flatMap(s=>[...RANKS].map(r=>r+s));}
-export function shuffle(cards,random=Math.random){
+const secureRandom=()=>crypto.getRandomValues(new Uint32Array(1))[0]/4294967296;
+export function shuffle(cards,random=secureRandom){
  const a=[...cards];for(let i=a.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;
 }
 const rank=c=>RANKS.indexOf(c[0])+2;
