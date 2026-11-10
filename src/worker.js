@@ -191,6 +191,11 @@ export default {
       }
       return new Response("Not found",{status:404});
     }
+    // Read-only public rankings; no account identity or personal data exposed.
+    if(url.pathname==="/api/kart/leaderboard"&&request.method==="GET"){
+      return env.KART.get(env.KART.idFromName("velvet-circuit-global"))
+        .fetch("https://kart/leaderboard",{method:"GET"});
+    }
     if(url.pathname.startsWith("/api/")){
       const viewer=await authenticate();
       if(!viewer)return Response.json({error:"Please sign in first"},{status:401});
