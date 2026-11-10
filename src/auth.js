@@ -71,7 +71,7 @@ export class AuthStore {
         const name=String(body.name||"").trim();
         const color=String(body.color||"");
         const hair=String(body.hair||"");
-        if(name.length<2||name.length>22||!/^[\\p{L}\\p{N} _.-]+$/u.test(name))
+        if(name.length<2||name.length>22||!/^[\p{L}\p{N} _.-]+$/u.test(name))
           return json({error:"Username must be 2–22 letters, numbers, spaces or _.-"},400);
         if(!["ruby","plum","emerald","navy","gold"].includes(color))
           return json({error:"Invalid outfit colour"},400);
