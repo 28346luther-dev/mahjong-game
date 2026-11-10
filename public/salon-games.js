@@ -85,7 +85,14 @@ function renderBlackjack(){
  const dealerEl=$("blackjackDealer");
  for(let i=0;i<dealer.length;i++)if(!dealer[i])dealerEl.replaceChild(cardElement(null,true),dealerEl.children[i]);
  appendCards($("blackjackHand"),me?.hand||[]);
- text("blackjackDealerScore","Dealer: "+(s.dealerTotal??"hidden"));
+ text("blackjackDealerScore",(s.dealerName||"Computer dealer")+": "+(s.dealerTotal??"hidden"));
+ text("blackjackOpponentInfo",s.mode==="person"
+  ?"REAL-PLAYER DUEL · First ready is challenger, second ready is the human dealer. Both enter 10 Sana Coins; winner receives 20."
+  :"COMPUTER DEALER · Up to six real players can play against the house in the same round.");
+ $("blackjackVsComputer").disabled=s.phase==="playing"||s.players.some(p=>p.status==="ready");
+ $("blackjackVsPerson").disabled=s.phase==="playing"||s.players.some(p=>p.status==="ready");
+ $("blackjackVsComputer").setAttribute("aria-pressed",String(s.mode!=="person"));
+ $("blackjackVsPerson").setAttribute("aria-pressed",String(s.mode==="person"));
  text("blackjackYourScore","Your hand: "+(me?.total??"—"));
  text("blackjackMessage",s.message+(me?.result?" · "+me.result:""));
  text("blackjackWallet",(s.balance?.total??wallet?.total??500)+" Sana Coins");
@@ -97,10 +104,12 @@ function renderBlackjack(){
   const score=document.createElement("span");score.textContent=p.status+" · "+(p.total||"—")+(p.result?" · "+p.result:"");
   item.append(title,score);players.append(item);
  }
- const canPlay=s.phase==="playing"&&me?.status==="playing";
+ const challenger=s.players.find(p=>p.bet&&p.id!==s.dealerId);
+ const dealerWaits=s.mode==="person"&&s.dealerId===s.you&&challenger?.status==="playing";
+ const canPlay=s.phase==="playing"&&me?.status==="playing"&&!dealerWaits;
  $("blackjackHit").disabled=!canPlay;$("blackjackStand").disabled=!canPlay;
  $("blackjackReady").disabled=s.phase==="playing"||me?.status==="ready"||(s.balance?.balance??0)<10;
- $("blackjackDeal").disabled=s.phase==="playing"||!s.players.some(p=>p.status==="ready");
+ $("blackjackDeal").disabled=s.phase==="playing"||!s.players.some(p=>p.status==="ready")||(s.mode==="person"&&s.players.filter(p=>p.status==="ready").length!==2);
 }
 async function joinBlackjack(){
  text("blackjackMessage","Joining the shared dealer table…");
@@ -129,9 +138,9 @@ function connectBlackjack(){
  };
  ws.onerror=()=>text("blackjackMessage","Connection interrupted.");
 }
-function blackjackSend(action){
+function blackjackSend(action,mode){
  if(blackjackSocket?.readyState!==WebSocket.OPEN){text("blackjackMessage","Reconnecting to blackjack…");return;}
- blackjackSocket.send(JSON.stringify({action}));
+ blackjackSocket.send(JSON.stringify({action,mode}));
 }
 async function joinPoker(){
  text("pokerMessage","Connecting to the shared club poker table…");
@@ -199,6 +208,8 @@ function renderPoker(){
 $("salonClose").addEventListener("click",close);
 $("salonGame").addEventListener("click",e=>{if(e.target===$("salonGame"))close();});
 $("slotSpin").addEventListener("click",spin);
+$("blackjackVsComputer").addEventListener("click",()=>blackjackSend("mode","computer"));
+$("blackjackVsPerson").addEventListener("click",()=>blackjackSend("mode","person"));
 $("blackjackDeal").addEventListener("click",()=>blackjackSend("deal"));
 $("blackjackReady").addEventListener("click",()=>blackjackSend("ready"));
 $("blackjackHit").addEventListener("click",()=>blackjackSend("hit"));
