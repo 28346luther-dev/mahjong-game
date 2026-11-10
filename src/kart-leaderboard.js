@@ -1,89 +1,114 @@
-// Server-validated casual go-kart time trial for The Games Club.
-// A full lap crosses checkpoints 1..7 then the finish at 0 in that order.
-// Times are measured on the server (never accepted from the browser).
-export const GATE_COUNT=8;
-export const TRACK_RX=25,TRACK_RZ=15,TRACK_WIDTH=8;
-export const GATES=Array.from({length:GATE_COUNT},(_,i)=>{
- const angle=i*Math.PI*2/GATE_COUNT;
- return {index:i,x:Math.sin(angle)*TRACK_RX,z:-Math.cos(angle)*TRACK_RZ};
-});
-export const MIN_SECTOR_MS=750;
-export const MIN_LAP_MS=14000;
+import {ROAD,ROAD_HALF_WIDTH,projectToRoute,raceStart} from "../public/kart-track.js";
+
+// Continuous on-road progress verification. No checkpoint gates or checkpoints UI.
+// Times use server wall-clock, and accepted samples must stay near the circuit
+// and travel plausible distances. This is an arcade leaderboard, not anti-cheat proof.
+export const MIN_LAP_MS=22000;
 export const MAX_LAP_MS=10*60*1000;
-export function nearGate(index,x,z){
- const gate=GATES[index];
- return !!gate&&Number.isFinite(x)&&Number.isFinite(z)&&Math.hypot(x-gate.x,z-gate.z)<4.4;
-}
+export const MAX_SPEED_MPS=17;
 export function sanitizeDriverName(name){
  return String(name||"Racer").replace(/[^\p{L}\p{N} _.-]/gu,"").trim().slice(0,22)||"Racer";
 }
 export function leaderboardEntries(records,limit=10){
- return Object.entries(records).map(([id,r])=>({id,name:r.name,bestMs:r.bestMs,at:r.at}))
-  .filter(r=>Number.isInteger(r.bestMs)&&r.bestMs>=MIN_LAP_MS&&r.bestMs<=MAX_LAP_MS)
+ return Object.entries(records).map(([id,r])=>({id,name:r.name,bestMs:r.bestMs,at:r.at,version:r.version||1}))
+  .filter(r=>Number.isInteger(r.bestMs)&&r.bestMs>=MIN_LAP_MS&&r.bestMs<=MAX_LAP_MS&&r.version===2)
   .sort((a,b)=>a.bestMs-b.bestMs||a.at-b.at).slice(0,limit)
   .map((r,i)=>({rank:i+1,name:r.name,bestMs:r.bestMs,at:r.at}));
 }
-export class KartLeaderboard{
- constructor(ctx){this.ctx=ctx;this.storage=ctx.storage;this.sessions=new Map();}
- async read(){return await this.storage.get("best-times")||{};}
+export function validateSample(session,x,z,now){
+ if(!Number.isFinite(x)||!Number.isFinite(z)||Math.abs(x)>115||Math.abs(z)>95)
+  return {error:"Invalid kart position"};
+ const road=projectToRoute(x,z);
+ if(road.distance>ROAD_HALF_WIDTH+1.25)return {error:"Stay on the race track for a valid lap"};
+ const dt=now-session.lastAt;
+ if(dt<0)return {error:"Invalid race clock"};
+ const moved=Math.hypot(x-session.x,z-session.z);
+ // One half-second telemetry interval at 12.6 m/s covers ~6 metres.
+ if(moved>MAX_SPEED_MPS*dt/1000+4)
+  return {error:"Lap rejected: position changed too quickly"};
+ const old=session.progress,p=road.progress;
+ let delta=p-old;
+ // Finish line seam: 0.98 -> 0.01 means a forward crossing.
+ if(delta<-.7)delta+=1;
+ if(delta>.7)delta-=1;
+ if(delta>0.08)return {error:"Lap rejected: progress jumped too far"};
+ if(delta<-.08)return {error:"Lap rejected: reverse shortcut"};
+ return {progress:p,delta,complete:old>.94&&p<.06&&delta>=0};
+}
+export class KartLeaderboard {
+ constructor(ctx){this.ctx=ctx;this.storage=ctx.storage;}
+ async read(){return await this.storage.get("best-times-v2")||{};}
  async fetch(request){
   const url=new URL(request.url);
   if(request.method==="GET"&&url.pathname==="/leaderboard"){
    const records=await this.read();
-   return Response.json({track:"Velvet Circuit",laps:1,entries:leaderboardEntries(records)},{headers:{"cache-control":"no-store"}});
+   return Response.json({track:"Velvet Circuit Road Course",laps:1,entries:leaderboardEntries(records)},
+    {headers:{"cache-control":"no-store"}});
   }
   if(request.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
-  let body;
-  try{body=await request.json();}catch{return Response.json({error:"Invalid request"},{status:400});}
+  let body;try{body=await request.json();}catch{return Response.json({error:"Invalid request"},{status:400});}
   const id=String(body.user||"");
   if(!/^[a-f0-9]{64}$/.test(id))return Response.json({error:"Sign in required"},{status:401});
   const now=Date.now();
   if(url.pathname==="/start"){
-   const session={id:crypto.randomUUID(),name:sanitizeDriverName(body.name),start:now,last:now,next:1};
-   await this.storage.put("session:"+id,session);
-   return Response.json({ok:true,raceId:session.id,startedAt:session.start,nextCheckpoint:1,checkpoints:GATES});
+   const start=raceStart();
+   const s={id:crypto.randomUUID(),name:sanitizeDriverName(body.name),
+    start:now,lastAt:now,lastAtProgress:0,x:start.x,z:start.z,
+    progress:0,travel:0,valid:true};
+   await this.storage.put("kart-session-v2:"+id,s);
+   return Response.json({ok:true,raceId:s.id,startedAt:s.start,
+    trackLength:Math.round(ROAD.length),bestMs:(await this.read())[id]?.bestMs??null});
   }
-  const session=await this.storage.get("session:"+id);
-  if(!session||session.id!==body.raceId)return Response.json({error:"No active race. Start again."},{status:409});
+  const key="kart-session-v2:"+id,session=await this.storage.get(key);
+  if(!session||session.id!==body.raceId)
+   return Response.json({error:"No active lap. Start a new race."},{status:409});
   if(now-session.start>MAX_LAP_MS){
-   await this.storage.delete("session:"+id);
-   return Response.json({error:"Race expired. Please restart."},{status:410});
-  }
-  if(url.pathname==="/checkpoint"){
-   const index=body.index,x=Number(body.x),z=Number(body.z);
-   if(!Number.isInteger(index)||index!==session.next||index>=GATE_COUNT||!nearGate(index,x,z))
-    return Response.json({error:"Checkpoint must be crossed in order."},{status:422});
-   if(now-session.last<MIN_SECTOR_MS)
-    return Response.json({error:"Checkpoint was reached too quickly."},{status:422});
-   session.last=now;session.next++;
-   await this.storage.put("session:"+id,session);
-   return Response.json({ok:true,nextCheckpoint:session.next});
-  }
-  if(url.pathname==="/finish"){
-   if(session.next!==GATE_COUNT||!nearGate(0,Number(body.x),Number(body.z)))
-    return Response.json({error:"Complete all checkpoints before the finish line."},{status:422});
-   const elapsed=now-session.start;
-   if(elapsed<MIN_LAP_MS||now-session.last<MIN_SECTOR_MS)
-    return Response.json({error:"Lap time was too short to be valid."},{status:422});
-   // No separate read-modify-write race across users: one Durable Object serializes
-   // race requests through storage transactions.
-   const result=await this.storage.transaction(async txn=>{
-    const records=await txn.get("best-times")||{};
-    const prev=records[id]?.bestMs??Infinity;
-    const personalBest=elapsed<prev;
-    if(personalBest){
-     records[id]={name:session.name,bestMs:elapsed,at:now};
-     await txn.put("best-times",records);
-    }
-    await txn.delete("session:"+id);
-    return {personalBest,bestMs:personalBest?elapsed:prev,entries:leaderboardEntries(records)};
-   });
-   return Response.json({ok:true,elapsedMs:elapsed,...result},{headers:{"cache-control":"no-store"}});
+   await this.storage.delete(key);
+   return Response.json({error:"The race timer expired."},{status:410});
   }
   if(url.pathname==="/abort"){
-   await this.storage.delete("session:"+id);
+   await this.storage.delete(key);
    return Response.json({ok:true});
   }
-  return Response.json({error:"Unknown route"},{status:404});
+  if(url.pathname!=="/sample"&&url.pathname!=="/finish")
+   return Response.json({error:"Unknown kart route"},{status:404});
+  const x=Number(body.x),z=Number(body.z);
+  const check=validateSample(session,x,z,now);
+  if(check.error){
+   session.valid=false;await this.storage.put(key,session);
+   return Response.json({error:check.error},{status:422});
+  }
+  if(!session.valid)
+   return Response.json({error:"This lap was invalidated. Restart to record a new time."},{status:422});
+  const increase=Math.max(0,check.delta);
+  session.travel+=increase;
+  session.progress=check.progress;session.x=x;session.z=z;session.lastAt=now;
+  if(url.pathname==="/sample"){
+   if(check.complete){
+    // Finish can only be committed via the explicit finish request.
+    session.crossed=true;
+   }
+   await this.storage.put(key,session);
+   return Response.json({ok:true,progress:Math.min(100,Math.floor(session.travel*100)),
+    readyToFinish:!!session.crossed});
+  }
+  if(!check.complete&&!session.crossed)
+   return Response.json({error:"Cross the start/finish line after a full lap."},{status:422});
+  const elapsed=now-session.start;
+  if(elapsed<MIN_LAP_MS||session.travel<.93||session.travel>1.2)
+   return Response.json({error:"Lap must complete the circuit at racing speed."},{status:422});
+  const result=await this.storage.transaction(async txn=>{
+   const records=await txn.get("best-times-v2")||{};
+   const previous=records[id]?.bestMs??Infinity;
+   const personalBest=elapsed<previous;
+   if(personalBest){
+    records[id]={name:session.name,bestMs:elapsed,at:now,version:2};
+    await txn.put("best-times-v2",records);
+   }
+   await txn.delete(key);
+   return {personalBest,bestMs:personalBest?elapsed:previous,entries:leaderboardEntries(records)};
+  });
+  return Response.json({ok:true,elapsedMs:elapsed,...result},
+   {headers:{"cache-control":"no-store"}});
  }
 }
