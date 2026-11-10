@@ -38,3 +38,15 @@
 body.kart-open{overflow:hidden}
 @media(max-width:930px){.kart-layout{grid-template-columns:1fr}.kart-sheet{max-height:98dvh}.kart-leaderboard{order:2}.kart-leaderboard ol{max-height:220px}}
 @media(max-width:600px){.kart-modal{padding:5px}.kart-sheet{padding:9px;border-radius:12px}.kart-header button{font-size:10px;padding:8px}.kart-header h2{font-size:21px}.kart-header p{font-size:10px}.kart-stage{aspect-ratio:4/3;border-width:4px}.kart-overlay{top:5px;left:5px;gap:4px}.kart-overlay>div{padding:4px 7px}.kart-overlay strong{font-size:12px}.kart-actions{gap:6px}.kart-primary{font-size:13px;padding:9px 13px}.kart-touch button{min-width:70px;font-size:11px;flex:1}.kart-board-head h3{font-size:16px}}
+
+/* Broadcast top-ten standings below the clubhouse scene. */
+.kart-club-board{margin:10px 0 16px;padding:14px;border-radius:14px;border:1px solid #bd935d;background:linear-gradient(135deg,#2c2536,#413044);box-shadow:0 5px 20px #0003;color:#f9dfb4}
+.kart-club-board-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:11px}
+.kart-club-board-head strong{font:700 16px Georgia,serif}
+.kart-club-board-head span{font-size:11px;color:#dfc1a0}
+.kart-club-board ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:7px}
+.kart-club-board li{display:flex;align-items:center;gap:8px;border:1px solid #8b6671;background:#4b3446;border-radius:9px;padding:9px;font-size:12px}
+.kart-club-board li strong{color:#f5ce85}
+.kart-club-board li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.kart-club-board li b{font-variant-numeric:tabular-nums;color:#ffe0a5}
+@media(max-width:620px){.kart-club-board-head{flex-wrap:wrap}.kart-club-board ol{grid-template-columns:1fr 1fr}}
