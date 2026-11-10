@@ -262,7 +262,7 @@
    // not one encoder for every remote viewer.
    const self=member(myId);record(self,stream);
    send({action:"cameraStatus",enabled:true});
-   button();note("Low-lag camera mode (320p / 12 fps) enabled. Other players can see your video. You can switch it off at any time.");
+   button();note("Low-lag camera mode (320×240 / 12 fps) enabled. Other players can see your video. You can switch it off at any time.");
   }catch{note("Camera permission was denied or the camera is busy.");}
  }
  function handle(data){
