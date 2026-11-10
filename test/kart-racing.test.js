@@ -114,7 +114,7 @@ test("high-quality circuit renders curved corner kerbs, asphalt and painted runo
  const client=readFileSync("public/kart-racing.js","utf8");
  const html=readFileSync("public/index.html","utf8");
  const clubhouse=readFileSync("public/kart-global-board.js","utf8");
- assert.match(graphics,/Math\.abs\(bend\(i\)\)<\.14/);
+ assert.match(graphics,/Math\.abs\(b\)<\.14/);
  assert.match(graphics,/kerbVerts/);
  assert.match(graphics,/greenMat/);
  assert.match(graphics,/asphalt=texturedCanvas/);
