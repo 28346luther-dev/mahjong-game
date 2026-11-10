@@ -28,12 +28,13 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
  function makeAvatar(p){
   const g=new THREE.Group();
   const sum=Array.from(p.id).reduce((n,c)=>n+c.charCodeAt(0),0);
-  const coats=[0x742940,0x923a52,0x552c48,0x9b5360,0x4b394c];
-  const coat=new THREE.MeshPhysicalMaterial({color:coats[sum%coats.length],roughness:.84,sheen:1,sheenColor:0xb85b6c});
+  const coatColours={ruby:0x872a45,plum:0x583354,emerald:0x286553,navy:0x2c476b,gold:0xb88d56};
+  const hairColours={dark:0x231e26,brown:0x67452d,blonde:0xba9456,auburn:0x863c30};
+  const coat=new THREE.MeshPhysicalMaterial({color:coatColours[p.color]||coatColours.ruby,roughness:.84,sheen:1,sheenColor:0xb85b6c});
   const skin=new THREE.MeshStandardMaterial({color:0xc98a6f,roughness:.83});
   const trim=new THREE.MeshStandardMaterial({color:0xd0b17c,metalness:.45,roughness:.45});
   const trousers=new THREE.MeshStandardMaterial({color:0x2d2831,roughness:.85});
-  const hairMat=new THREE.MeshStandardMaterial({color:sum%3===0?0x654336:0x2d2429,roughness:.91});
+  const hairMat=new THREE.MeshStandardMaterial({color:hairColours[p.hair]||hairColours.dark,roughness:.91});
   const body=new THREE.Mesh(new THREE.CapsuleGeometry(.31,.72,7,14),coat);
   body.position.y=1.20;body.scale.set(.95,1,0.78);g.add(body);
   const collar=new THREE.Mesh(new THREE.TorusGeometry(.19,.038,8,18),trim);
@@ -41,6 +42,14 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
   const head=new THREE.Mesh(new THREE.SphereGeometry(.235,22,16),skin);head.position.y=1.93;g.add(head);
   const hair=new THREE.Mesh(new THREE.SphereGeometry(.246,22,14,0,Math.PI*2,0,1.32),hairMat);
   hair.position.y=2.013;g.add(hair);
+  // Face details on local +Z. Facing is driven by the ACTUAL walk direction.
+  const eyeMaterial=new THREE.MeshStandardMaterial({color:0x25212a});
+  for(const sx of [-.085,.085]){
+   const eye=new THREE.Mesh(new THREE.SphereGeometry(.023,8,8),eyeMaterial);
+   eye.position.set(sx,1.97,.224);g.add(eye);
+  }
+  const nose=new THREE.Mesh(new THREE.SphereGeometry(.045,8,7),skin);
+  nose.position.set(0,1.88,.232);g.add(nose);
   for(const sx of [-1,1]){
    const arm=new THREE.Mesh(new THREE.CapsuleGeometry(.106,.59,5,10),coat);
    arm.position.set(sx*.39,1.26,0);arm.rotation.z=sx*.16;g.add(arm);
@@ -54,8 +63,17 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
   const tag=textSprite(p.name,"#402539","#f5ddb5");
   tag.position.y=2.67;tag.scale.set(1.7,.43,1);g.add(tag);
   g.position.set(p.x,0,p.z);g.rotation.y=p.yaw||0;scene.add(g);
-  const info={...p,group:g,tag,bubble:null,bubbleUntil:0,targetX:p.x,targetZ:p.z,targetYaw:p.yaw||0};
+  const info={...p,group:g,coat,hairMat,tag,bubble:null,bubbleUntil:0,targetX:p.x,targetZ:p.z,targetYaw:p.yaw??Math.PI};
   peers.set(p.id,info);return info;
+ }
+ function updateAvatar(p){
+  const coatColours={ruby:0x872a45,plum:0x583354,emerald:0x286553,navy:0x2c476b,gold:0xb88d56};
+  const hairColours={dark:0x231e26,brown:0x67452d,blonde:0xba9456,auburn:0x863c30};
+  p.coat.color.setHex(coatColours[p.color]||coatColours.ruby);
+  p.hairMat.color.setHex(hairColours[p.hair]||hairColours.dark);
+  p.group.remove(p.tag);p.tag.material.map.dispose();p.tag.material.dispose();
+  p.tag=textSprite(p.name,"#402539","#f5ddb5");p.tag.position.y=2.67;p.tag.scale.set(1.7,.43,1);
+  p.group.add(p.tag);
  }
  function remove(id){
   const p=peers.get(id);if(!p)return;
@@ -181,6 +199,8 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
    selfId=data.id;for(const p of peers.keys())remove(p);
    for(const p of data.peers||[])if(p.id!==selfId)makeAvatar(p);
    refreshCount();append("","Connected to the social clubhouse",true);
+   const profile=window.SalonProfile?.get();
+   if(profile)send({type:"profile",...profile});
    if(micEnabled)send({type:"voice",enabled:true});
   }
   if(data.type==="join"&&data.peer?.id!==selfId){if(!peers.has(data.peer.id))makeAvatar(data.peer);refreshCount();append("",data.peer.name+" entered the club",true);}
@@ -197,6 +217,10 @@ export function createClubSocial(THREE,scene,camera,zoneAt){
   }
   if(data.type==="signal")handleSignal(data);
  }
+ window.addEventListener("salon-profile",event=>{
+  if(active&&socket?.readyState===WebSocket.OPEN)
+   send({type:"profile",name:event.detail.name,color:event.detail.color,hair:event.detail.hair});
+ });
  function connect(){
   if(!active||socket&&[WebSocket.CONNECTING,WebSocket.OPEN].includes(socket.readyState))return;
   socket=new WebSocket((location.protocol==="https:"?"wss://":"ws://")+location.host+"/club/ws");
