@@ -95,7 +95,11 @@
         <header class="kart-header">
           <div><div class="kart-eyebrow">THE GAMES CLUB · GO-KART TIME TRIAL</div><h2 id="kartTitle">VELVET CIRCUIT</h2>
             <p>Unlimited laps · High-detail racing circuit · Global fastest-lap rankings</p></div>
-          <button id="kartClose" type="button" aria-label="Return to clubhouse">✕ Back to clubhouse</button>
+          <div class="kart-header-controls">
+            <button id="kartCameraToggle" type="button" aria-pressed="false" title="Switch camera with C">⛑ First-person view</button>
+            <button id="kartFullscreen" type="button" aria-pressed="false" title="Toggle fullscreen with F">⛶ Fullscreen</button>
+            <button id="kartClose" type="button" aria-label="Return to clubhouse">✕ Back to clubhouse</button>
+          </div>
         </header>
         <div class="kart-layout">
           <div class="kart-drive">
@@ -105,13 +109,15 @@
                 <div><small>LAP</small><strong id="kartLap">1</strong></div><div><small>CURRENT LAP</small><strong id="kartTime">00:00.000</strong></div>
                 <div><small>LAP PROGRESS</small><strong id="kartProgress">0%</strong></div>
                 <div><small>SPEED</small><strong id="kartSpeed">0 km/h</strong></div>
+                <div><small>CAMERA</small><strong id="kartCameraLabel">CHASE / THIRD PERSON</strong></div>
               </div>
             </div>
             <div class="kart-actions">
               <button type="button" id="kartStart" class="kart-primary">🏁 Start timed lap</button>
               <strong id="kartLast">LAST --:--.---</strong><strong id="kartBest">BEST --:--.---</strong>
             </div>
-            <p id="kartStatus" role="status">Drive with W / A / S / D, brake with Space, reset with R.</p>
+            <p id="kartStatus" role="status">Drive with W / A / S / D, brake with Space, reset with R. C switches camera; F toggles fullscreen.</p>
+            <p id="kartCameraHelp" class="kart-camera-help">Chase camera · press C for a driver’s-eye view</p>
             <div class="kart-touch" aria-label="Touch driving controls">
               <button data-kart-key="a" type="button" aria-label="Steer left">◀ Steer</button>
               <button data-kart-key="w" type="button" aria-label="Accelerate">▲ Accelerate</button>
