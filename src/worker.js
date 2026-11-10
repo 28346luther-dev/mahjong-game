@@ -187,6 +187,8 @@ export default {
       const viewer=await authenticate();
       if(!viewer)return Response.json({error:"Please sign in first"},{status:401});
       if(url.pathname==="/api/poker/join"&&request.method==="POST"){
+        const origin=request.headers.get("origin");
+        if(origin&&origin!==url.origin)return Response.json({error:"Invalid request origin"},{status:403});
         const profileRes=await authStub.fetch("https://auth/profile",{method:"POST",body:JSON.stringify({token})});
         const profile=profileRes.ok?await profileRes.json():{name:"Player"};
         const user=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(viewer.email));
