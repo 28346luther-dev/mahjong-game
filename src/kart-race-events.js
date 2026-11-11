@@ -8,6 +8,8 @@ import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,PIT_BAYS,PIT_BAY_TO
 export const EVENT_INTERVAL_MS=600_000;
 export const QUALIFY_MS=120_000;
 export const RACE_LAPS=10;
+export const START_LIGHTS_MS=8000;
+export const START_LIGHT_INTERVAL_MS=1000;
 export const PIT_SERVICE_MS=10_000;
 export const EVENT_LIFETIME_MS=45*60_000;
 const MIN_LAP_MS=20_000;
@@ -17,6 +19,7 @@ export const activeEventId=now=>Math.floor(now/EVENT_INTERVAL_MS)*EVENT_INTERVAL
 export function eventPhase(id,now){
  if(now<id)return "registration";
  if(now<id+QUALIFY_MS)return "qualifying";
+ if(now<id+QUALIFY_MS+START_LIGHTS_MS)return "grid";
  if(now<id+EVENT_LIFETIME_MS)return "race";
  return "closed";
 }
@@ -24,7 +27,7 @@ export function scheduledEvents(now=Date.now()){
  const base=activeEventId(now);
  return [-2,-1,0,1,2,3].map(n=>base+n*EVENT_INTERVAL_MS).filter(id=>id>0&&now<id+EVENT_LIFETIME_MS)
   .map(id=>({id,qualifyingAt:id,raceAt:id+QUALIFY_MS,registrationCloses:id+QUALIFY_MS,
-    phase:eventPhase(id,now),raceLaps:RACE_LAPS,qualifyingMinutes:2}))
+    phase:eventPhase(id,now),lightsOutAt:id+QUALIFY_MS+START_LIGHTS_MS,raceLaps:RACE_LAPS,qualifyingMinutes:2}))
   .sort((a,b)=>a.id-b.id);
 }
 function driverView(p){return {
@@ -57,6 +60,8 @@ export function eventSnapshot(meeting,now=Date.now(),user=null){
   [...racers].sort((a,b)=>(a.qualifiedMs??Infinity)-(b.qualifiedMs??Infinity)||a.joined-b.joined):
   raceStanding(racers);
  return {id:meeting.id,phase,qualifyingAt:meeting.id,raceAt:meeting.id+QUALIFY_MS,
+  lightsOutAt:meeting.id+QUALIFY_MS+START_LIGHTS_MS,
+  redLights:phase==="grid"?Math.min(5,Math.max(0,Math.floor((now-(meeting.id+QUALIFY_MS))/START_LIGHT_INTERVAL_MS)+1)):0,
   qualifyingRemainingMs:Math.max(0,meeting.id+QUALIFY_MS-now),
   phaseRemainingMs:phase==="registration"?Math.max(0,meeting.id-now):
    phase==="qualifying"?Math.max(0,meeting.id+QUALIFY_MS-now):null,
@@ -77,12 +82,12 @@ function gridPosition(index){
 }
 function advance(meeting,now){
  const phase=eventPhase(meeting.id,now);
- if(phase==="race"&&!meeting.gridStarted){
+ if((phase==="grid"||phase==="race")&&!meeting.gridStarted){
   const order=rankPlayers(meeting.players);
   for(let i=0;i<order.length;i++){
    const p=order[i],grid=gridPosition(i),proj=projectToRoute(grid.x,grid.z);
    Object.assign(p,grid,{progress:proj.progress,travel:0,lastAt:now,
-    lapStarted:meeting.id+QUALIFY_MS,lap:0,finishedAt:null,finishedMs:null,
+    lapStarted:meeting.id+QUALIFY_MS+START_LIGHTS_MS,lap:0,finishedAt:null,finishedMs:null,
     pitComplete:false,pitUntil:0,pitBay:null,pitMode:false,disqualified:false,startedDriving:false,
     sectorTimes:[],sectorColors:[],sectorIndex:0,sectorLastAt:now});
   }
