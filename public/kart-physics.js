@@ -37,3 +37,13 @@ export function surfaceNormal(route,projection,angle,THREE){
  // the upward-facing geometric normal is (-dy/dx,1,-dy/dz).
  return new THREE.Vector3(-grade*tx-crossSlope*nx,1,-grade*tz-crossSlope*nz).normalize();
 }
+
+export function gravityAlongRoad(route,projection,headingYaw,g=9.81){
+ const samples=route.samples,i=projection.index;
+ const a=samples[i],b=samples[(i+1)%samples.length];
+ const dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz)||1;
+ // Gravity accelerates downhill along the direction of travel.
+ const grade=(b.y-a.y)/len;
+ const alignment=(dx*Math.sin(headingYaw)+dz*Math.cos(headingYaw))/len;
+ return -g*grade*alignment;
+}
