@@ -18,7 +18,7 @@ test("timing line is at the FAR END of pit straight, not its original start",()=
  assert.match(readFileSync("public/kart-graphics.js","utf8"),/Start\/finish squares/);
 });
 test("staggered starting slots use L-shaped half rectangles straight behind finish",()=>{
- assert.match(racing,/const gridPrevious=ROAD.samples\[ROAD.samples.length-8\]/);
+ assert.match(racing,/gridPrevious=ROAD.samples\[ROAD.samples.length-8\]/);
  assert.match(racing,/const back=8\+Math.floor\(i\/2\)\*5\.7/);
  assert.match(racing,/drawGridLine\(2\.08,\.105/);
  assert.match(racing,/drawGridLine\(\.105,2\.95/);
