@@ -30,9 +30,9 @@ export function joinBlackjack(game,id,name){
  if(!p){
   if(game.phase==="playing")throw Error("Round in progress. Join when it finishes.");
   if(game.players.length>=6)throw Error("Blackjack has six seats maximum.");
-  p={id,name:safeName(name),hand:[],bet:0,status:"watching",result:"",online:true};
+  p={id,name:safeName(name),hand:[],bet:0,status:"watching",result:"",online:false};
   game.players.push(p);
- }else{p.name=safeName(name);p.online=true;}
+ }else{p.name=safeName(name);}
  return p;
 }
 export function chooseBlackjackMode(game,mode){
@@ -54,7 +54,7 @@ export function readyBlackjack(game,id,wallets){
  }
  const p=game.players.find(p=>p.id===id);if(!p)throw Error("Join first.");
  if(p.status==="ready")throw Error("You're already entered.");
- if(game.mode==="person"&&game.players.filter(x=>x.status==="ready").length>=2)
+ if(game.mode==="person"&&game.players.filter(x=>x.status==="ready"&&x.online).length>=2)
   throw Error("The player-versus-player round already has two people.");
  const wallet=wallets[id];
  if(!wallet||wallet.balance<BLACKJACK_BET)throw Error("You need 10 Sana Coins to enter.");
@@ -65,7 +65,7 @@ export function readyBlackjack(game,id,wallets){
 }
 export function beginBlackjack(game,wallets){
  if(game.phase==="playing")throw Error("The hand is already in progress.");
- const active=game.players.filter(p=>p.status==="ready");
+ const active=game.players.filter(p=>p.status==="ready"&&p.online);
  if(game.mode==="person"&&active.length!==2)
   throw Error("Two real players must join the player-versus-player duel.");
  if(!active.length)throw Error("At least one player needs to join.");
@@ -146,4 +146,37 @@ export function settleBlackjack(game,wallets){
  }
  game.phase="finished";
  game.message="Computer dealer finished on "+house+". Choose Join next round to play again.";
+}
+
+export function disconnectBlackjack(game,id,wallets){
+ const player=game.players.find(p=>p.id===id);
+ if(!player)return false;
+ player.online=false;
+ if(game.phase==="waiting"&&player.status==="ready"){
+  wallets[id]??={balance:INITIAL_SANA};
+  wallets[id].balance+=player.bet||0;
+  player.bet=0;player.status="watching";
+ }
+ if(game.phase==="playing"&&player.status==="playing"){
+  // Leaving a live game cannot hold the other human indefinitely.
+  player.status="stand";
+  player.result="Disconnected · auto-stand";
+  if(!game.players.some(p=>p.bet&&p.status==="playing"))
+   settleBlackjack(game,wallets);
+ }
+ if(game.phase!=="playing"){
+  game.players=game.players.filter(p=>p.id!==id);
+ }
+ game.message=player.name+" left the blackjack table."+
+  (game.phase==="waiting"?" Their entry was refunded.":"");
+ return true;
+}
+export function reconcileBlackjack(game,connectedIds,wallets){
+ let changed=false;
+ for(const p of [...game.players]){
+  if(p.online&&!connectedIds.has(p.id)){
+   changed=disconnectBlackjack(game,p.id,wallets)||changed;
+  }
+ }
+ return changed;
 }
