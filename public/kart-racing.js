@@ -4,6 +4,7 @@ import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
 import {createFormulaVee} from "./kart-formula-vee.js";
 import {addCircuitGrandstands} from "./kart-grandstands.js";
+import {addStraightGlassBarriers} from "./kart-straight-barriers.js";
 import {resolveKartCollision,surfaceNormal,nearPitBay,gravityAlongRoad} from "./kart-physics.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
@@ -335,20 +336,29 @@ function track(){
  // Detailed two-level garage building, safe entry signs and four marked service bays.
  addPitComplex(THREE,scene,PIT,PIT_BAYS);
  addCircuitGrandstands(THREE,scene);
- // Sixteen painted grid slots on the start straight: white L-shaped front
- // corner brackets and a white start marker for each qualifying position.
- const gridStart=ROAD.samples[0],gridNext=ROAD.samples[4];
- const gridDx=gridNext.x-gridStart.x,gridDz=gridNext.z-gridStart.z;
+ addStraightGlassBarriers(THREE,scene,ROAD,ROAD_HALF_WIDTH);
+ // Sixteen staggered, clean half-box grid positions. The start/finish
+ // line is now at the END of the pit straight, so all boxes sit BACK from
+ // the finish line along the straight, not scattered into turn one.
+ const gridStart=ROAD.samples[0],gridPrevious=ROAD.samples[ROAD.samples.length-8];
+ const gridDx=gridStart.x-gridPrevious.x,gridDz=gridStart.z-gridPrevious.z;
  const gridLen=Math.hypot(gridDx,gridDz)||1,gtx=gridDx/gridLen,gtz=gridDz/gridLen;
+ const gridYaw=Math.atan2(gtx,gtz);
+ const drawGridLine=(width,length,x,z)=>{
+  const y=projectToRoute(x,z,ROAD).y+.13;
+  const stripe=box(width,.017,length,0xf8f6ef,x,y,z);
+  stripe.rotation.y=gridYaw;
+  return stripe;
+ };
  for(let i=0;i<16;i++){
-  const lane=(i%2?1:-1)*2.25,forward=8+Math.floor(i/2)*5.7;
-  const gx=gridStart.x+gtx*forward-gtz*lane;
-  const gz=gridStart.z+gtz*forward+gtx*lane;
-  const y=projectToRoute(gx,gz,ROAD).y+.16;
-  const sideLine=box(.09,.022,3.6,0xfaf3e6,gx,y,gz);
-  sideLine.rotation.y=Math.atan2(gtx,gtz);
-  const frontLine=box(2.3,.022,.11,0xfaf3e6,gx+gtx*1.75,y,gz+gtz*1.75);
-  frontLine.rotation.y=Math.atan2(gtx,gtz);
+  const side=i%2?1:-1,lane=side*2.25;
+  const back=8+Math.floor(i/2)*5.7;
+  const gx=gridStart.x-gtx*back-gtz*lane;
+  const gz=gridStart.z-gtz*back+gtx*lane;
+  // Short forward transverse edge plus ONE longitudinal edge: an L shape.
+  drawGridLine(2.08,.105,gx+gtx*1.49,gz+gtz*1.49);
+  const outer=side*1.03;
+  drawGridLine(.105,2.95,gx-gtz*outer,gz+gtx*outer);
  }
  // Physical starting gantry on the outside of the racing line.
  const p=ROAD.samples[0],d=tangent(ROAD,0);
@@ -479,7 +489,13 @@ async function transmit(){
      format(finish.elapsedMs)+" · Lap "+lapCount+" now running.");
    standings(finish.entries);
    lastLeaderboardRefresh=performance.now();
-   if(timeTrial){playing=false;speed=0;message("Time trial complete — "+format(finish.elapsedMs)+". Choose Start timed lap to go again.");}
+   if(timeTrial){
+    // Time Trial is an ongoing best-lap session, NOT a one-lap mode.
+    // Preserve velocity and the same server session for unlimited attempts.
+    resetSectors();
+    message("Time trial lap "+finish.lap+": "+format(finish.elapsedMs)+
+      (finish.personalBest?" · NEW BEST!":" · keep racing for a faster lap!"));
+   }
   }
  }catch(error){
   if(raceId===current){playing=false;message(error.message+" Restart the lap to try again.");}
