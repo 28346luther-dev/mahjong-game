@@ -2,6 +2,7 @@ import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCAL
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
+import {createFormulaVee} from "./kart-formula-vee.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
@@ -11,20 +12,10 @@ let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
 let driveMode="practice",meetingPhase=null,remoteKarts=new Map();
 function getPose(){return {x:pos.x,z:pos.z,yaw,speed,pit:inPitLane};}
 function createRival(p){
- const g=new THREE.Group();scene.add(g);
- const body=new THREE.Mesh(new THREE.BoxGeometry(1.45,.38,2.35),
-  new THREE.MeshPhysicalMaterial({color:(Number.parseInt(p.id.slice(0,6),16)&0xffffff)||0x318ead,
-    metalness:.32,roughness:.33,clearcoat:1}));
- body.position.y=.57;g.add(body);
- const helmet=new THREE.Mesh(new THREE.SphereGeometry(.29,16,12),
-  new THREE.MeshStandardMaterial({color:0xffd998,roughness:.34}));
- helmet.position.set(0,1.4,.38);g.add(helmet);
- const tyres=new THREE.MeshStandardMaterial({color:0x1d2125,roughness:.9});
- for(const x of [-.78,.78])for(const z of [-.78,.78]){
-  const w=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,.25,14),tyres);
-  w.position.set(x,.35,z);w.rotation.z=Math.PI/2;g.add(w);
- }
- return g;
+ const palette=[0xb33749,0x2a739d,0x3f8a6b,0xd2ac51,0x805b98,0xdc7b39];
+ const index=parseInt(p.id.slice(0,7),16)%palette.length;
+ const model=createFormulaVee(THREE,{color:palette[index],number:index+1});
+ scene.add(model.group);return model.group;
 }
 function updateRivals(racers,myId){
  if(!scene)return;
@@ -291,45 +282,9 @@ function track(){
  }
 }
 function kartModel(){
- kart=new THREE.Group();scene.add(kart);
- const paint=new THREE.MeshPhysicalMaterial({color:0x9d284b,metalness:.35,roughness:.28,clearcoat:1,clearcoatRoughness:.11});
- const chrome=new THREE.MeshStandardMaterial({color:0xc9c6c1,metalness:.82,roughness:.2});
- const rubber=material(0x191b21,.98),leather=material(0x372735,.84);
- const body=object(new THREE.SphereGeometry(1,24,16),paint,0,.66,0,kart);
- body.scale.set(.83,.24,1.36);
- const nose=object(new THREE.SphereGeometry(1,24,16),paint,0,.52,-.91,kart);
- nose.scale.set(.68,.21,.54);
- const frontBumper=box(1.75,.11,.18,0xdab989,0,.42,-1.36,kart);
- box(1.85,.12,.18,0x23252b,0,.43,1.21,kart);
- box(1.08,.28,.95,0x29232c,0,.85,.42,kart);
- const seat=object(new THREE.SphereGeometry(1,16,12),leather,0,1.06,.45,kart);
- seat.scale.set(.48,.46,.37);
- for(const x of [-.79,.79])for(const z of [-.85,.85]){
-  const wheel=object(new THREE.CylinderGeometry(.33,.33,.28,18),rubber,x,.35,z,kart);
-  wheel.rotation.z=Math.PI/2;
-  const hub=object(new THREE.CylinderGeometry(.14,.14,.295,16),chrome,x,.35,z,kart);
-  hub.rotation.z=Math.PI/2;
- }
- const helmet=new THREE.Mesh(new THREE.SphereGeometry(.31,22,16),new THREE.MeshPhysicalMaterial({
-  color:0xf2c77e,metalness:.35,roughness:.25,clearcoat:1}));
- helmet.position.set(0,1.57,.37);kart.add(helmet);cockpitOccluders.push(helmet);
- const visor=object(new THREE.SphereGeometry(.26,20,12),material(0x1b313c,.09,.48),0,1.56,.19,kart);
- visor.scale.set(.95,.47,.42);cockpitOccluders.push(visor);
- const wheel=object(new THREE.TorusGeometry(.23,.045,8,22),rubber,0,1.04,-.38,kart);
- wheel.rotation.x=Math.PI*.27;
- for(const x of [-.39,.39]){
-  const arm=object(new THREE.CapsuleGeometry(.065,.36,5,9),material(0xdbc6a7,.75),x*.75,1.1,-.07,kart);
-  arm.rotation.x=Math.PI/4;
-  box(.11,.1,.14,0xf9eed5,x,.54,-1.31,kart);
- }
- const label=box(.75,.035,.55,0xf5e9d5,0,.93,-.7,kart);
- label.rotation.x=-.06;
- const number=box(.33,.014,.34,0x33333b,0,.961,-.7,kart);
- number.rotation.x=-.06;
- const shadow=new THREE.Mesh(new THREE.CircleGeometry(1.12,28),new THREE.MeshBasicMaterial({
-  color:0x111219,transparent:true,opacity:.21,depthWrite:false}));
- shadow.rotation.x=-Math.PI/2;shadow.position.y=.024;
- kart.add(shadow);
+ const vee=createFormulaVee(THREE,{color:0xa62c46,number:7});
+ kart=vee.group;scene.add(kart);
+ cockpitOccluders.push(...vee.hiddenInCockpit);
 }
 function construct(){
  scene=new THREE.Scene();scene.background=new THREE.Color(0xa2c6d0);scene.fog=new THREE.FogExp2(0xa2c6d0,.0034);
@@ -486,9 +441,9 @@ function frame(){
   // behind the kart: chase-style interpolation exposed the driver's head
   // whenever acceleration caused the vehicle to pull ahead of the camera.
   const forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw);
-  camera.position.set(pos.x+forwardX*.26,pos.y+1.30,pos.z+forwardZ*.26);
+  camera.position.set(pos.x+forwardX*.40,pos.y+1.27,pos.z+forwardZ*.40);
   camera.lookAt(pos.x+forwardX*28,pos.y+1.42,pos.z+forwardZ*28);
-  // Constant field of view: no acceleration-induced zoom or head clipping.
+  // Fixed FOV: the tapered Formula Vee nose and front wheels remain visible.
   if(camera.fov!==73){camera.fov=73;camera.updateProjectionMatrix();}
  }else{
   const target=new THREE.Vector3(pos.x-Math.sin(yaw)*11,pos.y+7.3,pos.z-Math.cos(yaw)*11);
