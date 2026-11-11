@@ -69,6 +69,35 @@ export function addPitComplex(THREE,scene,PIT,bays){
   block(.85,.05,1.45,red,x,y+.101,z-1.15);
   const tire= item(new THREE.TorusGeometry(.28,.11,8,16),mat(0x23282c,.95),x+1.7,y+.25,z+1.06);
   tire.rotation.x=Math.PI/2;
+  // Painted pit-box graphics sit on the tarmac rather than floating overhead.
+  // A translucent stop target shows a clear car-sized placement zone.
+  const marking=document.createElement("canvas");
+  marking.width=512;marking.height=512;
+  const ctx=marking.getContext("2d");
+  ctx.clearRect(0,0,512,512);
+  ctx.strokeStyle="#f9d15b";ctx.lineWidth=16;ctx.strokeRect(35,35,442,442);
+  ctx.fillStyle="#f5d15c";ctx.fillRect(40,352,432,18);
+  ctx.strokeStyle="#f6f2df";ctx.lineWidth=11;
+  ctx.beginPath();ctx.moveTo(256,75);ctx.lineTo(256,330);ctx.stroke();
+  ctx.fillStyle="#e53f4c";ctx.beginPath();ctx.moveTo(256,150);ctx.lineTo(206,220);
+  ctx.lineTo(306,220);ctx.closePath();ctx.fill();
+  ctx.fillStyle="#fff5cd";ctx.font="bold 62px Arial";ctx.textAlign="center";
+  ctx.fillText("PIT "+(index+1),256,443);
+  const texture=new THREE.CanvasTexture(marking);texture.colorSpace=THREE.SRGBColorSpace;
+  const zone=new THREE.Mesh(new THREE.PlaneGeometry(5.4,5.0),
+    new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:THREE.DoubleSide}));
+  zone.rotation.x=-Math.PI/2;zone.position.set(x,y+.145,z);scene.add(zone);
+  // Racing pit boom: an outboard steel mast and an overhead swing arm with
+  // a suspended pit-stop lamp, all outside the kart's collision envelope.
+  const boomX=x+3.65,boomZ=z+2.05;
+  block(.16,4.9,.16,steel,boomX,y+2.45,boomZ);
+  const arm=block(3.65,.16,.18,steel,boomX-1.8,y+4.65,boomZ);
+  block(.19,1.55,.19,steel,x+.22,y+4.0,boomZ);
+  block(.85,.36,.75,mat(0xe5b346,.47,.15),x+.22,y+3.18,boomZ);
+  for(const side of [-.2,.2])
+   block(.14,.13,.10,side<0?mat(0xe74751):mat(0x5dda8c),x+.22+side,y+3.10,boomZ-.4);
+  // Garage apron kept open: low tool trolley stands outside the marked bay.
+  block(.9,.45,.65,red,x+4.55,y+.31,z+2.5);
   // Bay number on an outboard upright, nowhere near driving centerline.
   const pole=block(.1,2.8,.1,steel,signX+2.75,y+1.45,signZ);
   const label=block(1.7,.8,.13,red,signX+2.75,y+2.65,signZ);
