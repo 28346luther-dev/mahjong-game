@@ -39,8 +39,10 @@ export function addKartSafety(THREE,scene,ROAD,halfWidth,runoffWidth){
    // between the main straight and the pit-lane entrance/exit.
    const guardX=p.x+a.nx*base,guardZ=p.z+a.nz*base;
    const nextX=q.x+b.nx*base,nextZ=q.z+b.nz*base;
-   if(projectToRoute(guardX,guardZ,PIT).distance<PIT_HALF_WIDTH+4.2||
-      projectToRoute(nextX,nextZ,PIT).distance<PIT_HALF_WIDTH+4.2)continue;
+   // Keep every old Armco rail out of the extended entry and the long
+   // merge zone. No old rail may pierce the new driveable pit tarmac.
+   if(projectToRoute(guardX,guardZ,PIT).distance<PIT_HALF_WIDTH+12||
+      projectToRoute(nextX,nextZ,PIT).distance<PIT_HALF_WIDTH+12)continue;
    for(let rail=0;rail<2;rail++){
     const height=.64+rail*.44;
     const a0=[p.x+a.nx*base,p.y+height-.13,p.z+a.nz*base];
@@ -79,7 +81,9 @@ export function addKartSafety(THREE,scene,ROAD,halfWidth,runoffWidth){
  for(let i=0;i<n;i+=18){
   const curve=bend(i);if(Math.abs(curve)<.09)continue;
   const p=pts[i],t=tangent(i),side=-Math.sign(curve);
-  padData.push({x:p.x+t.nx*side*(guardOffset-.34),y:p.y+.52,z:p.z+t.nz*side*(guardOffset-.34),angle:Math.atan2(t.dx,t.dz)});
+  const x=p.x+t.nx*side*(guardOffset-.34),z=p.z+t.nz*side*(guardOffset-.34);
+  if(projectToRoute(x,z,PIT).distance<PIT_HALF_WIDTH+20)continue;
+  padData.push({x,y:p.y+.52,z,angle:Math.atan2(t.dx,t.dz)});
  }
  const padGeometry=new THREE.BoxGeometry(1.2,.65,.24);
  const padMaterials=[rubber,new THREE.MeshStandardMaterial({color:0xe0b34d,roughness:.71})];
