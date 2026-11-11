@@ -214,11 +214,24 @@ document.addEventListener("fullscreenchange",syncFullscreen);
 function message(t){$("kartStatus").textContent=t;}
 function standings(records){
  const list=$("kartLeaderboard");list.replaceChildren();
- if(!records?.length){const li=document.createElement("li");li.textContent="No times yet. Be the first!";list.append(li);return;}
+ const selectorList=$("kartHubLeaderboard");
+ if(selectorList)selectorList.replaceChildren();
+ if(!records?.length){
+  for(const parent of [list,selectorList].filter(Boolean)){
+   const li=document.createElement("li");li.textContent="No recorded laps yet — set the first full lap!";
+   parent.append(li);
+  }
+  return;
+ }
  for(const p of records){
   const li=document.createElement("li"),rank=document.createElement("strong"),name=document.createElement("span"),time=document.createElement("b");
   rank.textContent="#"+p.rank;name.textContent=p.name;time.textContent=format(p.bestMs);
   li.append(rank,name,time);list.append(li);
+  if(selectorList){
+   const row=document.createElement("li");
+   row.textContent="#"+p.rank+"  "+p.name+"  —  "+format(p.bestMs);
+   selectorList.append(row);
+  }
  }
 }
 async function leaderboard(){
@@ -405,7 +418,10 @@ function positionOnTrack(x,z){
  // With P active the pit corridor takes priority, including its full
  // tapered entry/exit. Previously nearest-road selection trapped the kart
  // against the pit-wall as it tried to cross onto the service lane.
- const pitSurface=pit.distance<PIT_HALF_WIDTH+1.25&&
+ // A dedicated PIT OUT merge is reached near the end of the pit spline.
+ // Rejoin the racing surface once the two asphalt strips physically overlap.
+ const atPitExit=inPitLane&&pit.progress>.91&&road.distance<ROAD_HALF_WIDTH+1.6;
+ const pitSurface=!atPitExit&&pit.distance<PIT_HALF_WIDTH+1.25&&
   (inPitLane||pit.progress>.02&&pit.progress<.98||pit.distance<road.distance+2.4);
  // The pit route is only accessible with the limiter engaged.
  if(pitSurface&&pitLimiter)return {...pit,isPit:true};
@@ -424,7 +440,11 @@ async function transmit(){
   if(!active||raceId!==current)return;
   progress=result.progress;
   $("kartProgress").textContent=progress+"%";
-  if(result.sectorUpdate){
+  if(Number.isFinite(result.lapElapsedMs)){
+   // Single cumulative lap clock; split updates never change its origin.
+   $("kartTime").textContent=format(result.lapElapsedMs);
+ }
+ if(result.sectorUpdate){
    showSector(result.sectorUpdate.index,result.sectorUpdate.timeMs);
    message("Sector "+result.sectorUpdate.index+": "+format(result.sectorUpdate.timeMs));
   }
@@ -538,7 +558,9 @@ function update(dt){
  updateRideHeightAndBank(dt);
  localPitService();
  if(performance.now()-sendAt>600&&!telemetryPending){sendAt=performance.now();transmit();}
- $("kartTime").textContent=format(performance.now()-started);
+ // Sector times are display-only and never reset this lap clock.
+ if(driveMode!=="meeting")$("kartTime").textContent=format(performance.now()-started);
+ else if(meetingPhase==="qualifying"||meetingPhase==="race")$("kartTime").textContent=format(performance.now()-started);
 }
 function frame(){
  requestAnimationFrame(frame);
