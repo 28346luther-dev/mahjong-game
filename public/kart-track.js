@@ -32,6 +32,13 @@ export function bankRise(progress,lateralOffset){
  // Outside of this right-hander lies on the negative normal side.
  return -lateralOffset*Math.tan(bankAngle(progress));
 }
+// Four protected service boxes off the fast lane, facing the pit garages.
+// The drive-through portion of the pit route remains usable in free practice.
+export const PIT_BAYS=[.31,.43,.55,.67].map((fraction,i)=>{
+ const n=Math.round(fraction*72),route=makeRoute(PIT_POINTS,72,false);
+ const p=route.samples[Math.min(n,route.samples.length-1)];
+ return {index:i,x:p.x,z:p.z+1.15,y:p.y,label:"BAY "+(i+1)};
+});
 export const TRACK_SAMPLES=480;
 function point(p){return {x:p[0],z:p[1],y:p[2]};}
 function catmull(a,b,c,d,t){
