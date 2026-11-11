@@ -45,7 +45,7 @@ export function addCircuitGrandstands(THREE,scene){
   const group=new THREE.Group();
   group.position.set(cx,Math.max(.15,sample.y-1.1),cz);
   group.rotation.y=Math.atan2(tx,tz);
-  scene.add(group);structures.push(group);
+  scene.add(group);group.updateMatrixWorld(true);structures.push(group);
   const colWidth=.86,step=1.2,rise=.55,totalWidth=st.cols*colWidth;
   // Rear roof over all rows, held up by pillars outside the spectator aisle.
   box(totalWidth+2,.24,st.rows*step+2,roofMat,group,0,st.rows*rise+3.8,(st.rows*step)/2);
