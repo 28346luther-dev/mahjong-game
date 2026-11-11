@@ -14,8 +14,8 @@ export function createFormulaVee(THREE,{color=0x9f2f4b,number=7,driver=true}={})
  const mat=(shade,roughness=.48,metalness=.2)=>new THREE.MeshStandardMaterial({
   color:shade,roughness,metalness,side:THREE.DoubleSide
  });
- const body=new THREE.MeshPhysicalMaterial({color,roughness:.29,metalness:.28,
-  clearcoat:1,clearcoatRoughness:.12});
+ const body=new THREE.MeshPhysicalMaterial({color,roughness:.25,metalness:.3,
+  clearcoat:1,clearcoatRoughness:.085,envMapIntensity:.95});
  const cream=mat(0xffe9b7,.41),black=mat(0x1b1e25,.87),carbon=mat(0x282b2f,.59),
   steel=mat(0xa6aeb4,.28,.82),skin=mat(0xd2a482,.77);
  const block=(w,h,d,m,x,y,z,parent)=>mesh(new THREE.BoxGeometry(w,h,d),m,x,y,z,parent);
@@ -27,14 +27,14 @@ export function createFormulaVee(THREE,{color=0x9f2f4b,number=7,driver=true}={})
  block(1.0,.12,3.34,carbon,0,.43,-.05);
  const tub=mesh(new THREE.BoxGeometry(.88,.44,1.55),body,0,.69,.24);
  tub.scale.set(1,1,1);
- const front=mesh(new THREE.ConeGeometry(.48,2.48,4),body,0,.64,-.94);
+ const front=mesh(new THREE.ConeGeometry(.48,2.48,24),body,0,.64,-.94);
  front.rotation.x=-Math.PI/2;
  front.rotation.y=Math.PI/4;
  front.scale.set(.96,.88,1);
  // Smooth upper hood running ahead of the open cockpit, clearly visible from first person.
- const bonnet=mesh(new THREE.SphereGeometry(1,20,12),body,0,.75,-1.05);
+ const bonnet=mesh(new THREE.SphereGeometry(1,32,20),body,0,.75,-1.05);
  bonnet.scale.set(.43,.19,1.0);
- const tip=mesh(new THREE.SphereGeometry(.24,14,10),body,0,.55,-2.02);
+ const tip=mesh(new THREE.SphereGeometry(.24,24,16),body,0,.55,-2.02);
  tip.scale.set(1,.62,1.45);
  block(.82,.035,.85,cream,0,.905,-1.06);
  block(.17,.041,.24,black,0,.932,-1.04);
@@ -61,16 +61,30 @@ export function createFormulaVee(THREE,{color=0x9f2f4b,number=7,driver=true}={})
   visor.scale.set(.28,.13,.14);hiddenInCockpit.push(visor);
  }
  // Open-wheel axles, hubs and visible slender front & rear suspension wishbones.
- const tire=new THREE.MeshStandardMaterial({color:0x19191c,roughness:1});
+ const tire=new THREE.MeshStandardMaterial({color:0x151619,roughness:.94});
+ const rubberTread=new THREE.MeshStandardMaterial({color:0x222326,roughness:1});
+ const wheelRim=new THREE.MeshStandardMaterial({color:0xb8b9bb,metalness:.9,roughness:.26});
  const sidewall=new THREE.MeshStandardMaterial({color:0x303034,roughness:.88});
  for(const x of [-.86,.86]){
   for(const z of [-1.34,1.27]){
-   const tyre=mesh(new THREE.CylinderGeometry(.36,.36,.28,22),tire,x,.38,z);
+   const tyre=mesh(new THREE.CylinderGeometry(.36,.36,.28,40),tire,x,.38,z);
    tyre.rotation.z=Math.PI/2;
-   const wheel=mesh(new THREE.CylinderGeometry(.19,.19,.295,20),steel,x,.38,z);
+   const wheel=mesh(new THREE.CylinderGeometry(.19,.19,.295,40),wheelRim,x,.38,z);
    wheel.rotation.z=Math.PI/2;
    const centre=mesh(new THREE.CylinderGeometry(.10,.10,.305,14),carbon,x,.38,z);
    centre.rotation.z=Math.PI/2;
+   // Sculpted sidewall beads and narrow circumferential tread grooves.
+   // Smooth tyres no longer look like low-sided polygon drums up close.
+   for(const offset of [-.115,.115]){
+    const bead=mesh(new THREE.TorusGeometry(.285,.032,8,40),rubberTread,
+     x+offset,.38,z);
+    bead.rotation.y=Math.PI/2;
+   }
+   for(const offset of [-.066,.066]){
+    const groove=mesh(new THREE.TorusGeometry(.358,.006,6,40),rubberTread,
+     x+offset,.38,z);
+    groove.rotation.y=Math.PI/2;
+   }
    for(const dz of [-.27,.25]){
     // diagonally arranged long thin wishbones reaching into wheel hubs
     const xa=x*.62,za=z+(z<0?.40:-.34);
@@ -92,7 +106,7 @@ export function createFormulaVee(THREE,{color=0x9f2f4b,number=7,driver=true}={})
  const muffler=mesh(new THREE.CylinderGeometry(.12,.13,.54,12),steel,-.54,.54,1.72);
  muffler.rotation.x=Math.PI/2;
  // Traditional roll hoop, stronger than decorative rear seat headrest.
- const hoop=mesh(new THREE.TorusGeometry(.41,.046,8,22,Math.PI),steel,0,1.29,1.01);
+ const hoop=mesh(new THREE.TorusGeometry(.41,.046,12,36,Math.PI),steel,0,1.29,1.01);
  hoop.rotation.z=0;
  tube(.042,.46,steel,-.41,1.23,1.02);
  tube(.042,.46,steel,.41,1.23,1.02);
