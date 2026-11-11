@@ -100,7 +100,7 @@ test("kart UI removes checkpoint arches, uses progress, and shows pit-lane geome
  const client=readFileSync("public/kart-racing.js","utf8");
  const html=readFileSync("public/index.html","utf8");
  const house=readFileSync("public/clubhouse.js","utf8");
- assert.match(client,/ribbon\(PIT/);
+ assert.match(client,/ribbon\(visualPit/);
  assert.match(client,/addCircuitGraphics/);
  assert.match(readFileSync("public/kart-graphics.js","utf8"),/const kerbMeshes/);
  assert.match(client,/projectToRoute/);
