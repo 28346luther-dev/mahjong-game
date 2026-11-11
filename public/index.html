@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css"><link rel="stylesheet" href="/reaction-camera.css"><link rel="stylesheet" href="/mahjong-screen-fit.css"><link rel="stylesheet" href="/reaction-clip.css"><link rel="stylesheet" href="/mahjong-spectator.css"><link rel="stylesheet" href="/salon-games.css"><link rel="stylesheet" href="/kart-racing.css">
+<title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css"><link rel="stylesheet" href="/reaction-camera.css"><link rel="stylesheet" href="/mahjong-screen-fit.css"><link rel="stylesheet" href="/reaction-clip.css"><link rel="stylesheet" href="/mahjong-spectator.css"><link rel="stylesheet" href="/salon-games.css"><link rel="stylesheet" href="/kart-racing.css"><link rel="stylesheet" href="/kart-meetings.css">
 </head>
 <body>
 <div class="app">
@@ -102,6 +102,28 @@
             <button id="kartClose" type="button" aria-label="Return to clubhouse">✕ Back to clubhouse</button>
           </div>
         </header>
+        <section class="kart-meetings" aria-label="Multiplayer race timetable and registrations">
+          <div class="kart-meeting-head">
+            <div><h3>🏁 Championship race meetings</h3>
+              <p>Every 10 minutes · 2-minute qualifying · grid from qualifying · 10-lap race · mandatory 10-second pit service</p></div>
+            <span class="kart-live" id="kartMeetingClock">Updating race timetable…</span>
+          </div>
+          <div class="kart-event-list" id="kartEventList" aria-live="polite">Loading race meetings…</div>
+          <div class="kart-meeting-main">
+            <div class="kart-meeting-status">
+              <strong id="kartMeetingTitle">Choose a scheduled race</strong>
+              <p id="kartMeetingStatus">Register for the next race or run solo laps in Free Practice below.</p>
+              <div class="kart-meeting-count" id="kartMeetingCountdown">--:--</div>
+              <div class="kart-events-actions">
+                <button id="kartMeetingRegister" type="button">Register for selected race</button>
+                <button id="kartPractice" type="button">Free Practice</button>
+                <button id="kartPitService" type="button" disabled>Stop in pit bay · 10 sec</button>
+              </div>
+              <p class="kart-grid-notice" id="kartGridMessage">Grid order follows each driver's best qualifying lap; spectators can follow the live results.</p>
+            </div>
+            <div class="kart-roster"><h4>Race grid & live classification</h4><ol id="kartMeetingRoster" aria-live="polite"></ol></div>
+          </div>
+        </section>
         <div class="kart-layout">
           <div class="kart-drive">
             <div class="kart-stage">
@@ -110,9 +132,14 @@
                 <div><small>LAP</small><strong id="kartLap">1</strong></div><div><small>CURRENT LAP</small><strong id="kartTime">00:00.000</strong></div>
                 <div><small>LAP PROGRESS</small><strong id="kartProgress">0%</strong></div>
                 <div><small>SPEED</small><strong id="kartSpeed">0 km/h</strong></div>
+                <div><small>SESSION</small><strong id="kartRacePhase">PRACTICE</strong></div>
                 <div><small>CAMERA</small><strong id="kartCameraLabel">CHASE / THIRD PERSON</strong></div>
                 <div><small>PIT LANE</small><strong id="kartPitStatus">PIT LIMITER OFF</strong></div>
                 <div><small>CURRENT SECTOR</small><strong id="kartSectorLive">SECTOR 1</strong></div>
+              </div>
+              <div class="kart-service-overlay hidden" id="kartServiceOverlay" aria-live="assertive">
+                <div class="kart-service-card"><span>PIT SERVICE · DO NOT MOVE</span>
+                  <strong id="kartServiceCountdown">10.0</strong><p>Mandatory stop being completed</p></div>
               </div>
             </div>
             <div class="kart-sector-splits" aria-label="Official race sector times">
@@ -138,7 +165,7 @@
             <p>Global live ranking · updates every 15 seconds · fastest lap per player.</p>
             <ol id="kartLeaderboard" aria-live="polite"></ol>
             <div class="kart-rules"><strong>HOW TO RACE</strong>
-              <p>Race unlimited laps. Apex kerbs are red and white, with bright green paint and gravel runoff on the outside. Cross the chequered finish line to log each lap and immediately continue into the next. Engage the 40 km/h limiter with P before PIT IN. Keep it on until you rejoin the circuit at PIT OUT; your timed lap restarts after pitting. The long right-hand corner is banked for speed, and your S1/S2/S3 splits appear in the sector display. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
+              <p>Join a scheduled multiplayer race for 2-minute qualifying and a 10-lap sprint with a mandatory 10-second pit stop. Free Practice still offers unlimited laps. Apex kerbs are red and white, with bright green paint and gravel runoff on the outside. Cross the chequered finish line to log each lap and immediately continue into the next. Engage the 40 km/h limiter with P before PIT IN. Keep it on until you rejoin the circuit at PIT OUT; your timed lap restarts after pitting. The long right-hand corner is banked for speed, and your S1/S2/S3 splits appear in the sector display. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
             </div>
           </aside>
         </div>
