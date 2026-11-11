@@ -1,4 +1,4 @@
-import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,bankAngle,projectToRoute,raceStart} from "./kart-track.js";
+import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,bankAngle,cornerKerbGripWidth,projectToRoute,raceStart} from "./kart-track.js";
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
@@ -163,10 +163,13 @@ async function api(path,body){
  const result=await r.json();if(!r.ok)throw Error(result.error||"Race service unavailable");
  return result;
 }
-function gripForDistance(distance,isPit=false){
+function gripForDistance(distance,isPit=false,progress=0){
  // Painted racing kerbs and adjoining green paint have full road grip.
  // Sand and grass alone drag the kart down.
- if(isPit||distance<=ROAD_HALF_WIDTH+1.23)return {drag:0,surface:"kerb"};
+ // Apex kerbs extend 1.48 m beyond the edge; selected exits extend 2.46 m.
+ // Keep the full painted exit strip driveable, not just the original narrow kerb.
+ const kerbWidth=cornerKerbGripWidth(progress);
+ if(isPit||distance<=ROAD_HALF_WIDTH+kerbWidth)return {drag:0,surface:"kerb"};
  if(distance<=ROAD_HALF_WIDTH+3.9)return {drag:2.1,surface:"gravel"};
  if(distance<=ROAD_HALF_WIDTH+RUNOFF_WIDTH)return {drag:3.3,surface:"grass"};
  return {drag:7.5,surface:"barrier"};
@@ -260,6 +263,12 @@ function embankment(route,side,width=8){
  }
  for(let i=0;i<(route.closed?samples.length:samples.length-1);i++){
   const a=i*2,b=((i+1)%samples.length)*2;
+  // Suppress the main-track grass embankment where the paved pit road
+  // branches off or merges back. Otherwise a green lip crosses the exit.
+  const p=samples[i],q=samples[(i+1)%samples.length],d=tangent(route,i);
+  const edge=(ROAD_HALF_WIDTH+RUNOFF_WIDTH+.35+width/2)*side;
+  const testX=(p.x+q.x)/2+d.nx*edge,testZ=(p.z+q.z)/2+d.nz*edge;
+  if(projectToRoute(testX,testZ,PIT).distance<PIT_HALF_WIDTH+8)continue;
   indices.push(a,a+1,b,a+1,b+1,b);
  }
  const geometry=new THREE.BufferGeometry();
@@ -285,7 +294,7 @@ function track(){
  ribbon(ROAD,-ROAD_HALF_WIDTH-.55,ROAD_HALF_WIDTH+.55,0x9b7e65,-.025);
  ribbon(ROAD,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0x373b43,.015);
  ribbon(PIT,-PIT_HALF_WIDTH-.34,PIT_HALF_WIDTH+.34,0x927765,-.02);
- ribbon(PIT,-PIT_HALF_WIDTH,PIT_HALF_WIDTH,0x4b4e51,.035);
+ ribbon(PIT,-PIT_HALF_WIDTH,PIT_HALF_WIDTH,0x353c44,.065);
  // The graphics pass generates smooth apex kerbs and a wide green runoff
  // using batched geometry. The old alternating cubes along every straight,
  // and the longitudinal start line, are intentionally removed.
@@ -474,7 +483,7 @@ function update(dt){
  const x=collision?.x??proposedX,z=collision?.z??proposedZ;
  if(collision?.hit){speed*=.22;message("CONTACT · Avoid the other Formula Vee cars.");}
  const projected=positionOnTrack(x,z);
- const grip=gripForDistance(projected.distance,projected.isPit);
+ const grip=gripForDistance(projected.distance,projected.isPit,projected.progress);
  // PIT route is a real driveable road ONLY with P limiter enabled.
  // Do not penalise tarmac, kerbs or green painted runoff.
  if(grip.drag>0)speed*=Math.exp(-grip.drag*dt);
