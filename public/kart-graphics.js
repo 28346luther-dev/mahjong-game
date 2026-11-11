@@ -1,7 +1,7 @@
 /* VELVET CIRCUIT — high-detail, procedural Three.js art pass.
    Curved paint & apex kerbs are geometry following the road surface, not
    stacked cubes. Low-cost instancing retains frame rate on laptop GPUs. */
-import {bankRise} from "./kart-track.js";
+import {bankRise,PIT,PIT_HALF_WIDTH,projectToRoute} from "./kart-track.js";
 export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  const ps=ROAD.samples,N=ps.length,PI2=Math.PI*2;
  const standard=(color,rough=.85,metal=0)=>new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal,side:THREE.DoubleSide});
@@ -172,7 +172,11 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   const x=(rand()-.5)*410,z=(rand()-.5)*305;
   let near=Infinity;
   for(let j=0;j<N;j+=3){const p=ps[j];near=Math.min(near,Math.hypot(x-p.x,z-p.z));}
-  if(near<halfWidth+runoffWidth+6)continue;
+  // Keep the entire pit road, all garage fronts and their apron clear of trees.
+  // Their trunks must never appear inside a service bay or behind the pit wall.
+  if(near<halfWidth+runoffWidth+6||
+     projectToRoute(x,z,PIT).distance<PIT_HALF_WIDTH+17||
+     (x>-89&&x<45&&z>-28&&z<16))continue;
   woods.push({x,z,h:2+rand()*2.3,s:0.7+rand()*.65,col:Math.floor(rand()*treeColors.length)});
  }
  const trunks=new THREE.InstancedMesh(trunkGeo,trunkMat,woods.length);
