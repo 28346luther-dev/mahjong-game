@@ -174,7 +174,7 @@ export function disconnectBlackjack(game,id,wallets){
 export function reconcileBlackjack(game,connectedIds,wallets){
  let changed=false;
  for(const p of [...game.players]){
-  if(p.online&&!connectedIds.has(p.id)){
+  if(!connectedIds.has(p.id)&&(p.online||p.status==="ready"||p.status==="playing")){
    changed=disconnectBlackjack(game,p.id,wallets)||changed;
   }
  }
