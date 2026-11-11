@@ -1,6 +1,7 @@
 /* Trackside pit architecture inspired by modern circuits: not an exact copy of
  * any real venue. Long glazed hospitality level, garage roll-up doors, bays,
  * raised pit-wall fencing, lane markings and safe outboard signs. */
+import {PIT_HALF_WIDTH} from "./kart-track.js";
 export function addPitComplex(THREE,scene,PIT,bays){
  const mat=(color,roughness=.65,metalness=0,transparent=false,opacity=1)=>
   new THREE.MeshStandardMaterial({color,roughness,metalness,transparent,opacity,side:THREE.DoubleSide});
@@ -88,17 +89,23 @@ export function addPitComplex(THREE,scene,PIT,bays){
  }
  roadsideSign(PIT.samples[4],"PIT ENTRY 40",1);
  roadsideSign(PIT.samples[PIT.samples.length-7],"PIT EXIT",1);
- // Pit separating wall and protective catch fence between main racing straight
- // and pit lane, with a clean opening at each end.
+ // Pit wall sits OUTSIDE the driving envelope, not across its centreline.
+ // Sections begin well past the pit entry and end before the pit exit.
+ // Geometry follows the tangent AND uses the raceward normal of the pit lane.
  const fence=mat(0x89949b,.36,.73,true,.55);
- for(let i=10;i<PIT.samples.length-10;i+=4){
-  const p=PIT.samples[i],next=PIT.samples[Math.min(i+1,PIT.samples.length-1)];
-  const yaw=Math.atan2(next.x-p.x,next.z-p.z);
-  const base=block(.19,.72,2.65,white,p.x,p.y+.36,p.z-3.7);
-  base.rotation.y=yaw;
-  const post=block(.10,2.1,.1,steel,p.x,p.y+1.55,p.z-3.7);
-  const mesh=block(.06,1.3,2.6,fence,p.x,p.y+1.52,p.z-3.7);
-  mesh.rotation.y=yaw;
+ for(let i=15;i<PIT.samples.length-15;i+=4){
+  const p=PIT.samples[i],next=PIT.samples[Math.min(i+3,PIT.samples.length-1)];
+  const dx=next.x-p.x,dz=next.z-p.z,dist=Math.hypot(dx,dz)||1;
+  const tx=dx/dist,tz=dz/dist,nx=-tz,nz=tx;
+  const barrierOffset=PIT_HALF_WIDTH+3.35;
+  // On this circuit the race track lies toward the -normal side of pit road.
+  const bx=p.x-nx*barrierOffset,bz=p.z-nz*barrierOffset;
+  const angle=Math.atan2(tx,tz);
+  const base=block(.18,.72,Math.min(4.6,dist),white,bx,p.y+.36,bz);
+  base.rotation.y=angle;
+  block(.10,2.2,.10,steel,bx,p.y+1.56,bz);
+  const mesh=block(.06,1.35,Math.min(4.6,dist),fence,bx,p.y+1.55,bz);
+  mesh.rotation.y=angle;
  }
  return {pitBuilding:true,bays:bays.length};
 }
