@@ -48,7 +48,7 @@ export function bankRise(progress,lateralOffset){
 // The drive-through portion of the pit route remains usable in free practice.
 // Bays are set back into the service apron, toward the garages (+normal)
 // while the fast lane stays open on the race-track side (-normal).
-export const PIT_BAYS=[.38,.46,.54,.62].map((fraction,i)=>{
+export const PIT_BAYS=[.31,.38,.45,.52].map((fraction,i)=>{
  const route=makeRoute(PIT_POINTS,96,false);
  const n=Math.min(route.samples.length-2,Math.round(fraction*96));
  const p=route.samples[n],q=route.samples[n+1],prev=route.samples[Math.max(0,n-1)];
