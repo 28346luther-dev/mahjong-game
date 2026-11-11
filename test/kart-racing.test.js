@@ -101,7 +101,7 @@ test("kart UI removes checkpoint arches, uses progress, and shows pit-lane geome
  const house=readFileSync("public/clubhouse.js","utf8");
  assert.match(client,/ribbon\(PIT/);
  assert.match(client,/addCircuitGraphics/);
- assert.match(readFileSync("public/kart-graphics.js","utf8"),/const kerbVerts/);
+ assert.match(readFileSync("public/kart-graphics.js","utf8"),/const kerbMeshes/);
  assert.match(client,/projectToRoute/);
  assert.doesNotMatch(client,/glowing turquoise checkpoint|GATE_COUNT|turquoise\.*/);
  assert.ok(html.includes('id="kartProgress"'));
@@ -114,8 +114,8 @@ test("high-quality circuit renders curved corner kerbs, asphalt and painted runo
  const client=readFileSync("public/kart-racing.js","utf8");
  const html=readFileSync("public/index.html","utf8");
  const clubhouse=readFileSync("public/kart-global-board.js","utf8");
- assert.match(graphics,/Math\.abs\(b\)<\.14/);
- assert.match(graphics,/kerbVerts/);
+ assert.match(graphics,/cornerMask\[i\]/);
+ assert.match(graphics,/kerbMeshes/);
  assert.match(graphics,/greenMat/);
  assert.match(graphics,/asphalt=texturedCanvas/);
  assert.match(graphics,/InstancedMesh/);
@@ -147,7 +147,7 @@ test("cockpit view, realistic metal guardrails and fullscreen race controls are 
 });
 test("racing kerbs do not slow down, while gravel and grass do",()=>{
  const client=readFileSync("public/kart-racing.js","utf8");
- assert.match(client,/distance<=ROAD_HALF_WIDTH\+1\.23\)return \{drag:0,surface:"kerb"\}/);
+ assert.match(client,/distance<=ROAD_HALF_WIDTH\+kerbWidth\)return \{drag:0,surface:"kerb"\}/);
  assert.match(client,/surface:"gravel"/);
  assert.match(client,/surface:"grass"/);
  assert.match(client,/if\(grip\.drag>0\)speed\*=Math\.exp\(-grip\.drag\*dt\)/);
