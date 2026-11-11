@@ -1,7 +1,7 @@
 /* VELVET CIRCUIT — high-detail, procedural Three.js art pass.
    Curved paint & apex kerbs are geometry following the road surface, not
    stacked cubes. Low-cost instancing retains frame rate on laptop GPUs. */
-import {bankRise} from "./kart-track.js";
+import {bankRise,PIT,PIT_HALF_WIDTH,projectToRoute} from "./kart-track.js";
 export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  const ps=ROAD.samples,N=ps.length,PI2=Math.PI*2;
  const standard=(color,rough=.85,metal=0)=>new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal,side:THREE.DoubleSide});
@@ -122,6 +122,28 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   geometry.computeVertexNormals();
   makeMesh(geometry,col?white:red);
  }
+ // Wide, fully driveable corner-exit kerbs: long alternating red/white
+ // stripes following the OUTSIDE edge as steering unwinds. Asphalt, kerbs
+ // and green paint are one full-grip surface; gravel begins farther out.
+ const exitVertices=[[],[]];
+ for(let i=0;i<N;i++){
+  const bendNow=bend(i),prior=bend((i-10+N)%N);
+  const exit=Math.abs(prior)>.13&&Math.abs(bendNow)>.065&&Math.abs(bendNow)<Math.abs(prior)*1.1;
+  if(!exit)continue;
+  const j=(i+1)%N,side=prior>0?-1:1;
+  const p=ps[i],q=ps[j],d=tangent(i),e=tangent(j);
+  const inside=side*(halfWidth-.18),outside=side*(halfWidth+2.3);
+  const vertices=exitVertices[Math.floor(i/5)%2];
+  for(const [point,t,off] of [[p,d,inside],[p,d,outside],[q,e,inside],
+   [q,e,inside],[p,d,outside],[q,e,outside]])
+   stripVertex(vertices,point,t,off,.11);
+ }
+ for(let i=0;i<2;i++){
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.Float32BufferAttribute(exitVertices[i],3));
+  geometry.computeVertexNormals();
+  makeMesh(geometry,i?white:red);
+ }
  // Painted white edge lines with actual curved mesh, not short floating rods.
  const line=standard(0xf9eee1,.65);
  addBand(-halfWidth+.12,-halfWidth+.19,line,.057);
@@ -172,7 +194,11 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   const x=(rand()-.5)*410,z=(rand()-.5)*305;
   let near=Infinity;
   for(let j=0;j<N;j+=3){const p=ps[j];near=Math.min(near,Math.hypot(x-p.x,z-p.z));}
-  if(near<halfWidth+runoffWidth+6)continue;
+  // Keep the entire pit road, all garage fronts and their apron clear of trees.
+  // Their trunks must never appear inside a service bay or behind the pit wall.
+  if(near<halfWidth+runoffWidth+6||
+     projectToRoute(x,z,PIT).distance<PIT_HALF_WIDTH+17||
+     (x>-89&&x<45&&z>-28&&z<16))continue;
   woods.push({x,z,h:2+rand()*2.3,s:0.7+rand()*.65,col:Math.floor(rand()*treeColors.length)});
  }
  const trunks=new THREE.InstancedMesh(trunkGeo,trunkMat,woods.length);

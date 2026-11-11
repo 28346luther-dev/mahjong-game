@@ -5,7 +5,8 @@
 export const ROAD_HALF_WIDTH=4.2;
 export const RUNOFF_WIDTH=7.5;
 export const TRACK_SCALE=1.65;
-export const PIT_HALF_WIDTH=2.45;
+export const PIT_HALF_WIDTH=3.15;
+export const PIT_BAY_TOLERANCE=3.65;
 export const ROAD_POINTS=[
  [-47,-22,0.8],[-30,-22,0.8],[-10,-22,0.9],[5,-22,0.9],
  [16,-24,1.05],[27,-32,1.25],[37,-22,1.65],[53,-18,2.15],
@@ -37,7 +38,7 @@ export function bankRise(progress,lateralOffset){
 export const PIT_BAYS=[.31,.43,.55,.67].map((fraction,i)=>{
  const n=Math.round(fraction*72),route=makeRoute(PIT_POINTS,72,false);
  const p=route.samples[Math.min(n,route.samples.length-1)];
- return {index:i,x:p.x,z:p.z+1.15,y:p.y,label:"BAY "+(i+1)};
+ return {index:i,x:p.x,z:p.z+1.15,y:p.y,label:"BAY "+(i+1),radius:PIT_BAY_TOLERANCE};
 });
 export const TRACK_SAMPLES=480;
 function point(p){return {x:p[0],z:p[1],y:p[2]};}

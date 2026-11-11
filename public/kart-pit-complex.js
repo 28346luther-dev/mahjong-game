@@ -1,6 +1,7 @@
 /* Trackside pit architecture inspired by modern circuits: not an exact copy of
  * any real venue. Long glazed hospitality level, garage roll-up doors, bays,
  * raised pit-wall fencing, lane markings and safe outboard signs. */
+import {PIT_HALF_WIDTH} from "./kart-track.js";
 export function addPitComplex(THREE,scene,PIT,bays){
  const mat=(color,roughness=.65,metalness=0,transparent=false,opacity=1)=>
   new THREE.MeshStandardMaterial({color,roughness,metalness,transparent,opacity,side:THREE.DoubleSide});
@@ -68,6 +69,35 @@ export function addPitComplex(THREE,scene,PIT,bays){
   block(.85,.05,1.45,red,x,y+.101,z-1.15);
   const tire= item(new THREE.TorusGeometry(.28,.11,8,16),mat(0x23282c,.95),x+1.7,y+.25,z+1.06);
   tire.rotation.x=Math.PI/2;
+  // Painted pit-box graphics sit on the tarmac rather than floating overhead.
+  // A translucent stop target shows a clear car-sized placement zone.
+  const marking=document.createElement("canvas");
+  marking.width=512;marking.height=512;
+  const ctx=marking.getContext("2d");
+  ctx.clearRect(0,0,512,512);
+  ctx.strokeStyle="#f9d15b";ctx.lineWidth=16;ctx.strokeRect(35,35,442,442);
+  ctx.fillStyle="#f5d15c";ctx.fillRect(40,352,432,18);
+  ctx.strokeStyle="#f6f2df";ctx.lineWidth=11;
+  ctx.beginPath();ctx.moveTo(256,75);ctx.lineTo(256,330);ctx.stroke();
+  ctx.fillStyle="#e53f4c";ctx.beginPath();ctx.moveTo(256,150);ctx.lineTo(206,220);
+  ctx.lineTo(306,220);ctx.closePath();ctx.fill();
+  ctx.fillStyle="#fff5cd";ctx.font="bold 62px Arial";ctx.textAlign="center";
+  ctx.fillText("PIT "+(index+1),256,443);
+  const texture=new THREE.CanvasTexture(marking);texture.colorSpace=THREE.SRGBColorSpace;
+  const zone=new THREE.Mesh(new THREE.PlaneGeometry(5.4,5.0),
+    new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:THREE.DoubleSide}));
+  zone.rotation.x=-Math.PI/2;zone.position.set(x,y+.145,z);scene.add(zone);
+  // Racing pit boom: an outboard steel mast and an overhead swing arm with
+  // a suspended pit-stop lamp, all outside the kart's collision envelope.
+  const boomX=x+3.65,boomZ=z+2.05;
+  block(.16,4.9,.16,steel,boomX,y+2.45,boomZ);
+  const arm=block(3.65,.16,.18,steel,boomX-1.8,y+4.65,boomZ);
+  block(.19,1.55,.19,steel,x+.22,y+4.0,boomZ);
+  block(.85,.36,.75,mat(0xe5b346,.47,.15),x+.22,y+3.18,boomZ);
+  for(const side of [-.2,.2])
+   block(.14,.13,.10,side<0?mat(0xe74751):mat(0x5dda8c),x+.22+side,y+3.10,boomZ-.4);
+  // Garage apron kept open: low tool trolley stands outside the marked bay.
+  block(.9,.45,.65,red,x+4.55,y+.31,z+2.5);
   // Bay number on an outboard upright, nowhere near driving centerline.
   const pole=block(.1,2.8,.1,steel,signX+2.75,y+1.45,signZ);
   const label=block(1.7,.8,.13,red,signX+2.75,y+2.65,signZ);
@@ -88,17 +118,23 @@ export function addPitComplex(THREE,scene,PIT,bays){
  }
  roadsideSign(PIT.samples[4],"PIT ENTRY 40",1);
  roadsideSign(PIT.samples[PIT.samples.length-7],"PIT EXIT",1);
- // Pit separating wall and protective catch fence between main racing straight
- // and pit lane, with a clean opening at each end.
+ // Pit wall sits OUTSIDE the driving envelope, not across its centreline.
+ // Sections begin well past the pit entry and end before the pit exit.
+ // Geometry follows the tangent AND uses the raceward normal of the pit lane.
  const fence=mat(0x89949b,.36,.73,true,.55);
- for(let i=10;i<PIT.samples.length-10;i+=4){
-  const p=PIT.samples[i],next=PIT.samples[Math.min(i+1,PIT.samples.length-1)];
-  const yaw=Math.atan2(next.x-p.x,next.z-p.z);
-  const base=block(.19,.72,2.65,white,p.x,p.y+.36,p.z-3.7);
-  base.rotation.y=yaw;
-  const post=block(.10,2.1,.1,steel,p.x,p.y+1.55,p.z-3.7);
-  const mesh=block(.06,1.3,2.6,fence,p.x,p.y+1.52,p.z-3.7);
-  mesh.rotation.y=yaw;
+ for(let i=15;i<PIT.samples.length-15;i+=4){
+  const p=PIT.samples[i],next=PIT.samples[Math.min(i+3,PIT.samples.length-1)];
+  const dx=next.x-p.x,dz=next.z-p.z,dist=Math.hypot(dx,dz)||1;
+  const tx=dx/dist,tz=dz/dist,nx=-tz,nz=tx;
+  const barrierOffset=PIT_HALF_WIDTH+3.35;
+  // On this circuit the race track lies toward the -normal side of pit road.
+  const bx=p.x-nx*barrierOffset,bz=p.z-nz*barrierOffset;
+  const angle=Math.atan2(tx,tz);
+  const base=block(.18,.72,Math.min(4.6,dist),white,bx,p.y+.36,bz);
+  base.rotation.y=angle;
+  block(.10,2.2,.10,steel,bx,p.y+1.56,bz);
+  const mesh=block(.06,1.35,Math.min(4.6,dist),fence,bx,p.y+1.55,bz);
+  mesh.rotation.y=angle;
  }
  return {pitBuilding:true,bays:bays.length};
 }

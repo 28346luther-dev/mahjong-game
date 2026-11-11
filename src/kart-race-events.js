@@ -4,7 +4,7 @@
  * one another. All registered positions, lap times, pit service and results are
  * held in the existing KartLeaderboard Durable Object.
  */
-import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,PIT_BAYS,projectToRoute,sampleAt} from "../public/kart-track.js";
+import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,PIT_BAYS,PIT_BAY_TOLERANCE,projectToRoute,sampleAt} from "../public/kart-track.js";
 export const EVENT_INTERVAL_MS=600_000;
 export const QUALIFY_MS=120_000;
 export const RACE_LAPS=10;
@@ -113,7 +113,7 @@ function makeDriver(user,name,now){
 }
 function pitAtBay(x,z,index){
  const box=PIT_BAYS[index];
- return box&&Math.hypot(x-box.x,z-box.z)<=2.25;
+ return box&&Math.hypot(x-box.x,z-box.z)<=PIT_BAY_TOLERANCE;
 }
 function pitPose(x,z){
  return PIT_BAYS.some((bay,i)=>pitAtBay(x,z,i));
@@ -183,6 +183,8 @@ export async function handleRaceEvent(request,storage){
   return Response.json({error:"Session not currently driving."},{status:409});
  if(player.finishedAt)return Response.json({ok:true,...eventSnapshot(meeting,now,user)});
  if(player.pitUntil){
+  // Pit service is a controlled stationary hold; don't accept the driver
+  // teleporting away while the ten-second maintenance countdown runs.
   if(now<player.pitUntil)
    return Response.json({ok:true,pitServiceRemainingMs:player.pitUntil-now,...eventSnapshot(meeting,now,user)});
   player.pitComplete=true;player.pitUntil=0;player.pitBay=null;
@@ -191,7 +193,17 @@ export async function handleRaceEvent(request,storage){
  const speed=Number(body.speed||0);
  if(pit&&(!Number.isFinite(speed)||Math.abs(speed)>11.4))
   return Response.json({error:"Engage the 40 km/h pit limiter."},{status:422});
- const movement=sampleMovement(player,x,z,now,pit);
+ // Server-side overlap validation protects competitive races from clients
+ // which omit local car-to-car contact handling.
+ if(phase==="race"&&!pit){
+  for(const rival of meeting.players){
+   if(rival.id===user||rival.finishedAt||!rival.startedDriving||now-rival.lastAt>3500)continue;
+   if(Math.hypot(x-rival.x,z-rival.z)<2.8)
+    return Response.json({error:"Contact with another car: leave a safe gap.",collision:true,
+     ...eventSnapshot(meeting,now,user)},{status:409});
+  }
+ }
+  const movement=sampleMovement(player,x,z,now,pit);
  if(movement.error)return Response.json({error:movement.error},{status:422});
  if(pit){
   player.pitMode=true;player.progress=projectToRoute(x,z,ROAD).progress;

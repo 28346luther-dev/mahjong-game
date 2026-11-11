@@ -17,7 +17,12 @@ async function call(path,body=null){
 const status=s=>{if($("kartMeetingStatus"))$("kartMeetingStatus").textContent=s;};
 const countdown=ms=>Math.max(0,Math.ceil(ms/1000));
 function timeRemaining(){
- if(!snapshot)return;
+ const localRemaining=window.KartRacing?.getLocalPitRemaining?.()||0;
+ if(!snapshot){
+  $("kartServiceOverlay").classList.toggle("hidden",localRemaining<=0);
+  if(localRemaining>0)$("kartServiceCountdown").textContent=(localRemaining/1000).toFixed(1);
+  return;
+ }
  const now=Date.now()+serverOffset;
  const clock=$("kartMeetingClock");if(clock)clock.textContent=new Date(now).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
  const el=$("kartMeetingCountdown");
@@ -26,17 +31,20 @@ function timeRemaining(){
  else if(snapshot.phase==="race")el.textContent="10-LAP RACE IN PROGRESS";
  else el.textContent="SESSION COMPLETE";
  const you=snapshot.racers?.find(p=>p.id===snapshot.you);
- const seconds=Math.max(0,(you?.pitUntil||serviceUntil)-now)/1000;
+ const serverRemaining=Math.max(0,(you?.pitUntil||serviceUntil)-now);
+ const seconds=Math.max(localRemaining,serverRemaining)/1000;
  const servicing=seconds>0;
  $("kartServiceOverlay").classList.toggle("hidden",!servicing);
  if(servicing)$("kartServiceCountdown").textContent=seconds.toFixed(1);
  const pose=window.KartRacing?.getPose?.();
  const bays=window.KartRacing?.pitBays?.()||[];
- const nearby=bays.find(b=>pose&&Math.hypot(pose.x-b.x,pose.z-b.z)<2.25);
+ const nearby=bays.find(b=>pose&&Math.hypot(pose.x-b.x,pose.z-b.z)<(b.radius||3.65));
  const ready=snapshot.phase==="race"&&you&&!you.pitComplete&&!you.finishedAt
   &&you.pitMode&&nearby&&Math.abs(pose?.speed||0)<.65&&!servicing;
+ if(ready&&!serviceRequested){serviceRequested=true;service();}
+ if(you?.pitComplete||!you?.pitMode)serviceRequested=false;
  const btn=$("kartPitService");
- btn.disabled=!ready;
+ btn.disabled=!ready||serviceRequested;
  btn.textContent=servicing?"🛠 SERVICING…":you?.pitComplete?"✓ PIT STOP COMPLETE":
    nearby&&you?.pitMode?"STOP HERE · 10-SECOND SERVICE":"Stop in pit bay · 10 sec";
 }
@@ -149,14 +157,14 @@ async function register(){
 }
 async function service(){
  const pose=window.KartRacing?.getPose?.(),bays=window.KartRacing?.pitBays?.()||[];
- const bay=bays.find(b=>pose&&Math.hypot(b.x-pose.x,b.z-pose.z)<2.25);
+ const bay=bays.find(b=>pose&&Math.hypot(b.x-pose.x,b.z-pose.z)<(b.radius||3.65));
  if(!bay||!pose)return;
  try{
   const data=await call("event/pit",{eventId:selected,x:pose.x,z:pose.z,speed:pose.speed,bay:bay.index});
   serviceUntil=data.serviceUntil;serviceRequested=true;
   status("PIT STOP: hold position for 10 seconds. Do not accelerate.");
   timeRemaining();
- }catch(error){status(error.message);}
+ }catch(error){serviceRequested=false;status(error.message);}
 }
 async function sendTelemetry(pose){
  if(!open||!selected||!snapshot?.you||!["qualifying","race"].includes(snapshot.phase)||sending)return;
