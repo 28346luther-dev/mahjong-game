@@ -87,6 +87,24 @@ export function makeRoute(points=ROAD_POINTS,count=TRACK_SAMPLES,closed=true){
 }
 export const ROAD=makeRoute();
 export const PIT=makeRoute(PIT_POINTS,160,false);
+export function cornerKerbGripWidth(progress){
+ // Same local curvature criteria used by the visual apex and exit kerbs.
+ const samples=ROAD.samples,n=samples.length;
+ const i=Math.max(0,Math.min(n-1,Math.floor(Math.max(0,Math.min(.999999,progress))*n)));
+ const tangent=j=>{
+  const a=samples[(j-1+n)%n],b=samples[(j+1)%n],dx=b.x-a.x,dz=b.z-a.z;
+  const d=Math.hypot(dx,dz)||1;return {x:dx/d,z:dz/d};
+ };
+ const bend=j=>{
+  const a=tangent((j-7+n)%n),b=tangent((j+7)%n);
+  return a.x*b.z-a.z*b.x;
+ };
+ const prior=Math.abs(bend((i-11+n)%n)),now=Math.abs(bend(i));
+ if(prior>.13&&now>.035&&now<prior*1.22)return 3.56;
+ const next=Math.abs(bend((i+11)%n));
+ return Math.max(prior,now,next)>.125?1.5:1.23;
+}
+
 export function projectToRoute(x,z,route=ROAD){
  let best={distance:Infinity,index:0,t:0,progress:0,y:0,x:0,z:0,normalX:0,normalZ:0};
  const ps=route.samples,n=ps.length,segments=route.closed?n:n-1;
