@@ -1,3 +1,4 @@
+import {PIT,PIT_HALF_WIDTH,projectToRoute} from "./kart-track.js";
 /* Circuit safety infrastructure: double-height steel Armco barriers, steel
  * posts, reflective bolt caps and crash pads. Geometry follows real road bends;
  * barrier placement stays beyond kerbs, gravel and green runoff. */
@@ -31,6 +32,12 @@ export function addKartSafety(THREE,scene,ROAD,halfWidth,runoffWidth){
   for(const side of [-1,1]){
    if(!protectedSide(i,side)||!protectedSide(j,side))continue;
    const base=side*guardOffset;
+   // Safety opening: do not build an Armco wall across the branch
+   // between the main straight and the pit-lane entrance/exit.
+   const guardX=p.x+a.nx*base,guardZ=p.z+a.nz*base;
+   const nextX=q.x+b.nx*base,nextZ=q.z+b.nz*base;
+   if(projectToRoute(guardX,guardZ,PIT).distance<PIT_HALF_WIDTH+4.2||
+      projectToRoute(nextX,nextZ,PIT).distance<PIT_HALF_WIDTH+4.2)continue;
    for(let rail=0;rail<2;rail++){
     const height=.64+rail*.44;
     const a0=[p.x+a.nx*base,p.y+height-.13,p.z+a.nz*base];
