@@ -30,6 +30,7 @@ export function scheduledEvents(now=Date.now()){
 function driverView(p){return {
  id:p.id,name:p.name,qualifiedMs:p.qualifiedMs,grid:p.grid||null,
  lap:p.lap||0,finishedMs:p.finishedMs||null,finishedAt:p.finishedAt||null,
+ sectorTimes:p.sectorTimes||[],sectorColors:p.sectorColors||[],
  pitComplete:!!p.pitComplete,pitUntil:p.pitUntil||0,pitBay:p.pitBay??null,
  pitMode:!!p.pitMode,disqualified:!!p.disqualified,
  x:p.x,z:p.z,yaw:p.yaw||0,lastAt:p.lastAt||0,
@@ -58,17 +59,17 @@ export function eventSnapshot(meeting,now=Date.now(),user=null){
    phase==="qualifying"?Math.max(0,meeting.id+QUALIFY_MS-now):null,
   laps:RACE_LAPS,pitServiceMs:PIT_SERVICE_MS,
   racers:ordered.map((p,i)=>({...driverView(p),position:i+1})),
-  registered:racers.length,
+  registered:racers.length,sessionSectors:meeting.sessionSectors||[null,null,null],
   you:racers.some(p=>p.id===user)?user:null,
   serverNow:now};
 }
 function gridPosition(index){
  // Starting grid on the main straight, staggered behind the finish line.
- const lane=(index%2?1:-1)*1.45,back=7+Math.floor(index/2)*5.5;
+ const lane=(index%2?1:-1)*1.3,forward=8+Math.floor(index/2)*5.1;
  const start=ROAD.samples[0],ahead=ROAD.samples[4];
  const dx=ahead.x-start.x,dz=ahead.z-start.z,len=Math.hypot(dx,dz)||1;
  const tx=dx/len,tz=dz/len;
- return {x:start.x-tx*back-tz*lane,z:start.z-tz*back+tx*lane,
+ return {x:start.x+tx*forward-tz*lane,z:start.z+tz*forward+tx*lane,
   yaw:Math.atan2(tx,tz)};
 }
 function advance(meeting,now){
@@ -79,7 +80,8 @@ function advance(meeting,now){
    const p=order[i],grid=gridPosition(i),proj=projectToRoute(grid.x,grid.z);
    Object.assign(p,grid,{progress:proj.progress,travel:0,lastAt:now,
     lapStarted:meeting.id+QUALIFY_MS,lap:0,finishedAt:null,finishedMs:null,
-    pitComplete:false,pitUntil:0,pitBay:null,pitMode:false,disqualified:false});
+    pitComplete:false,pitUntil:0,pitBay:null,pitMode:false,disqualified:false,
+    sectorTimes:[],sectorColors:[],sectorIndex:0,sectorLastAt:now});
   }
   meeting.gridStarted=true;
  }
@@ -103,7 +105,8 @@ function makeDriver(user,name,now){
  return {id:user,name:String(name||"Racer").replace(/[^\p{L}\p{N} _.-]/gu,"").trim().slice(0,22)||"Racer",
   joined:now,qualifiedMs:null,qualStart:now,grid:null,lap:0,travel:0,progress:0,
   x:start.x,z:start.z,yaw:Math.atan2(next.x-start.x,next.z-start.z),
-  lastAt:now,lapStarted:now,pitComplete:false,pitUntil:0,pitBay:null,pitMode:false};
+  lastAt:now,lapStarted:now,pitComplete:false,pitUntil:0,pitBay:null,pitMode:false,
+  sectorTimes:[],sectorColors:[],sectorBest:[null,null,null],sectorIndex:0,sectorLastAt:now};
 }
 function pitAtBay(x,z,index){
  const box=PIT_BAYS[index];
@@ -183,13 +186,14 @@ export async function handleRaceEvent(request,storage){
  }
  const x=Number(body.x),z=Number(body.z),pit=body.pit===true;
  const speed=Number(body.speed||0);
- if(pit&&(!Number.isFinite(speed)||speed>11.4))
+ if(pit&&(!Number.isFinite(speed)||Math.abs(speed)>11.4))
   return Response.json({error:"Engage the 40 km/h pit limiter."},{status:422});
  const movement=sampleMovement(player,x,z,now,pit);
  if(movement.error)return Response.json({error:movement.error},{status:422});
  if(pit){
   player.pitMode=true;player.progress=projectToRoute(x,z,ROAD).progress;
   player.travel=0;player.x=x;player.z=z;player.lastAt=now;
+  player.sectorIndex=0;player.sectorTimes=[];player.sectorColors=[];player.sectorLastAt=now;
   await storage.put(key,meeting);
   return Response.json({ok:true,pit:true,pitComplete:player.pitComplete,
    ...eventSnapshot(meeting,now,user)});
@@ -198,8 +202,26 @@ export async function handleRaceEvent(request,storage){
   player.pitMode=false;
   player.progress=movement.progress;player.x=x;player.z=z;player.lastAt=now;
   player.travel=0;player.lapStarted=now;
+  player.sectorIndex=0;player.sectorTimes=[];player.sectorColors=[];player.sectorLastAt=now;
   await storage.put(key,meeting);
   return Response.json({ok:true,pitExit:true,...eventSnapshot(meeting,now,user)});
+ }
+ let sectorUpdate=null;
+ const previousProgress=player.progress;
+ const mark=[1/3,2/3][player.sectorIndex||0];
+ if(mark!==undefined&&previousProgress<mark&&movement.progress>=mark){
+  const idx=player.sectorIndex||0;
+  const sectorMs=Math.max(1,now-(player.sectorLastAt||player.lapStarted));
+  meeting.sessionSectors??=[null,null,null];
+  player.sectorBest??=[null,null,null];
+  const purple=meeting.sessionSectors[idx]===null||sectorMs<meeting.sessionSectors[idx];
+  const green=!purple&&(player.sectorBest[idx]===null||sectorMs<player.sectorBest[idx]);
+  const color=purple?"purple":green?"green":"yellow";
+  meeting.sessionSectors[idx]=Math.min(meeting.sessionSectors[idx]??Infinity,sectorMs);
+  player.sectorBest[idx]=Math.min(player.sectorBest[idx]??Infinity,sectorMs);
+  player.sectorTimes.push(sectorMs);player.sectorColors.push(color);
+  player.sectorIndex=idx+1;player.sectorLastAt=now;
+  sectorUpdate={index:idx+1,timeMs:sectorMs,color};
  }
  const crossed=player.progress>.94&&movement.progress<.06&&movement.delta>=0;
  player.travel+=Math.max(0,movement.delta);
@@ -220,9 +242,22 @@ export async function handleRaceEvent(request,storage){
      player.disqualified=!player.pitComplete;
     }
    }
+   if(player.sectorTimes.length===2){
+    const idx=2,sectorMs=Math.max(1,now-player.sectorLastAt);
+    meeting.sessionSectors??=[null,null,null];
+    player.sectorBest??=[null,null,null];
+    const purple=meeting.sessionSectors[idx]===null||sectorMs<meeting.sessionSectors[idx];
+    const green=!purple&&(player.sectorBest[idx]===null||sectorMs<player.sectorBest[idx]);
+    const color=purple?"purple":green?"green":"yellow";
+    meeting.sessionSectors[idx]=Math.min(meeting.sessionSectors[idx]??Infinity,sectorMs);
+    player.sectorBest[idx]=Math.min(player.sectorBest[idx]??Infinity,sectorMs);
+    player.sectorTimes.push(sectorMs);player.sectorColors.push(color);
+    sectorUpdate={index:3,timeMs:sectorMs,color};
+   }
    player.travel=0;player.lapStarted=now;
+   player.sectorIndex=0;player.sectorTimes=[];player.sectorColors=[];player.sectorLastAt=now;
   }
  }
  await storage.put(key,meeting);
- return Response.json({ok:true,lapUpdate,...eventSnapshot(meeting,now,user)});
+ return Response.json({ok:true,lapUpdate,sectorUpdate,...eventSnapshot(meeting,now,user)});
 }
