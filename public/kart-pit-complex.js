@@ -163,16 +163,8 @@ export function addPitComplex(THREE,scene,PIT,bays){
  }
  roadsideSign(9,"PIT IN · 40");
  roadsideSign(pitPs.length-11,"PIT OUT");
- // Low pit wall separates race traffic from the fast lane along the
- // straight only. Both PIT IN and PIT OUT are completely unblocked.
- const fence=mat(0x89949b,.36,.73,true,.45);
- for(let i=25;i<pitPs.length-27;i+=5){
-  const p=pitPs[i],d=tangent(i);
-  const bx=p.x-d.nx*(PIT_HALF_WIDTH+1.65),bz=p.z-d.nz*(PIT_HALF_WIDTH+1.65);
-  const angle=Math.atan2(d.tx,d.tz);
-  const base=block(.18,.62,3.3,white,bx,p.y+.31,bz);base.rotation.y=angle;
-  block(.10,1.75,.10,steel,bx,p.y+1.48,bz);
-  const panel=block(.05,1.2,3.2,fence,bx,p.y+1.29,bz);panel.rotation.y=angle;
- }
+ // Obsolete free-standing pit fence removed: it projected through the
+ // asphalt and duplicated the main straight's continuous glass safety wall.
+ // The dedicated track-edge glass barrier owns the straight protection.
  return {pitBuilding:true,bays:bays.length};
 }
