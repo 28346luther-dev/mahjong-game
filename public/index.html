@@ -110,10 +110,14 @@
             <button type="button" class="kart-mode-card" data-kart-mode="timetrial"><span>⏱</span><strong>TIME TRIAL</strong><small>One complete lap at a time · global fastest lap board</small><em>START TIME TRIAL</em></button>
             <button type="button" class="kart-mode-card" data-kart-mode="races"><span>🏎</span><strong>UPCOMING RACES</strong><small>10-minute meetings · 2-minute qualifying · 10 laps</small><em>OPEN REGISTRATIONS</em></button>
           </div>
+          <div class="kart-hub-standings"><strong>🏆 GLOBAL FASTEST FULL LAPS</strong>
+            <ol id="kartHubLeaderboard" aria-live="polite"><li>Loading current records…</li></ol>
+          </div>
         </section>
         <div id="kartSelectorBar" class="kart-selector-bar"><button id="kartBackSelector" type="button">‹ Back to Race Selector</button><span id="kartDrivingMode">FREE PRACTICE</span></div>
                 <section class="kart-meetings" aria-label="Multiplayer race timetable and registrations">
           <div class="kart-meeting-head">
+            <button id="kartRaceModesBack" type="button" class="kart-modes-back">‹ All racing modes</button>
             <div><h3>🏁 Championship race meetings</h3>
               <p>Every 10 minutes · 2-minute qualifying · grid from qualifying · 10-lap race · mandatory 10-second pit service</p></div>
             <span class="kart-live" id="kartMeetingClock">Updating race timetable…</span>
