@@ -61,13 +61,19 @@ function updateRivals(racers,myId){
  }
 }
 async function beginMeetingStage(phase,mine){
+ if(driveMode==="meeting"&&meetingPhase==="grid"&&phase==="race"){
+  meetingPhase="race";playing=true;speed=0;started=performance.now();
+  $("kartRacePhase").textContent="RACE";
+  message("LIGHTS OUT! GO! Complete 10 laps and the mandatory pit stop.");
+  return;
+ }
  enterTrack("races");
  if(!active)return;
  try{
   await init();driveMode="meeting";meetingPhase=phase;personalSectorBests=[null,null,null];
   playing=true;raceId=null;reportedFinish=false;
   reset();
-  if(phase==="race"&&Number.isFinite(mine?.x)){
+  if(["grid","race"].includes(phase)&&Number.isFinite(mine?.x)){
    pos.x=mine.x;pos.z=mine.z;
    pos.y=projectToRoute(pos.x,pos.z,ROAD).y;
    yaw=mine.yaw||yaw;
@@ -77,6 +83,7 @@ async function beginMeetingStage(phase,mine){
   $("kartRacePhase").textContent=phase.toUpperCase();
   $("kartLap").textContent="1";$("kartProgress").textContent="0%";
   message(phase==="qualifying"?"QUALIFYING: Set your best full lap before the race starts.":
+    phase==="grid"?"GRID P"+mine.grid+" · stay stationary until the red lights go out.":
     "LIGHTS OUT! Grid P"+mine.grid+" · ten laps · mandatory pit service.");
  }catch(error){message("Could not start multiplayer session: "+error.message);}
 }
@@ -315,6 +322,21 @@ function track(){
  // Detailed two-level garage building, safe entry signs and four marked service bays.
  addPitComplex(THREE,scene,PIT,PIT_BAYS);
  addCircuitGrandstands(THREE,scene);
+ // Sixteen painted grid slots on the start straight: white L-shaped front
+ // corner brackets and a white start marker for each qualifying position.
+ const gridStart=ROAD.samples[0],gridNext=ROAD.samples[4];
+ const gridDx=gridNext.x-gridStart.x,gridDz=gridNext.z-gridStart.z;
+ const gridLen=Math.hypot(gridDx,gridDz)||1,gtx=gridDx/gridLen,gtz=gridDz/gridLen;
+ for(let i=0;i<16;i++){
+  const lane=(i%2?1:-1)*2.25,forward=8+Math.floor(i/2)*5.7;
+  const gx=gridStart.x+gtx*forward-gtz*lane;
+  const gz=gridStart.z+gtz*forward+gtx*lane;
+  const y=projectToRoute(gx,gz,ROAD).y+.16;
+  const sideLine=box(.09,.022,3.6,0xfaf3e6,gx,y,gz);
+  sideLine.rotation.y=Math.atan2(gtx,gtz);
+  const frontLine=box(2.3,.022,.11,0xfaf3e6,gx+gtx*1.75,y,gz+gtz*1.75);
+  frontLine.rotation.y=Math.atan2(gtx,gtz);
+ }
  // Physical starting gantry on the outside of the racing line.
  const p=ROAD.samples[0],d=tangent(ROAD,0);
  for(const side of [-1,1])post(.16,4.1,0xd4ad79,p.x+d.nx*side*4.8,p.y+2,p.z+d.nz*side*4.8);
