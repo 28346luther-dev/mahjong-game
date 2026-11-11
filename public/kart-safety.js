@@ -20,6 +20,9 @@ export function addKartSafety(THREE,scene,ROAD,halfWidth,runoffWidth){
  // A guarded segment uses two corrugated steel bands. At high curvature the
  // outside is protected; on high-speed straights, guard both edges.
  function protectedSide(i,side){
+  // The main straight is protected by the flush glass barrier system.
+  // Do NOT also draw the old setback Armco on the same straight.
+  if(i>=n-70||i<=5)return false;
   const curve=bend(i);
   if(Math.abs(curve)>.055)return Math.sign(curve)!==side;
   return i<66||i>n-46||(i>135&&i<187)||(i>315&&i<385);

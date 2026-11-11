@@ -38,7 +38,7 @@ test("corner kerbs are continuous curved striped paint, not alternating floating
  assert.match(gfx,/const kerbMeshes=\[\[\],\[\]\]/);
  assert.match(gfx,/curvedStrip\(i,side,halfWidth-\.22,halfWidth\+1\.48/);
  assert.match(gfx,/curvedStrip\(i,outside,halfWidth-\.18,halfWidth\+2\.46/);
- assert.match(gfx,/Math\.floor\(i\/6\)%2/);
+ assert.match(gfx,/Math\.floor\(i\/\(6\*detail\)\)%2/);
  assert.match(gfx,/finishMesh\(kerbMeshes\[0\],red\)/);
  assert.match(gfx,/blueMeshes/);
  assert.match(client,/cornerKerbGripWidth\(progress\)/);

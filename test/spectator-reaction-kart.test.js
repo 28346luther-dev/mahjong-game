@@ -92,7 +92,7 @@ test("extended kart circuit is longer, faster, direction corrected, with runoff"
  assert.match(js,/yaw-=steer\*dt/);
  assert.match(js,/Math\.min\(pitLimiter\?PIT_LIMIT_MS:29,speed\)/);
  assert.match(js,/if\(brake\)speed/);
- assert.match(js,/ribbon\(ROAD,-ROAD_HALF_WIDTH-RUNOFF_WIDTH/);
+ assert.match(js,/ribbon\(visualRoad,-ROAD_HALF_WIDTH-RUNOFF_WIDTH/);
 });
 test("all updated sources parse",()=>{
  for(const p of ["src/worker.js","src/club-social.js","public/app.js","public/kart-track.js","public/kart-racing.js","src/kart-leaderboard.js"])

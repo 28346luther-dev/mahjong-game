@@ -31,12 +31,12 @@ test("staggered starting slots use L-shaped half rectangles straight behind fini
  assert.ok(x<p.x,"pole grid is behind the line");
 });
 test("joined glass safety panels border BOTH sides of main straight, with pit entry gap",()=>{
- assert.match(racing,/addStraightGlassBarriers\(THREE,scene,ROAD,ROAD_HALF_WIDTH\)/);
+ assert.match(racing,/addStraightGlassBarriers\(THREE,scene,visualRoad,ROAD_HALF_WIDTH,PIT\)/);
  assert.match(barriers,/const barrier=new THREE.MeshStandardMaterial/);
  assert.match(barriers,/const glass=new THREE.MeshPhysicalMaterial/);
  assert.match(barriers,/for\(const side of \[-1,1\]\)/);
  assert.match(barriers,/roadHalfWidth\+\.27/);
- assert.match(barriers,/side===1\?from\+15:from/);
+ assert.match(barriers,/projectToRoute\(x,z,pitRoute\)\.distance<2\.7/);
  assert.match(barriers,/for\(let i=first;i<to;i\+\+\)/);
  assert.match(barriers,/quad\(glassVertices,a1,b1,a2,b2\)/);
  assert.match(barriers,/InstancedMesh/);

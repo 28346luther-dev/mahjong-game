@@ -1,17 +1,18 @@
+import {projectToRoute} from "./kart-track.js";
 /* Continuous safety glazing ONLY on the main/pit straight.
  * Panels are joined edge-to-edge in shared coordinates, never offset as
  * individual loosely positioned fences. The PIT IN side has an opening.
  */
-export function addStraightGlassBarriers(THREE,scene,road,roadHalfWidth){
+export function addStraightGlassBarriers(THREE,scene,road,roadHalfWidth,pitRoute){
  const samples=road.samples,n=samples.length;
  const barrier=new THREE.MeshStandardMaterial({color:0xc5c8c8,roughness:.48,metalness:.54,side:THREE.DoubleSide});
  const glass=new THREE.MeshPhysicalMaterial({
-  color:0x9bbec5,roughness:.12,metalness:.09,transparent:true,opacity:.34,
+  color:0x83b7c7,roughness:.08,metalness:.14,transparent:true,opacity:.62,
   depthWrite:false,side:THREE.DoubleSide
  });
  const steel=new THREE.MeshStandardMaterial({color:0x5a666f,roughness:.31,metalness:.84});
- const baseVertices=[],glassVertices=[],posts=[];
- const from=n-61,to=n-4;
+ const baseVertices=[],glassVertices=[],topRails=[],posts=[];
+ const from=n-Math.round(n*69/480),to=n-Math.round(n*2/480);
  function tangent(i){
   const a=samples[(i-2+n)%n],b=samples[(i+2)%n];
   const dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz)||1;
@@ -26,13 +27,20 @@ export function addStraightGlassBarriers(THREE,scene,road,roadHalfWidth){
  for(const side of [-1,1]){
   // The service-lane branch joins the pit-side (+normal) edge near the
   // beginning of this straight; leave it physically clear.
-  const first=side===1?from+15:from;
+  const first=from;
   for(let i=first;i<to;i++){
+   // Pit access stays open; otherwise form an uninterrupted barrier immediately
+   // along the two edges of the racing asphalt, not on the far-away grass.
+   const p=samples[i],dir=tangent(i),edge=side*(roadHalfWidth+.27);
+   const x=p.x+dir.nx*edge,z=p.z+dir.nz*edge;
+   if(pitRoute&&projectToRoute(x,z,pitRoute).distance<2.7)continue;
    const a0=point(i,side,.06),b0=point(i+1,side,.06);
    const a1=point(i,side,.84),b1=point(i+1,side,.84);
    const a2=point(i,side,2.75),b2=point(i+1,side,2.75);
    quad(baseVertices,a0,b0,a1,b1);
    quad(glassVertices,a1,b1,a2,b2);
+   const a3=point(i,side,2.82),b3=point(i+1,side,2.82);
+   quad(topRails,a2,b2,a3,b3);
    segments++;
    if(i===first||i===to-1||(i-first)%5===0){
     const p=point(i,side,1.42);
@@ -52,6 +60,7 @@ export function addStraightGlassBarriers(THREE,scene,road,roadHalfWidth){
  }
  surface(baseVertices,barrier,true);
  surface(glassVertices,glass);
+ surface(topRails,steel,true);
  const postGeo=new THREE.BoxGeometry(.1,2.9,.1);
  const instance=new THREE.InstancedMesh(postGeo,steel,posts.length);
  const dummy=new THREE.Object3D();

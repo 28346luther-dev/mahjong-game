@@ -1,4 +1,4 @@
-import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,bankAngle,cornerKerbGripWidth,projectToRoute,raceStart} from "./kart-track.js";
+import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,bankAngle,cornerKerbGripWidth,refineRoute,projectToRoute,raceStart} from "./kart-track.js";
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
@@ -177,6 +177,7 @@ function setCameraMode(mode){
   :"Chase camera · press C for a driver's-eye view";
 }
 const keys=new Set(),touch=new Set(),down=k=>keys.has(k)||touch.has(k);
+const visualRoad=refineRoute(ROAD,4),visualPit=refineRoute(PIT,3);
 async function api(path,body){
  const r=await fetch("/api/kart/"+path,{method:body?"POST":"GET",credentials:"same-origin",
   headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store"});
@@ -268,7 +269,7 @@ function ribbon(route,from,to,color,raise=.02){
  for(let i=0;i<ps.length;i++){
   const p=ps[i],dir=tangent(route,i);
   for(const offset of [from,to]){
-   verts.push(p.x+dir.nx*offset,p.y+raise+(route===ROAD?bankRise(i/ps.length,offset):0),p.z+dir.nz*offset);
+   verts.push(p.x+dir.nx*offset,p.y+raise+(route.closed?bankRise(i/ps.length,offset):0),p.z+dir.nz*offset);
    uv.push(i/ps.length*14,offset===from?0:1);
   }
  }
@@ -321,22 +322,22 @@ function stripeAcross(route,i,color,count=10,depth=.5){
 function track(){
  const green=object(new THREE.PlaneGeometry(430,330),material(0x477854,.97),0,-.1,0);
  green.rotation.x=-Math.PI/2;
- embankment(ROAD,-1);embankment(ROAD,1);
- ribbon(ROAD,-ROAD_HALF_WIDTH-RUNOFF_WIDTH,ROAD_HALF_WIDTH+RUNOFF_WIDTH,0x698c68,-.058);
- ribbon(ROAD,-ROAD_HALF_WIDTH-2.7,ROAD_HALF_WIDTH+2.7,0xa98c6c,-.043);
- ribbon(ROAD,-ROAD_HALF_WIDTH-.55,ROAD_HALF_WIDTH+.55,0x9b7e65,-.025);
- ribbon(ROAD,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0x373b43,.015);
- ribbon(PIT,-PIT_HALF_WIDTH-.34,PIT_HALF_WIDTH+.34,0x927765,-.02);
- ribbon(PIT,-PIT_HALF_WIDTH,PIT_HALF_WIDTH,0x353c44,.065);
+ embankment(visualRoad,-1);embankment(visualRoad,1);
+ ribbon(visualRoad,-ROAD_HALF_WIDTH-RUNOFF_WIDTH,ROAD_HALF_WIDTH+RUNOFF_WIDTH,0x698c68,-.058);
+ ribbon(visualRoad,-ROAD_HALF_WIDTH-2.7,ROAD_HALF_WIDTH+2.7,0xa98c6c,-.043);
+ ribbon(visualRoad,-ROAD_HALF_WIDTH-.55,ROAD_HALF_WIDTH+.55,0x9b7e65,-.025);
+ ribbon(visualRoad,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0x373b43,.015);
+ ribbon(visualPit,-PIT_HALF_WIDTH-.34,PIT_HALF_WIDTH+.34,0x927765,-.02);
+ ribbon(visualPit,-PIT_HALF_WIDTH,PIT_HALF_WIDTH,0x353c44,.065);
  // The graphics pass generates smooth apex kerbs and a wide green runoff
  // using batched geometry. The old alternating cubes along every straight,
  // and the longitudinal start line, are intentionally removed.
- addCircuitGraphics(THREE,scene,ROAD,PIT,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
+ addCircuitGraphics(THREE,scene,visualRoad,visualPit,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  addKartSafety(THREE,scene,ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  // Detailed two-level garage building, safe entry signs and four marked service bays.
  addPitComplex(THREE,scene,PIT,PIT_BAYS);
  addCircuitGrandstands(THREE,scene);
- addStraightGlassBarriers(THREE,scene,ROAD,ROAD_HALF_WIDTH);
+ addStraightGlassBarriers(THREE,scene,visualRoad,ROAD_HALF_WIDTH,PIT);
  // Sixteen staggered, clean half-box grid positions. The start/finish
  // line is now at the END of the pit straight, so all boxes sit BACK from
  // the finish line along the straight, not scattered into turn one.
@@ -385,12 +386,14 @@ function kartModel(){
  cockpitOccluders.push(...vee.hiddenInCockpit);
 }
 function construct(){
- scene=new THREE.Scene();scene.background=new THREE.Color(0xa2c6d0);scene.fog=new THREE.FogExp2(0xa2c6d0,.0034);
- scene.add(new THREE.HemisphereLight(0xf2f6ff,0x5f765b,2.25));
+ scene=new THREE.Scene();scene.background=new THREE.Color(0xa2c6d0);scene.fog=new THREE.FogExp2(0xa2c6d0,.0025);
+ scene.add(new THREE.HemisphereLight(0xf2f6ff,0x5f765b,1.8));
  scene.add(new THREE.AmbientLight(0xffe9d5,.38));
- const sun=new THREE.DirectionalLight(0xffe2a3,3.25);
+ const sun=new THREE.DirectionalLight(0xffe2a3,2.6);
  sun.position.set(-35,76,28);sun.castShadow=true;
- sun.shadow.mapSize.set(1024,1024);
+ sun.shadow.mapSize.set(2048,2048);
+ sun.shadow.normalBias=.023;
+ sun.shadow.radius=2;
  sun.shadow.camera.left=-160;sun.shadow.camera.right=160;
  sun.shadow.camera.top=125;sun.shadow.camera.bottom=-125;
  sun.shadow.camera.far=260;sun.shadow.bias=-.0002;
@@ -410,9 +413,10 @@ async function init(){
  if(renderer)return;
  THREE=await import("https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js");
  renderer=new THREE.WebGLRenderer({canvas:$("kartCanvas"),antialias:true,powerPreference:"high-performance"});
- renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.5));
+ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
  renderer.outputColorSpace=THREE.SRGBColorSpace;
- renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.3;
+ renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
+ renderer.physicallyCorrectLights=true;
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
  camera=new THREE.PerspectiveCamera(64,1,.1,410);clock=new THREE.Clock();
  construct();reset();requestAnimationFrame(frame);
