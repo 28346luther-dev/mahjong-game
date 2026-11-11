@@ -4,7 +4,7 @@ import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
 import {createFormulaVee} from "./kart-formula-vee.js";
 import {addCircuitGrandstands} from "./kart-grandstands.js";
-import {resolveKartCollision,surfaceNormal,nearPitBay} from "./kart-physics.js";
+import {resolveKartCollision,surfaceNormal,nearPitBay,gravityAlongRoad} from "./kart-physics.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
@@ -359,8 +359,11 @@ function reset(){
 }
 function positionOnTrack(x,z){
  const road=projectToRoute(x,z,ROAD),pit=projectToRoute(x,z,PIT);
- const pitSurface=pit.distance<PIT_HALF_WIDTH+1.2&&
-  (inPitLane?pit.distance<road.distance+5:pit.distance<road.distance+1);
+ // With P active the pit corridor takes priority, including its full
+ // tapered entry/exit. Previously nearest-road selection trapped the kart
+ // against the pit-wall as it tried to cross onto the service lane.
+ const pitSurface=pit.distance<PIT_HALF_WIDTH+1.25&&
+  (inPitLane||pit.progress>.02&&pit.progress<.98||pit.distance<road.distance+2.4);
  // The pit route is only accessible with the limiter engaged.
  if(pitSurface&&pitLimiter)return {...pit,isPit:true};
  return {...road,isPit:false};
@@ -441,7 +444,7 @@ function update(dt){
   message("PIT SERVICE COMPLETE · RELEASED FROM BAY "+(Number(localPitBay)+1));
  }
  if(driveMode==="meeting"&&!window.KartMeetings?.canDrive?.()){
-  speed=0;
+  speed=0;updateRideHeightAndBank(dt);
   if(performance.now()-sendAt>950){sendAt=performance.now();transmit();}
   return;
  }
@@ -454,6 +457,12 @@ function update(dt){
  speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:29,speed));
  if(pitLimiter&&speed>PIT_LIMIT_MS)speed=PIT_LIMIT_MS;
  if(!accelerate&&!brake&&Math.abs(speed)<.15)speed=0;
+ const grade=positionOnTrack(pos.x,pos.z);
+ if(Math.abs(speed)>.05&&!grade.isPit){
+  // Small but physical downhill/uphill acceleration from the actual road grade.
+  speed+=gravityAlongRoad(ROAD,grade,yaw)*dt;
+  speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:29,speed));
+ }
  // In this coordinate system positive yaw steers world-left, so D decreases yaw.
  // Higher speed increases the turning radius; brake before the chicanes.
  const steeringRate=2.25/(1+Math.abs(speed)/15);
