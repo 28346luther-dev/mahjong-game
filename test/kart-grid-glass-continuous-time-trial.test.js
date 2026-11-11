@@ -36,7 +36,7 @@ test("joined glass safety panels border BOTH sides of main straight, with pit en
  assert.match(barriers,/const glass=new THREE.MeshPhysicalMaterial/);
  assert.match(barriers,/for\(const side of \[-1,1\]\)/);
  assert.match(barriers,/roadHalfWidth\+\.27/);
- assert.match(barriers,/projectToRoute\(x,z,pitRoute\)\.distance<2\.7/);
+ assert.match(barriers,/projectToRoute\(x,z,pitRoute\)\.distance<8\.5/);
  assert.match(barriers,/for\(let i=first;i<to;i\+\+\)/);
  assert.match(barriers,/quad\(glassVertices,a1,b1,a2,b2\)/);
  assert.match(barriers,/InstancedMesh/);

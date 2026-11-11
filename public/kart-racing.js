@@ -190,8 +190,8 @@ function gripForDistance(distance,isPit=false,progress=0){
  // Apex kerbs extend 1.48 m beyond the edge; selected exits extend 2.46 m.
  // Keep the full painted exit strip driveable, not just the original narrow kerb.
  const kerbWidth=cornerKerbGripWidth(progress);
- if(isPit||distance<=ROAD_HALF_WIDTH+kerbWidth)return {drag:0,surface:"kerb"};
- if(distance<=ROAD_HALF_WIDTH+3.9)return {drag:2.1,surface:"gravel"};
+ if(isPit||distance<=ROAD_HALF_WIDTH+Math.max(3.6,kerbWidth))return {drag:0,surface:"kerb"};
+ if(distance<=ROAD_HALF_WIDTH+5.2)return {drag:2.1,surface:"gravel"};
  if(distance<=ROAD_HALF_WIDTH+RUNOFF_WIDTH)return {drag:3.3,surface:"grass"};
  return {drag:7.5,surface:"barrier"};
 }
@@ -324,14 +324,10 @@ function track(){
  green.rotation.x=-Math.PI/2;
  embankment(visualRoad,-1);embankment(visualRoad,1);
  ribbon(visualRoad,-ROAD_HALF_WIDTH-RUNOFF_WIDTH,ROAD_HALF_WIDTH+RUNOFF_WIDTH,0x698c68,-.058);
- ribbon(visualRoad,-ROAD_HALF_WIDTH-2.7,ROAD_HALF_WIDTH+2.7,0xa98c6c,-.043);
- ribbon(visualRoad,-ROAD_HALF_WIDTH-.55,ROAD_HALF_WIDTH+.55,0x9b7e65,-.025);
- ribbon(visualRoad,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0x373b43,.015);
- ribbon(visualPit,-PIT_HALF_WIDTH-.34,PIT_HALF_WIDTH+.34,0x927765,-.02);
- ribbon(visualPit,-PIT_HALF_WIDTH,PIT_HALF_WIDTH,0x353c44,.065);
- // The graphics pass generates smooth apex kerbs and a wide green runoff
- // using batched geometry. The old alternating cubes along every straight,
- // and the longitudinal start line, are intentionally removed.
+  ribbon(visualRoad,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0x373b43,.015);
+ ribbon(visualPit,-PIT_HALF_WIDTH,PIT_HALF_WIDTH,0x353c44,.067);
+ // A single coherent textured circuit surface and curved kerb system
+ // replaces the previous overlapping paving, sharp blocks and floating sheets.
  addCircuitGraphics(THREE,scene,visualRoad,visualPit,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  addKartSafety(THREE,scene,ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  // Detailed two-level garage building, safe entry signs and four marked service bays.
@@ -429,16 +425,15 @@ function reset(){
 }
 function positionOnTrack(x,z){
  const road=projectToRoute(x,z,ROAD),pit=projectToRoute(x,z,PIT);
- // With P active the pit corridor takes priority, including its full
- // tapered entry/exit. Previously nearest-road selection trapped the kart
- // against the pit-wall as it tried to cross onto the service lane.
- // A dedicated PIT OUT merge is reached near the end of the pit spline.
- // Rejoin the racing surface once the two asphalt strips physically overlap.
- const atPitExit=inPitLane&&pit.progress>.91&&road.distance<ROAD_HALF_WIDTH+1.6;
- const pitSurface=!atPitExit&&pit.distance<PIT_HALF_WIDTH+1.25&&
-  (inPitLane||pit.progress>.02&&pit.progress<.98||pit.distance<road.distance+2.4);
- // The pit route is only accessible with the limiter engaged.
- if(pitSurface&&pitLimiter)return {...pit,isPit:true};
+ // The limiter commits the car to a long, smooth PIT IN route. It does not
+ // release it until the *paved* PIT OUT merge meets the racing asphalt.
+ // At either junction the two surfaces overlap and driving is continuous.
+ const mergeReady=inPitLane&&pit.progress>.955&&
+  road.distance<ROAD_HALF_WIDTH+1.5;
+ const pitAvailable=pit.distance<PIT_HALF_WIDTH+1.25;
+ const enterReady=pitAvailable&&pit.progress>.012&&pit.progress<.945;
+ if(pitLimiter&&!mergeReady&&pitAvailable&&(inPitLane||enterReady))
+  return {...pit,isPit:true};
  return {...road,isPit:false};
 }
 async function transmit(){
