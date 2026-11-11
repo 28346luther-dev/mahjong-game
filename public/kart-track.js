@@ -85,7 +85,21 @@ export function makeRoute(points=ROAD_POINTS,count=TRACK_SAMPLES,closed=true){
  }
  return {samples,length:distance,closed};
 }
-export const ROAD=makeRoute();
+// The timing line belongs at the FAR END of the pit straight, before turn 1.
+// Rotate the closed spline's origin without changing the geometry or lap length.
+// Every progress-based server/client lap check therefore uses the new line.
+export const FINISH_LINE_SAMPLE=66;
+function rotateClosedRoute(route,index){
+ const samples=route.samples.slice(index).concat(route.samples.slice(0,index));
+ let distance=0;
+ for(let i=0;i<samples.length;i++){
+  const next=samples[(i+1)%samples.length];
+  samples[i].distance=distance;
+  distance+=Math.hypot(next.x-samples[i].x,next.z-samples[i].z);
+ }
+ return {samples,length:distance,closed:true};
+}
+export const ROAD=rotateClosedRoute(makeRoute(),FINISH_LINE_SAMPLE);
 export const PIT=makeRoute(PIT_POINTS,160,false);
 export function cornerKerbGripWidth(progress){
  // Same local curvature criteria used by the visual apex and exit kerbs.
