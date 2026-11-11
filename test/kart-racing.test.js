@@ -181,12 +181,25 @@ test("pit entry is recognized as legitimate, discards shortcut lap and resets ti
  const raceId=started.result.raceId;
  const {PIT}=await import("../public/kart-track.js");
  const pitStart=PIT.samples[0];
+ // The finish line is now at the END of the pit straight, so simulate
+ // a legal slow approach to PIT IN rather than teleport from the new line.
+ const approaching=data.get("kart-session-v3:"+id);
+ approaching.x=pitStart.x;approaching.z=pitStart.z;
+ approaching.lastAt=Date.now()-1000;
+ data.set("kart-session-v3:"+id,approaching);
  const entry=await post(race,"/sample",{user:id,raceId,pit:true,x:pitStart.x,z:pitStart.z});
  assert.equal(entry.status,200,JSON.stringify(entry.result));
  assert.equal(entry.result.pitEntry,true);
  assert.equal(data.get("kart-session-v3:"+id).pitMode,true);
- const roadStart=raceStart();
- const exit=await post(race,"/sample",{user:id,raceId,pit:false,x:roadStart.x,z:roadStart.z});
+ // Advance the pit car to the paved PIT OUT merge before rejoining;
+ // driving directly to the finish line would be an invalid teleport.
+ const pitEnd=PIT.samples.at(-1);
+ const inPit=data.get("kart-session-v3:"+id);
+ inPit.x=pitEnd.x;inPit.z=pitEnd.z;
+ inPit.lastAt=Date.now()-1000;
+ data.set("kart-session-v3:"+id,inPit);
+ const merge=projectToRoute(pitEnd.x,pitEnd.z);
+ const exit=await post(race,"/sample",{user:id,raceId,pit:false,x:merge.x,z:merge.z});
  assert.equal(exit.status,200,JSON.stringify(exit.result));
  assert.equal(exit.result.pitExit,true);
  const after=data.get("kart-session-v3:"+id);
