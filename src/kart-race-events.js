@@ -73,11 +73,11 @@ export function eventSnapshot(meeting,now=Date.now(),user=null){
 }
 function gridPosition(index){
  // Starting grid on the main straight, staggered behind the finish line.
- const lane=(index%2?1:-1)*2.25,forward=8+Math.floor(index/2)*5.7;
- const start=ROAD.samples[0],ahead=ROAD.samples[4];
- const dx=ahead.x-start.x,dz=ahead.z-start.z,len=Math.hypot(dx,dz)||1;
+ const lane=(index%2?1:-1)*2.25,back=8+Math.floor(index/2)*5.7;
+ const start=ROAD.samples[0],prior=ROAD.samples[ROAD.samples.length-8];
+ const dx=start.x-prior.x,dz=start.z-prior.z,len=Math.hypot(dx,dz)||1;
  const tx=dx/len,tz=dz/len;
- return {x:start.x+tx*forward-tz*lane,z:start.z+tz*forward+tx*lane,
+ return {x:start.x-tx*back-tz*lane,z:start.z-tz*back+tx*lane,
   yaw:Math.atan2(tx,tz)};
 }
 function advance(meeting,now){
