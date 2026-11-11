@@ -1,6 +1,7 @@
-import {ROAD,PIT,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,projectToRoute,raceStart} from "./kart-track.js";
+import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,projectToRoute,raceStart} from "./kart-track.js";
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
+import {addPitComplex} from "./kart-pit-complex.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
@@ -188,38 +189,8 @@ function track(){
  // and the longitudinal start line, are intentionally removed.
  addCircuitGraphics(THREE,scene,ROAD,PIT,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  addKartSafety(THREE,scene,ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
- // Pit-lane entry, pit-speed signs and road markings: use P before entering.
- const pitEntry=PIT.samples[0],pitExit=PIT.samples[PIT.samples.length-1];
- for(const [point,label] of [[pitEntry,"PIT IN 40"],[pitExit,"PIT OUT"]]){
-  const signCanvas=document.createElement("canvas");signCanvas.width=512;signCanvas.height=128;
-  const ctx=signCanvas.getContext("2d");ctx.fillStyle="#1b3542";ctx.fillRect(0,0,512,128);
-  ctx.fillStyle="#ffe3a4";ctx.font="bold 62px Arial";ctx.textAlign="center";ctx.fillText(label,256,88);
-  const texture=new THREE.CanvasTexture(signCanvas);texture.colorSpace=THREE.SRGBColorSpace;
-  const sign=object(new THREE.PlaneGeometry(3.9,1),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}),
-   point.x,point.y+2.15,point.z);
-  const pole=post(.09,2.3,0xb8bdc0,point.x,point.y+1.0,point.z);
- }
- // Pit lane: visibly separated from the main straight, complete with garages and pit wall.
- for(let i=8;i<PIT.samples.length-10;i+=4){
-  const p=PIT.samples[i],d=tangent(PIT,Math.min(PIT.samples.length-2,i));
-  const stripe=box(.13,.02,.85,0xe9c775,p.x+d.nx*2.2,p.y+.06,p.z+d.nz*2.2);
-  stripe.rotation.y=Math.atan2(d.tx,d.tz);
- }
- for(let i=0;i<5;i++){
-  const x=(-32+i*9)*TRACK_SCALE,z=-1.2*TRACK_SCALE;
-  box(8.4,2.7,3.8,0x554356,x,1.35,z);
-  box(7.5,1.7,.08,0x202b34,x,1.26,z-1.98);
-  box(8.7,.34,4.1,0xdac6a0,x,2.8,z);
-  box(7.2,.12,.3,0xe4bc78,x,2.46,z-2.09);
-  const roof=box(8.5,.2,1.4,0x8a304b,x,3.05,z-1.3);roof.rotation.x=-.1;
- }
- for(let i=0;i<12;i++){
-  const p=PIT.samples[Math.min(PIT.samples.length-2,5+i*5)];
-  const d=tangent(PIT,Math.min(PIT.samples.length-2,5+i*5));
-  const wall=box(.18,.52,1.65,i%2?0xf4e5d4:0xc84955,
-   p.x+d.nx*3,p.y+.26,p.z+d.nz*3);
-  wall.rotation.y=Math.atan2(d.tx,d.tz);
- }
+ // Detailed two-level garage building, safe entry signs and four marked service bays.
+ addPitComplex(THREE,scene,PIT,PIT_BAYS);
  // Physical starting gantry on the outside of the racing line.
  const p=ROAD.samples[0],d=tangent(ROAD,0);
  for(const side of [-1,1])post(.16,4.1,0xd4ad79,p.x+d.nx*side*4.8,p.y+2,p.z+d.nz*side*4.8);
@@ -326,6 +297,10 @@ function positionOnTrack(x,z){
  return {...road,isPit:false};
 }
 async function transmit(){
+ if(driveMode==="meeting"){
+  if(playing)await window.KartMeetings?.sendTelemetry?.(getPose());
+  return;
+ }
  if(telemetryPending||!raceId||!playing)return;
  telemetryPending=true;
  const current=raceId,position={x:pos.x,z:pos.z,pit:inPitLane};
@@ -376,6 +351,11 @@ async function transmit(){
 }
 function update(dt){
  if(!playing)return;
+ if(driveMode==="meeting"&&!window.KartMeetings?.canDrive?.()){
+  speed=0;
+  if(performance.now()-sendAt>950){sendAt=performance.now();transmit();}
+  return;
+ }
  const accelerate=down("w")||down("arrowup");
  const brake=down("s")||down("arrowdown")||down(" ");
  const steer=Number(down("d")||down("arrowright"))-Number(down("a")||down("arrowleft"));
@@ -426,7 +406,7 @@ function frame(){
   // behind the kart: chase-style interpolation exposed the driver's head
   // whenever acceleration caused the vehicle to pull ahead of the camera.
   const forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw);
-  camera.position.set(pos.x+forwardX*1.08,pos.y+1.44,pos.z+forwardZ*1.08);
+  camera.position.set(pos.x+forwardX*.26,pos.y+1.30,pos.z+forwardZ*.26);
   camera.lookAt(pos.x+forwardX*28,pos.y+1.42,pos.z+forwardZ*28);
   // Constant field of view: no acceleration-induced zoom or head clipping.
   if(camera.fov!==73){camera.fov=73;camera.updateProjectionMatrix();}
@@ -437,10 +417,13 @@ function frame(){
   if(camera.fov!==64){camera.fov=64;camera.updateProjectionMatrix();}
  }
  renderer.render(scene,camera);
+ window.KartMeetings?.tick?.();
  if(performance.now()-lastLeaderboardRefresh>15000){lastLeaderboardRefresh=performance.now();leaderboard();}
  $("kartSpeed").textContent=Math.round(Math.abs(speed)*3.6)+" km/h";
 }
 async function begin(){
+ if(driveMode==="meeting")clearMeetingStage();
+ driveMode="practice";
  if(busy)return;busy=true;$("kartStart").disabled=true;
  try{
   await init();
@@ -460,8 +443,10 @@ function open(){
  document.body.classList.add("kart-open");document.exitPointerLock?.();
  message("Race the redesigned Velvet Circuit — corners, chicanes, hills and a pit lane.");
  leaderboard();lastLeaderboardRefresh=performance.now();init().catch(error=>message("Track unavailable: "+error.message));
+ window.KartMeetings?.open?.();
 }
 function close(){
+ window.KartMeetings?.close?.();clearMeetingStage();
  if(document.fullscreenElement===$("kartGame"))document.exitFullscreen().catch(()=>{});
  active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;pitLimiter=false;inPitLane=false;updatePitHUD();
  $("kartGame").classList.add("hidden");document.body.classList.remove("kart-open");
@@ -491,4 +476,6 @@ $("kartPitLimiter").addEventListener("click",togglePitLimiter);
 $("kartStart").addEventListener("click",begin);
 $("kartClose").addEventListener("click",close);
 $("kartRefresh").addEventListener("click",leaderboard);
-window.KartRacing={open,close,isOpen:()=>active,setCameraMode};
+window.KartRacing={open,close,isOpen:()=>active,setCameraMode,
+ beginMeetingStage,clearMeetingStage,finishMeetingStage,meetingLapUpdate,updateRivals,
+ getPose,pitBays:()=>PIT_BAYS,beginPractice:begin};
