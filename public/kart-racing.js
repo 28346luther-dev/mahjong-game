@@ -362,15 +362,15 @@ function track(){
  }
  // Physical starting gantry on the outside of the racing line.
  const p=ROAD.samples[0],d=tangent(ROAD,0);
- for(const side of [-1,1])post(.16,4.1,0xd4ad79,p.x+d.nx*side*4.8,p.y+2,p.z+d.nz*side*4.8);
- const banner=box(10,.9,.28,0x583149,p.x,p.y+4.1,p.z);
+ for(const side of [-1,1])post(.16,4.1,0xd4ad79,p.x+d.nx*side*(ROAD_HALF_WIDTH+1.1),p.y+2,p.z+d.nz*side*(ROAD_HALF_WIDTH+1.1));
+ const banner=box(ROAD_HALF_WIDTH*2+2,.9,.28,0x583149,p.x,p.y+4.1,p.z);
  banner.rotation.y=Math.atan2(d.tx,d.tz);
  const cv=document.createElement("canvas");cv.width=1024;cv.height=140;
  const ctx=cv.getContext("2d");
  ctx.fillStyle="#583149";ctx.fillRect(0,0,1024,140);
  ctx.fillStyle="#f8dfa9";ctx.font="bold 66px Georgia";ctx.textAlign="center";ctx.fillText("VELVET CIRCUIT",512,96);
  const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;
- const front=object(new THREE.PlaneGeometry(9.6,1.05),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}),
+ const front=object(new THREE.PlaneGeometry(ROAD_HALF_WIDTH*2+1.6,1.05),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}),
   p.x,p.y+4.1,p.z+.17);
  front.rotation.y=Math.atan2(d.tx,d.tz);
  // Pit-lane tire stacks, curbs and trackside grandstand.
