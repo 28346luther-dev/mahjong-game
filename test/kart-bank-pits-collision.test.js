@@ -43,7 +43,7 @@ test("pit barriers stay outboard, pit boxes have graphical markings and pit boom
  assert.match(complex,/new THREE\.CanvasTexture\(marking\)/);
  assert.match(complex,/new THREE\.PlaneGeometry\(5\.25,7\.25\)/);
  assert.match(complex,/boomX=-3\.25/);
- assert.match(complex,/PIT_HALF_WIDTH\+1\.65/);
+ assert.doesNotMatch(complex,/for\(let i=25;i<pitPs\.length-27/);
  assert.match(safety,/projectToRoute\(guardX,guardZ,PIT\)/);
  assert.match(client,/addCircuitGrandstands/);
  assert.match(client,/addPitComplex/);
