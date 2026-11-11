@@ -36,10 +36,10 @@ test("corner kerbs are continuous curved striped paint, not alternating floating
  const gfx=readFileSync("public/kart-graphics.js","utf8");
  const client=readFileSync("public/kart-racing.js","utf8");
  assert.match(gfx,/const kerbMeshes=\[\[\],\[\]\]/);
- assert.match(gfx,/curvedStrip\(i,side,halfWidth-\.22,halfWidth\+1\.48/);
- assert.match(gfx,/curvedStrip\(i,outside,halfWidth-\.18,halfWidth\+2\.46/);
- assert.match(gfx,/Math\.floor\(i\/\(6\*detail\)\)%2/);
- assert.match(gfx,/finishMesh\(kerbMeshes\[0\],red\)/);
+ assert.match(gfx,/const kerbWeight=i=>/);
+ assert.match(gfx,/\[\[side,1\.6\],\[-side,2\.35\]\]/);
+ assert.match(gfx,/Math\.floor\(p\.distance\/4\.6\)%2/);
+ assert.match(gfx,/makeMesh\(g,i\?white:red\)/);
  assert.match(gfx,/blueMeshes/);
  assert.match(client,/cornerKerbGripWidth\(progress\)/);
  assert.ok(cornerKerbGripWidth(.25)>=1.23);
