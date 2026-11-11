@@ -116,7 +116,7 @@ function stateUpdate(data){
   "Register to race. Two-minute qualifying precedes a ten-lap race.";
  status(details);
  const identity=String(selected)+":"+data.phase;
- if(data.you&&["qualifying","grid","race"].includes(data.phase)&&phaseEntered!==identity){
+ if(data.you&&window.KartRacing?.mayAutoJoinMeeting?.()&&["qualifying","grid","race"].includes(data.phase)&&phaseEntered!==identity){
   phaseEntered=identity;raceIdentity=selected;
   window.KartRacing?.beginMeetingStage?.(data.phase,mine,data);
  }
