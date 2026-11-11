@@ -102,7 +102,17 @@
             <button id="kartClose" type="button" aria-label="Return to clubhouse">✕ Back to clubhouse</button>
           </div>
         </header>
-        <section class="kart-meetings" aria-label="Multiplayer race timetable and registrations">
+        <section id="kartModeHub" class="kart-mode-hub" aria-label="Select a race mode">
+          <div class="kart-mode-hero"><span>VELVET MOTORSPORT · RACE CONTROL</span>
+            <h3>CHOOSE YOUR SESSION</h3><p>Choose a mode before entering the track. Practice freely, set a fastest lap, or register for the next multiplayer race.</p></div>
+          <div class="kart-mode-options">
+            <button type="button" class="kart-mode-card" data-kart-mode="practice"><span>🔧</span><strong>FREE PRACTICE</strong><small>Unlimited laps · explore the track and pit lane</small><em>ENTER PRACTICE</em></button>
+            <button type="button" class="kart-mode-card" data-kart-mode="timetrial"><span>⏱</span><strong>TIME TRIAL</strong><small>One complete lap at a time · global fastest lap board</small><em>START TIME TRIAL</em></button>
+            <button type="button" class="kart-mode-card" data-kart-mode="races"><span>🏎</span><strong>UPCOMING RACES</strong><small>10-minute meetings · 2-minute qualifying · 10 laps</small><em>OPEN REGISTRATIONS</em></button>
+          </div>
+        </section>
+        <div id="kartSelectorBar" class="kart-selector-bar"><button id="kartBackSelector" type="button">‹ Back to Race Selector</button><span id="kartDrivingMode">FREE PRACTICE</span></div>
+                <section class="kart-meetings" aria-label="Multiplayer race timetable and registrations">
           <div class="kart-meeting-head">
             <div><h3>🏁 Championship race meetings</h3>
               <p>Every 10 minutes · 2-minute qualifying · grid from qualifying · 10-lap race · mandatory 10-second pit service</p></div>
@@ -124,7 +134,7 @@
             <div class="kart-roster"><h4>Race grid & live classification</h4><ol id="kartMeetingRoster" aria-live="polite"></ol></div>
           </div>
         </section>
-        <div class="kart-layout">
+        <div class="kart-layout" id="kartTrackLayout">
           <div class="kart-drive">
             <div class="kart-stage">
               <canvas id="kartCanvas" width="960" height="600" aria-label="Interactive 3D go-kart circuit"></canvas>
@@ -137,15 +147,17 @@
                 <div><small>PIT LANE</small><strong id="kartPitStatus">PIT LIMITER OFF</strong></div>
                 <div><small>CURRENT SECTOR</small><strong id="kartSectorLive">SECTOR 1</strong></div>
               </div>
+            <div class="kart-sector-splits kart-track-sectors" aria-label="Official race sector times">
+              <div><span>SECTOR 1</span><strong id="kartSector1">--:--.---</strong></div>
+              <div><span>SECTOR 2</span><strong id="kartSector2">--:--.---</strong></div>
+              <div><span>SECTOR 3</span><strong id="kartSector3">--:--.---</strong></div>
+            </div>
+              <div id="kartStartLights" class="kart-start-lights hidden" aria-live="assertive"><div class="light-rack"><div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div></div><strong id="kartLightsText">FIVE RED LIGHTS</strong></div>
+              <div class="kart-live-positions" id="kartLivePositions" aria-live="polite"><strong>LIVE POSITIONS</strong><ol id="kartTrackPositions"><li>Free Practice</li></ol></div>
               <div class="kart-service-overlay hidden" id="kartServiceOverlay" aria-live="assertive">
                 <div class="kart-service-card"><span>PIT SERVICE · DO NOT MOVE</span>
                   <strong id="kartServiceCountdown">10.0</strong><p>Mandatory stop being completed</p></div>
               </div>
-            </div>
-            <div class="kart-sector-splits" aria-label="Official race sector times">
-              <div><span>SECTOR 1</span><strong id="kartSector1">--:--.---</strong></div>
-              <div><span>SECTOR 2</span><strong id="kartSector2">--:--.---</strong></div>
-              <div><span>SECTOR 3</span><strong id="kartSector3">--:--.---</strong></div>
             </div>
             <div class="kart-actions">
               <button type="button" id="kartStart" class="kart-primary">🏁 Start timed lap</button>
