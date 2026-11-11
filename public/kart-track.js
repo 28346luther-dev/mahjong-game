@@ -100,6 +100,33 @@ function rotateClosedRoute(route,index){
  return {samples,length:distance,closed:true};
 }
 export const ROAD=rotateClosedRoute(makeRoute(),FINISH_LINE_SAMPLE);
+// Higher-density VISUAL spline only: preserves the exact racing spline,
+// timing origin, progress and server-side lap validation geometry.
+export const VISUAL_SUBDIVISIONS=4;
+export function refineRoute(route,subdivisions=VISUAL_SUBDIVISIONS){
+ const input=route.samples,n=input.length,closed=route.closed;
+ const segments=closed?n:n-1;
+ const result=[];
+ const at=i=>input[closed?(i%n+n)%n:Math.max(0,Math.min(n-1,i))];
+ for(let i=0;i<segments;i++){
+  const a=at(i-1),b=at(i),c=at(i+1),d=at(i+2);
+  for(let step=0;step<subdivisions;step++){
+   const t=step/subdivisions;
+   result.push({x:catmull(a.x,b.x,c.x,d.x,t),
+    z:catmull(a.z,b.z,c.z,d.z,t),
+    y:catmull(a.y,b.y,c.y,d.y,t)});
+  }
+ }
+ if(!closed)result.push({...input[n-1]});
+ let length=0;
+ for(let i=0;i<result.length;i++){
+  const p=result[i],q=result[(i+1)%result.length];
+  p.distance=length;
+  if(i<result.length-1||closed)length+=Math.hypot(q.x-p.x,q.z-p.z);
+ }
+ return {samples:result,length,closed,visual:true,detail:subdivisions};
+}
+
 export const PIT=makeRoute(PIT_POINTS,160,false);
 export function cornerKerbGripWidth(progress){
  // Same local curvature criteria used by the visual apex and exit kerbs.
