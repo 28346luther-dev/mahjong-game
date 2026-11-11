@@ -1,0 +1,39 @@
+/* Shared event racing display — server-backed qualifying, race registration,
+   formation grid, live opponents, mandatory servicing and finishing results. */
+.kart-meetings{margin:10px 0 13px;background:linear-gradient(140deg,#242d37,#322839);border:1px solid #bfa175;border-radius:13px;padding:12px;color:#f5dcb6}
+.kart-meeting-head{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.kart-meeting-head h3{margin:0;color:#f8dfa5;font:700 18px Georgia,serif}
+.kart-meeting-head p{margin:3px 0 0;font-size:11px;color:#cfbcae}
+.kart-meeting-head .kart-live{font-weight:800;color:#a5e7d3}
+.kart-event-list{display:flex;gap:8px;overflow-x:auto;padding:10px 0 6px;scrollbar-width:thin}
+.kart-event-item{min-width:180px;background:#412d42;border:1px solid #9b8065;border-radius:11px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.kart-event-item.current{border:2px solid #f4d29a;background:#513448}
+.kart-event-item strong{color:#ffe3ae;font-size:13px}
+.kart-event-item span{font-size:11px;color:#e8cdb4}
+.kart-event-item button,.kart-events-actions button{border:1px solid #e2bf8c;border-radius:8px;background:#b48559;padding:9px 11px;color:#251f2c;font-weight:800;cursor:pointer}
+.kart-event-item button:disabled{opacity:.45;cursor:not-allowed}
+.kart-meeting-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(190px,290px);gap:9px;margin-top:8px}
+.kart-meeting-status{background:#1a2c31;border:1px solid #a68a68;border-radius:10px;padding:12px}
+.kart-meeting-status strong{font-size:15px;color:#f3dba7}
+.kart-meeting-status p{font-size:12px;color:#e8d4bf;min-height:18px}
+.kart-meeting-count{font-variant-numeric:tabular-nums;color:#9ce9d2;font-weight:900;font-size:22px}
+.kart-events-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.kart-events-actions button{font-size:12px}
+#kartPitService{background:#f2cc74}
+#kartPitService:disabled{opacity:.4}
+.kart-roster{background:#34273a;border-radius:10px;border:1px solid #a58366;padding:10px;max-height:220px;overflow-y:auto}
+.kart-roster h4{font-size:13px;color:#f3d8a1;margin:0 0 8px}
+.kart-roster ol{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:5px}
+.kart-roster li{display:flex;align-items:center;gap:8px;justify-content:space-between;border-bottom:1px solid #5f4b51;padding:5px 0;font-size:11px;color:#f3e1c9}
+.kart-roster li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.kart-roster li b{font-variant-numeric:tabular-nums;color:#a9e0c3}
+.kart-overlay #kartRacePhase{color:#99f5d4}
+.kart-service-overlay{position:absolute;inset:0;z-index:5;background:#130e18db;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.kart-service-overlay.hidden{display:none!important}
+.kart-service-card{border:4px solid #e3bd72;border-radius:20px;background:#382739;color:#ffe5ac;box-shadow:0 15px 60px #000a;padding:22px 36px;text-align:center}
+.kart-service-card strong{display:block;font:800 clamp(34px,7vw,78px) system-ui;font-variant-numeric:tabular-nums}
+.kart-service-card span{font-size:14px;letter-spacing:.08em;font-weight:800}
+.kart-service-card p{font-size:12px}
+.kart-grid-notice{background:#123d38;color:#b3f3dd;border:1px solid #79cebb;border-radius:8px;padding:8px;font-size:12px;font-weight:700}
+.kart-pit-building-tag{font-size:11px;color:#efd0a1}
+@media(max-width:850px){.kart-meeting-main{grid-template-columns:1fr}.kart-event-item{min-width:155px}.kart-meetings{padding:9px}.kart-roster{max-height:140px}}
