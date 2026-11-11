@@ -8,6 +8,86 @@ let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false
 let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPending=false,lastStatusAt=0;
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
+let driveMode="practice",meetingPhase=null,remoteKarts=new Map();
+function getPose(){return {x:pos.x,z:pos.z,yaw,speed,pit:inPitLane};}
+function createRival(p){
+ const g=new THREE.Group();scene.add(g);
+ const body=new THREE.Mesh(new THREE.BoxGeometry(1.45,.38,2.35),
+  new THREE.MeshPhysicalMaterial({color:(Number.parseInt(p.id.slice(0,6),16)&0xffffff)||0x318ead,
+    metalness:.32,roughness:.33,clearcoat:1}));
+ body.position.y=.57;g.add(body);
+ const helmet=new THREE.Mesh(new THREE.SphereGeometry(.29,16,12),
+  new THREE.MeshStandardMaterial({color:0xffd998,roughness:.34}));
+ helmet.position.set(0,1.4,.38);g.add(helmet);
+ const tyres=new THREE.MeshStandardMaterial({color:0x1d2125,roughness:.9});
+ for(const x of [-.78,.78])for(const z of [-.78,.78]){
+  const w=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,.25,14),tyres);
+  w.position.set(x,.35,z);w.rotation.z=Math.PI/2;g.add(w);
+ }
+ return g;
+}
+function updateRivals(racers,myId){
+ if(!scene)return;
+ const present=new Set();
+ for(const driver of racers||[]){
+  if(driver.id===myId||driver.finishedAt||!Number.isFinite(driver.x)||!Number.isFinite(driver.z))continue;
+  present.add(driver.id);
+  let g=remoteKarts.get(driver.id);
+  if(!g){g=createRival(driver);remoteKarts.set(driver.id,g);}
+  const road=projectToRoute(driver.x,driver.z,ROAD);
+  const pit=projectToRoute(driver.x,driver.z,PIT);
+  const route=pit.distance<road.distance?pit:road;
+  g.position.set(driver.x,route.y,driver.z);
+  g.rotation.y=(driver.yaw||0)+Math.PI;
+ }
+ for(const [id,g] of remoteKarts)if(!present.has(id)){
+  scene.remove(g);remoteKarts.delete(id);
+ }
+}
+async function beginMeetingStage(phase,mine){
+ if(!active)return;
+ try{
+  await init();driveMode="meeting";meetingPhase=phase;
+  playing=true;raceId=null;reportedFinish=false;
+  reset();
+  if(phase==="race"&&Number.isFinite(mine?.x)){
+   pos.x=mine.x;pos.z=mine.z;
+   pos.y=projectToRoute(pos.x,pos.z,ROAD).y;
+   yaw=mine.yaw||yaw;
+   kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;
+  }
+  started=performance.now();sendAt=performance.now();lapCount=1;resetSectors();
+  $("kartRacePhase").textContent=phase.toUpperCase();
+  $("kartLap").textContent="1";$("kartProgress").textContent="0%";
+  message(phase==="qualifying"?"QUALIFYING: Set your best full lap before the race starts.":
+    "LIGHTS OUT! Grid P"+mine.grid+" · ten laps · mandatory pit service.");
+ }catch(error){message("Could not start multiplayer session: "+error.message);}
+}
+function clearMeetingStage(){
+ if(driveMode==="meeting"){playing=false;driveMode="practice";meetingPhase=null;speed=0;}
+ for(const group of remoteKarts.values())scene?.remove(group);
+ remoteKarts.clear();
+}
+function finishMeetingStage(mine){
+ if(driveMode!=="meeting"||!mine?.finishedAt)return;
+ playing=false;speed=0;
+ message(mine.disqualified?
+  "Race completed but disqualified: mandatory pit stop not completed.":
+  "CHEQUERED FLAG! You finished P"+mine.position+" of the 10-lap race.");
+}
+function meetingLapUpdate(data){
+ if(driveMode!=="meeting")return;
+ if(data.type==="qualifying"){
+  $("kartBest").textContent="QUALI BEST "+format(data.bestMs);
+  message("Qualifying: "+format(data.timeMs)+" · best "+format(data.bestMs));
+ }else if(data.type==="race"){
+  $("kartLast").textContent="LAST "+format(data.timeMs);
+  $("kartLap").textContent=String(Math.min(10,data.lap+1));
+  message("RACE LAP "+data.lap+"/10 · "+format(data.timeMs));
+ }
+ started=performance.now();
+}
+
 const PIT_LIMIT_MS=11.1; // 40 km/h
 let pitLimiter=false,inPitLane=false;
 let currentSector=1,sectorStarted=0;
