@@ -135,3 +135,12 @@ body.kart-open{overflow:hidden}
 .kart-driving:fullscreen .kart-track-sectors{left:16px;bottom:17px}
 @media(max-width:800px){.kart-mode-options{grid-template-columns:1fr}.kart-mode-card{min-height:145px}.kart-live-positions{width:145px}.kart-track-sectors{right:158px}.kart-track-sectors strong{font-size:11px!important}}
 @media(max-width:490px){.kart-track-sectors{right:8px;bottom:6px;left:8px}.kart-live-positions{width:132px;top:72px}.kart-overlay>div:nth-child(n+5){display:none}.kart-mode-hero h3{font-size:26px}}
+
+.kart-hub-standings{margin-top:22px;padding:15px;border:1px solid #4b6972;background:#142634;border-radius:10px}
+.kart-hub-standings>strong{display:block;color:#f5d59f;font:900 13px system-ui;letter-spacing:.09em;margin-bottom:9px}
+.kart-hub-standings ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:7px}
+.kart-hub-standings li{padding:10px 12px;background:#263a47;border-radius:5px;font:750 12px system-ui;color:#f1e0ca;font-variant-numeric:tabular-nums}
+.kart-modes-back{padding:8px 12px;border:1px solid #b89d77;border-radius:5px;background:#142d37;color:#f2d7a1;font-weight:800;cursor:pointer}
+.kart-driving:fullscreen .kart-overlay>div:nth-child(n+3){display:none!important}
+.kart-driving:fullscreen .kart-live-positions{right:16px;top:16px}
+.kart-driving:fullscreen .kart-track-sectors{bottom:14px}
