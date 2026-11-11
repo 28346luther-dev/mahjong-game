@@ -45,6 +45,7 @@ test("Blackjack allows multiple human players to join one shared round",async()=
  const bob=await casinoRequest(table,"/blackjack/join","bob","Bob");
  assert.equal(alice.status,200);assert.equal(bob.status,200);
  const game=table.data.blackjack;
+ game.players.forEach(p=>p.online=true); // Simulate both users with live WebSocket seats.
  assert.deepEqual(game.players.map(p=>p.name),["Alice","Bob"]);
  readyBlackjack(game,"alice",table.data.wallets);
  readyBlackjack(game,"bob",table.data.wallets);
@@ -66,6 +67,7 @@ test("Blackjack allows multiple human players to join one shared round",async()=
 test("Blackjack next round does not pay out anyone from an old hand again",()=>{
  const game=newBlackjack(),wallets={alice:{balance:500},bob:{balance:500}};
  joinBlackjack(game,"alice","Alice");joinBlackjack(game,"bob","Bob");
+ game.players.forEach(p=>p.online=true);
  readyBlackjack(game,"alice",wallets);
  beginBlackjack(game,wallets);
  for(const p of game.players.filter(p=>p.status==="playing"))

@@ -2,7 +2,7 @@
  * The route is a closed continuous spline, not a generic ellipse.
  * No checkpoint gates, index-based user interactions or floating track props.
  */
-export const ROAD_HALF_WIDTH=4.2;
+export const ROAD_HALF_WIDTH=6.0;
 export const RUNOFF_WIDTH=7.5;
 export const TRACK_SCALE=1.65;
 export const PIT_FAST_LANE_WIDTH=4.4;

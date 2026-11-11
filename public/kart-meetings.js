@@ -28,8 +28,15 @@ function timeRemaining(){
  const el=$("kartMeetingCountdown");
  if(snapshot.phase==="registration")el.textContent=countdown(snapshot.qualifyingAt-now)+"s until qualifying";
  else if(snapshot.phase==="qualifying")el.textContent=countdown(snapshot.raceAt-now)+"s until grid start";
+ else if(snapshot.phase==="grid")el.textContent="GRID · FIVE RED LIGHTS";
  else if(snapshot.phase==="race")el.textContent="10-LAP RACE IN PROGRESS";
  else el.textContent="SESSION COMPLETE";
+ const lights=$("kartStartLights");
+ const isGrid=snapshot.phase==="grid"&&!!snapshot.you;
+ const amount=isGrid?Math.min(5,Math.floor(Math.max(0,now-snapshot.raceAt)/1000)+1):0;
+ lights.classList.toggle("hidden",!isGrid);
+ [...lights.querySelectorAll(".light-bulb")].forEach((bulb,i)=>bulb.classList.toggle("on",i<amount));
+ $("kartLightsText").textContent=amount===5?"HOLD FOR LIGHTS OUT":"FIVE RED LIGHTS";
  const you=snapshot.racers?.find(p=>p.id===snapshot.you);
  const serverRemaining=Math.max(0,(you?.pitUntil||serviceUntil)-now);
  const seconds=Math.max(localRemaining,serverRemaining)/1000;
@@ -99,6 +106,7 @@ function stateUpdate(data){
  const details=registered?
   data.phase==="registration"?"Registered. Qualifying starts at "+when(data.qualifyingAt)+". Grid set by your fastest lap.":
   data.phase==="qualifying"?"QUALIFYING: set your fastest lap before "+when(data.raceAt)+" ("+fmt(mine.qualifiedMs)+" best).":
+  data.phase==="grid"?"ON THE GRID · P"+mine.grid+" · wait for five red lights to go out.":
   data.phase==="race"?mine.finishedAt?
    mine.disqualified?"Race complete: disqualified for missing the mandatory pit stop.":
    "Finished! Final race position P"+mine.position:
@@ -108,11 +116,11 @@ function stateUpdate(data){
   "Register to race. Two-minute qualifying precedes a ten-lap race.";
  status(details);
  const identity=String(selected)+":"+data.phase;
- if(data.you&&["qualifying","race"].includes(data.phase)&&phaseEntered!==identity){
+ if(data.you&&window.KartRacing?.mayAutoJoinMeeting?.()&&["qualifying","grid","race"].includes(data.phase)&&phaseEntered!==identity){
   phaseEntered=identity;raceIdentity=selected;
   window.KartRacing?.beginMeetingStage?.(data.phase,mine,data);
  }
- if(data.you&&data.phase==="race"){
+ if(data.you&&["grid","race"].includes(data.phase)){
   window.KartRacing?.updateRivals?.(data.racers,data.you);
  }
  if(mine?.pitUntil)serviceUntil=mine.pitUntil;
@@ -195,5 +203,5 @@ $("kartPitService").addEventListener("click",service);
 $("kartPractice").addEventListener("click",()=>window.KartRacing?.beginPractice?.());
 window.KartMeetings={open:start,close:stop,getState:()=>snapshot,
  getActiveId:()=>raceIdentity,sendTelemetry,serviceUntil:()=>Math.max(0,serviceUntil-Date.now()-serverOffset),
- canDrive:()=>serviceUntil<=Date.now()+serverOffset&&!snapshot?.racers?.find(p=>p.id===snapshot.you)?.finishedAt,
+ canDrive:()=>snapshot?.phase!=="grid"&&serviceUntil<=Date.now()+serverOffset&&!snapshot?.racers?.find(p=>p.id===snapshot.you)?.finishedAt,
  tick:timeRemaining,refresh:refreshState};

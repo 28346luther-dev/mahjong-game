@@ -12,6 +12,7 @@ let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPendi
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
 let driveMode="practice",meetingPhase=null,remoteKarts=new Map();
+let selectedMode="practice",timeTrial=false,selectorVisible=true;
 let localPitUntil=0,localPitBay=null,localPitDone=false;
 function getLocalPitRemaining(){return Math.max(0,localPitUntil-Date.now());}
 function resetLocalPit(){localPitUntil=0;localPitBay=null;localPitDone=false;}
@@ -32,6 +33,16 @@ function createRival(p){
  scene.add(model.group);return model.group;
 }
 function updateRivals(racers,myId){
+ const list=$("kartTrackPositions");
+ if(list){
+  list.replaceChildren();
+  for(const [index,p] of (racers||[]).entries()){
+   const li=document.createElement("li");
+   li.textContent="P"+(p.position||index+1)+"  "+p.name+(p.id===myId?" · YOU":"")+"  L"+(p.lap||0)+"/10";
+   if(p.id===myId)li.className="my-position";
+   list.append(li);
+  }
+ }
  if(!scene)return;
  const present=new Set();
  for(const driver of racers||[]){
@@ -50,12 +61,19 @@ function updateRivals(racers,myId){
  }
 }
 async function beginMeetingStage(phase,mine){
+ if(driveMode==="meeting"&&meetingPhase==="grid"&&phase==="race"){
+  meetingPhase="race";playing=true;speed=0;started=performance.now();
+  $("kartRacePhase").textContent="RACE";
+  message("LIGHTS OUT! GO! Complete 10 laps and the mandatory pit stop.");
+  return;
+ }
+ enterTrack("races");
  if(!active)return;
  try{
   await init();driveMode="meeting";meetingPhase=phase;personalSectorBests=[null,null,null];
   playing=true;raceId=null;reportedFinish=false;
   reset();
-  if(phase==="race"&&Number.isFinite(mine?.x)){
+  if(["grid","race"].includes(phase)&&Number.isFinite(mine?.x)){
    pos.x=mine.x;pos.z=mine.z;
    pos.y=projectToRoute(pos.x,pos.z,ROAD).y;
    yaw=mine.yaw||yaw;
@@ -65,6 +83,7 @@ async function beginMeetingStage(phase,mine){
   $("kartRacePhase").textContent=phase.toUpperCase();
   $("kartLap").textContent="1";$("kartProgress").textContent="0%";
   message(phase==="qualifying"?"QUALIFYING: Set your best full lap before the race starts.":
+    phase==="grid"?"GRID P"+mine.grid+" · stay stationary until the red lights go out.":
     "LIGHTS OUT! Grid P"+mine.grid+" · ten laps · mandatory pit service.");
  }catch(error){message("Could not start multiplayer session: "+error.message);}
 }
@@ -195,11 +214,24 @@ document.addEventListener("fullscreenchange",syncFullscreen);
 function message(t){$("kartStatus").textContent=t;}
 function standings(records){
  const list=$("kartLeaderboard");list.replaceChildren();
- if(!records?.length){const li=document.createElement("li");li.textContent="No times yet. Be the first!";list.append(li);return;}
+ const selectorList=$("kartHubLeaderboard");
+ if(selectorList)selectorList.replaceChildren();
+ if(!records?.length){
+  for(const parent of [list,selectorList].filter(Boolean)){
+   const li=document.createElement("li");li.textContent="No recorded laps yet — set the first full lap!";
+   parent.append(li);
+  }
+  return;
+ }
  for(const p of records){
   const li=document.createElement("li"),rank=document.createElement("strong"),name=document.createElement("span"),time=document.createElement("b");
   rank.textContent="#"+p.rank;name.textContent=p.name;time.textContent=format(p.bestMs);
   li.append(rank,name,time);list.append(li);
+  if(selectorList){
+   const row=document.createElement("li");
+   row.textContent="#"+p.rank+"  "+p.name+"  —  "+format(p.bestMs);
+   selectorList.append(row);
+  }
  }
 }
 async function leaderboard(){
@@ -303,6 +335,21 @@ function track(){
  // Detailed two-level garage building, safe entry signs and four marked service bays.
  addPitComplex(THREE,scene,PIT,PIT_BAYS);
  addCircuitGrandstands(THREE,scene);
+ // Sixteen painted grid slots on the start straight: white L-shaped front
+ // corner brackets and a white start marker for each qualifying position.
+ const gridStart=ROAD.samples[0],gridNext=ROAD.samples[4];
+ const gridDx=gridNext.x-gridStart.x,gridDz=gridNext.z-gridStart.z;
+ const gridLen=Math.hypot(gridDx,gridDz)||1,gtx=gridDx/gridLen,gtz=gridDz/gridLen;
+ for(let i=0;i<16;i++){
+  const lane=(i%2?1:-1)*2.25,forward=8+Math.floor(i/2)*5.7;
+  const gx=gridStart.x+gtx*forward-gtz*lane;
+  const gz=gridStart.z+gtz*forward+gtx*lane;
+  const y=projectToRoute(gx,gz,ROAD).y+.16;
+  const sideLine=box(.09,.022,3.6,0xfaf3e6,gx,y,gz);
+  sideLine.rotation.y=Math.atan2(gtx,gtz);
+  const frontLine=box(2.3,.022,.11,0xfaf3e6,gx+gtx*1.75,y,gz+gtz*1.75);
+  frontLine.rotation.y=Math.atan2(gtx,gtz);
+ }
  // Physical starting gantry on the outside of the racing line.
  const p=ROAD.samples[0],d=tangent(ROAD,0);
  for(const side of [-1,1])post(.16,4.1,0xd4ad79,p.x+d.nx*side*4.8,p.y+2,p.z+d.nz*side*4.8);
@@ -371,7 +418,10 @@ function positionOnTrack(x,z){
  // With P active the pit corridor takes priority, including its full
  // tapered entry/exit. Previously nearest-road selection trapped the kart
  // against the pit-wall as it tried to cross onto the service lane.
- const pitSurface=pit.distance<PIT_HALF_WIDTH+1.25&&
+ // A dedicated PIT OUT merge is reached near the end of the pit spline.
+ // Rejoin the racing surface once the two asphalt strips physically overlap.
+ const atPitExit=inPitLane&&pit.progress>.91&&road.distance<ROAD_HALF_WIDTH+1.6;
+ const pitSurface=!atPitExit&&pit.distance<PIT_HALF_WIDTH+1.25&&
   (inPitLane||pit.progress>.02&&pit.progress<.98||pit.distance<road.distance+2.4);
  // The pit route is only accessible with the limiter engaged.
  if(pitSurface&&pitLimiter)return {...pit,isPit:true};
@@ -390,7 +440,11 @@ async function transmit(){
   if(!active||raceId!==current)return;
   progress=result.progress;
   $("kartProgress").textContent=progress+"%";
-  if(result.sectorUpdate){
+  if(Number.isFinite(result.lapElapsedMs)){
+   // Single cumulative lap clock; split updates never change its origin.
+   $("kartTime").textContent=format(result.lapElapsedMs);
+ }
+ if(result.sectorUpdate){
    showSector(result.sectorUpdate.index,result.sectorUpdate.timeMs);
    message("Sector "+result.sectorUpdate.index+": "+format(result.sectorUpdate.timeMs));
   }
@@ -425,6 +479,7 @@ async function transmit(){
      format(finish.elapsedMs)+" · Lap "+lapCount+" now running.");
    standings(finish.entries);
    lastLeaderboardRefresh=performance.now();
+   if(timeTrial){playing=false;speed=0;message("Time trial complete — "+format(finish.elapsedMs)+". Choose Start timed lap to go again.");}
   }
  }catch(error){
   if(raceId===current){playing=false;message(error.message+" Restart the lap to try again.");}
@@ -503,7 +558,9 @@ function update(dt){
  updateRideHeightAndBank(dt);
  localPitService();
  if(performance.now()-sendAt>600&&!telemetryPending){sendAt=performance.now();transmit();}
- $("kartTime").textContent=format(performance.now()-started);
+ // Sector times are display-only and never reset this lap clock.
+ if(driveMode!=="meeting")$("kartTime").textContent=format(performance.now()-started);
+ else if(meetingPhase==="qualifying"||meetingPhase==="race")$("kartTime").textContent=format(performance.now()-started);
 }
 function frame(){
  requestAnimationFrame(frame);
@@ -548,22 +605,54 @@ async function begin(){
   $("kartProgress").textContent="0%";
   $("kartStart").textContent="Restart session";
   if(result.bestMs)$("kartBest").textContent="BEST "+format(result.bestMs);
+  $("kartRacePhase").textContent=timeTrial?"TIME TRIAL":"FREE PRACTICE";
   message("GO! Hit the apex kerbs, keep clear of the gravel, and stay out for unlimited timed laps.");
  }catch(error){message(error.message);}
  finally{busy=false;$("kartStart").disabled=false;}
 }
+function enterTrack(mode="practice"){
+ selectedMode=mode;timeTrial=mode==="timetrial";selectorVisible=false;
+ $("kartGame").classList.add("kart-driving");
+ $("kartGame").classList.remove("kart-selector");
+ $("kartDrivingMode").textContent=mode==="timetrial"?"TIME TRIAL":mode==="races"?"CHAMPIONSHIP":"FREE PRACTICE";
+ $("kartTrackPositions").replaceChildren();
+ if(mode!=="races"){
+  const item=document.createElement("li");item.textContent=mode==="timetrial"?"GLOBAL TIME TRIAL":"SOLO PRACTICE";
+  $("kartTrackPositions").append(item);
+ }
+ if(mode==="practice"||mode==="timetrial"){begin();}
+ else message("Race meeting selected. Qualifying begins at the scheduled time.");
+}
+function backToSelector(){
+ if(document.fullscreenElement===$("kartGame"))document.exitFullscreen().catch(()=>{});
+ playing=false;speed=0;raceId=null;clearMeetingStage();keys.clear();touch.clear();
+ selectorVisible=true;
+ $("kartGame").classList.remove("kart-driving","kart-races-hub");
+ $("kartGame").classList.add("kart-selector");
+ window.KartMeetings?.refresh?.();
+}
+function showRaceMeetings(){
+ selectorVisible=true;$("kartGame").classList.add("kart-selector","kart-races-hub");
+ $("kartGame").classList.remove("kart-driving");
+ window.KartMeetings?.refresh?.();
+}
+function mayAutoJoinMeeting(){
+ return active&&(!selectorVisible||$("kartGame").classList.contains("kart-races-hub"));
+}
 function open(){
  if(active)return;active=true;$("kartGame").classList.remove("hidden");
  document.body.classList.add("kart-open");document.exitPointerLock?.();
- message("Race the redesigned Velvet Circuit — corners, chicanes, hills and a pit lane.");
- leaderboard();lastLeaderboardRefresh=performance.now();init().catch(error=>message("Track unavailable: "+error.message));
+ $("kartGame").classList.add("kart-selector");
+ $("kartGame").classList.remove("kart-driving","kart-races-hub");
+ selectorVisible=true;message("Choose your racing mode to begin.");
+ leaderboard();lastLeaderboardRefresh=performance.now();
  window.KartMeetings?.open?.();
 }
 function close(){
  window.KartMeetings?.close?.();clearMeetingStage();
  if(document.fullscreenElement===$("kartGame"))document.exitFullscreen().catch(()=>{});
- active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;pitLimiter=false;inPitLane=false;updatePitHUD();
- $("kartGame").classList.add("hidden");document.body.classList.remove("kart-open");
+ active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;selectorVisible=true;pitLimiter=false;inPitLane=false;updatePitHUD();
+ $("kartGame").classList.add("hidden");$("kartGame").classList.remove("kart-driving","kart-selector","kart-races-hub");document.body.classList.remove("kart-open");
 }
 window.addEventListener("keydown",e=>{
  if(!active||["INPUT","TEXTAREA"].includes(document.activeElement?.tagName))return;
@@ -573,9 +662,9 @@ window.addEventListener("keydown",e=>{
  }
  if(k==="c"){setCameraMode(cameraMode==="chase"?"cockpit":"chase");e.preventDefault();}
  if(k==="p"){togglePitLimiter();e.preventDefault();}
- if(k==="f"){toggleFullscreen();e.preventDefault();}
- if(k==="r"){reset();playing=false;message("Kart reset. Start a new timed lap to record a result.");}
- if(k==="escape"){e.preventDefault();close();}
+ if(k==="f"&&!selectorVisible){toggleFullscreen();e.preventDefault();}
+ if(k==="r"&&!selectorVisible){reset();playing=false;message("Kart reset. Start a new timed lap to record a result.");}
+ if(k==="escape"){e.preventDefault();if(!selectorVisible)backToSelector();else close();}
 });
 window.addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));
 window.addEventListener("blur",()=>keys.clear());
@@ -589,7 +678,16 @@ $("kartFullscreen").addEventListener("click",toggleFullscreen);
 $("kartPitLimiter").addEventListener("click",togglePitLimiter);
 $("kartStart").addEventListener("click",begin);
 $("kartClose").addEventListener("click",close);
+$("kartBackSelector").addEventListener("click",backToSelector);
+$("kartRaceModesBack").addEventListener("click",backToSelector);
+for(const card of document.querySelectorAll("[data-kart-mode]")){
+ card.addEventListener("click",()=>{
+  const mode=card.dataset.kartMode;
+  if(mode==="races")showRaceMeetings();
+  else enterTrack(mode);
+ });
+}
 $("kartRefresh").addEventListener("click",leaderboard);
 window.KartRacing={open,close,isOpen:()=>active,setCameraMode,meetingSectorUpdate,
  beginMeetingStage,clearMeetingStage,finishMeetingStage,meetingLapUpdate,updateRivals,
- getPose,pitBays:()=>PIT_BAYS,beginPractice:begin,getLocalPitRemaining,resetLocalPit};
+ getPose,pitBays:()=>PIT_BAYS,beginPractice:()=>enterTrack("practice"),enterTrack,backToSelector,mayAutoJoinMeeting,getLocalPitRemaining,resetLocalPit};

@@ -79,6 +79,7 @@ test("new circuit leaderboard does not compare old oval records to new road cour
 test("blackjack allows a computer dealer or a real challenger/dealer with 10 Sana each",()=>{
  const game=newBlackjack(),wallets={a:{balance:500},b:{balance:500}};
  joinBlackjack(game,"a","Alice");joinBlackjack(game,"b","Bob");
+ game.players.forEach(p=>p.online=true);
  chooseBlackjackMode(game,"person");
  readyBlackjack(game,"a",wallets);readyBlackjack(game,"b",wallets);
  assert.equal(wallets.a.balance,490);assert.equal(wallets.b.balance,490);
