@@ -122,6 +122,28 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   geometry.computeVertexNormals();
   makeMesh(geometry,col?white:red);
  }
+ // Wide, fully driveable corner-exit kerbs: long alternating red/white
+ // stripes following the OUTSIDE edge as steering unwinds. Asphalt, kerbs
+ // and green paint are one full-grip surface; gravel begins farther out.
+ const exitVertices=[[],[]];
+ for(let i=0;i<N;i++){
+  const bendNow=bend(i),prior=bend((i-10+N)%N);
+  const exit=Math.abs(prior)>.13&&Math.abs(bendNow)>.065&&Math.abs(bendNow)<Math.abs(prior)*1.1;
+  if(!exit)continue;
+  const j=(i+1)%N,side=prior>0?-1:1;
+  const p=ps[i],q=ps[j],d=tangent(i),e=tangent(j);
+  const inside=side*(halfWidth-.18),outside=side*(halfWidth+2.3);
+  const vertices=exitVertices[Math.floor(i/5)%2];
+  for(const [point,t,off] of [[p,d,inside],[p,d,outside],[q,e,inside],
+   [q,e,inside],[p,d,outside],[q,e,outside]])
+   stripVertex(vertices,point,t,off,.11);
+ }
+ for(let i=0;i<2;i++){
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute("position",new THREE.Float32BufferAttribute(exitVertices[i],3));
+  geometry.computeVertexNormals();
+  makeMesh(geometry,i?white:red);
+ }
  // Painted white edge lines with actual curved mesh, not short floating rods.
  const line=standard(0xf9eee1,.65);
  addBand(-halfWidth+.12,-halfWidth+.19,line,.057);
