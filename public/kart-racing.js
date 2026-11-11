@@ -1,8 +1,10 @@
-import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,projectToRoute,raceStart} from "./kart-track.js";
+import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,bankAngle,projectToRoute,raceStart} from "./kart-track.js";
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
 import {createFormulaVee} from "./kart-formula-vee.js";
+import {addCircuitGrandstands} from "./kart-grandstands.js";
+import {resolveKartCollision,surfaceNormal,nearPitBay} from "./kart-physics.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
@@ -10,6 +12,18 @@ let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPendi
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
 let driveMode="practice",meetingPhase=null,remoteKarts=new Map();
+let localPitUntil=0,localPitBay=null,localPitDone=false;
+function getLocalPitRemaining(){return Math.max(0,localPitUntil-Date.now());}
+function resetLocalPit(){localPitUntil=0;localPitBay=null;localPitDone=false;}
+function localPitService(){
+ if(driveMode==="meeting"&&meetingPhase==="race")return;
+ if(!inPitLane||!pitLimiter||Math.abs(speed)>.45)return;
+ const bay=PIT_BAYS.find(b=>nearPitBay(pos.x,pos.z,b));
+ if(!bay||localPitDone||localPitUntil)return;
+ localPitUntil=Date.now()+10000;localPitBay=bay.index;
+ message("PIT SERVICE · BAY "+(bay.index+1)+" · 10 SECOND STOP");
+}
+
 function getPose(){return {x:pos.x,z:pos.z,yaw,speed,pit:inPitLane};}
 function createRival(p){
  const palette=[0xb33749,0x2a739d,0x3f8a6b,0xd2ac51,0x805b98,0xdc7b39];
@@ -238,9 +252,11 @@ function embankment(route,side,width=8){
  const vertices=[],indices=[],samples=route.samples;
  for(let i=0;i<samples.length;i++){
   const p=samples[i],d=tangent(route,i);
-  const edge=(ROAD_HALF_WIDTH+.35)*side;
-  vertices.push(p.x+d.nx*edge,p.y-.04,p.z+d.nz*edge);
-  vertices.push(p.x+d.nx*(edge+side*width),Math.max(-.06,p.y-2.7),p.z+d.nz*(edge+side*width));
+  // Start outside all kerbs and runoff; original embankment began inside
+  // the paved verge and intersected the asphalt as an ugly grass lip.
+  const edge=(ROAD_HALF_WIDTH+RUNOFF_WIDTH+.35)*side;
+  vertices.push(p.x+d.nx*edge,p.y+bankRise(i/samples.length,edge)-.12,p.z+d.nz*edge);
+  vertices.push(p.x+d.nx*(edge+side*width),-.12,p.z+d.nz*(edge+side*width));
  }
  for(let i=0;i<(route.closed?samples.length:samples.length-1);i++){
   const a=i*2,b=((i+1)%samples.length)*2;
@@ -277,6 +293,7 @@ function track(){
  addKartSafety(THREE,scene,ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  // Detailed two-level garage building, safe entry signs and four marked service bays.
  addPitComplex(THREE,scene,PIT,PIT_BAYS);
+ addCircuitGrandstands(THREE,scene);
  // Physical starting gantry on the outside of the racing line.
  const p=ROAD.samples[0],d=tangent(ROAD,0);
  for(const side of [-1,1])post(.16,4.1,0xd4ad79,p.x+d.nx*side*4.8,p.y+2,p.z+d.nz*side*4.8);
@@ -335,13 +352,15 @@ async function init(){
  construct();reset();requestAnimationFrame(frame);
 }
 function reset(){
+ resetLocalPit();
  const start=raceStart();pos={x:start.x,y:start.y,z:start.z};yaw=start.yaw;
  speed=0;progress=0;reportedFinish=false;pitLimiter=false;inPitLane=false;updatePitHUD();
  if(kart){kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;}
 }
 function positionOnTrack(x,z){
  const road=projectToRoute(x,z,ROAD),pit=projectToRoute(x,z,PIT);
- const pitSurface=pit.distance<PIT_HALF_WIDTH+.55&&pit.distance<road.distance;
+ const pitSurface=pit.distance<PIT_HALF_WIDTH+1.2&&
+  (inPitLane?pit.distance<road.distance+5:pit.distance<road.distance+1);
  // The pit route is only accessible with the limiter engaged.
  if(pitSurface&&pitLimiter)return {...pit,isPit:true};
  return {...road,isPit:false};
@@ -399,8 +418,28 @@ async function transmit(){
   if(raceId===current){playing=false;message(error.message+" Restart the lap to try again.");}
  }finally{telemetryPending=false;}
 }
+function updateRideHeightAndBank(dt){
+ if(!kart||!THREE)return;
+ const projected=positionOnTrack(pos.x,pos.z);
+ const lateral=(pos.x-projected.x)*projected.normalX+(pos.z-projected.z)*projected.normalZ;
+ const contactY=projected.y+(projected.isPit?0:bankRise(projected.progress,lateral));
+ pos.y+=(contactY-pos.y)*Math.min(1,dt*12);
+ const up=projected.isPit?new THREE.Vector3(0,1,0):
+  surfaceNormal(ROAD,projected,bankAngle(projected.progress),THREE);
+ const bankQuat=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),up);
+ const yawQuat=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw+Math.PI);
+ kart.quaternion.slerp(bankQuat.multiply(yawQuat),Math.min(1,dt*11));
+ kart.position.set(pos.x,pos.y,pos.z);
+}
 function update(dt){
  if(!playing)return;
+ if(localPitUntil){
+  if(getLocalPitRemaining()>0){
+   speed=0;updateRideHeightAndBank(dt);return;
+  }
+  localPitUntil=0;localPitDone=true;
+  message("PIT SERVICE COMPLETE · RELEASED FROM BAY "+(Number(localPitBay)+1));
+ }
  if(driveMode==="meeting"&&!window.KartMeetings?.canDrive?.()){
   speed=0;
   if(performance.now()-sendAt>950){sendAt=performance.now();transmit();}
@@ -419,7 +458,12 @@ function update(dt){
  // Higher speed increases the turning radius; brake before the chicanes.
  const steeringRate=2.25/(1+Math.abs(speed)/15);
  yaw-=steer*dt*steeringRate*Math.min(1,Math.abs(speed)/3)*(speed>=0?1:-1);
- const x=pos.x+Math.sin(yaw)*speed*dt,z=pos.z+Math.cos(yaw)*speed*dt;
+ const proposedX=pos.x+Math.sin(yaw)*speed*dt;
+ const proposedZ=pos.z+Math.cos(yaw)*speed*dt;
+ const collision=driveMode==="meeting"?resolveKartCollision(pos.x,pos.z,proposedX,proposedZ,
+   [...remoteKarts.values()].filter(g=>g.visible).map(g=>({x:g.position.x,z:g.position.z}))):null;
+ const x=collision?.x??proposedX,z=collision?.z??proposedZ;
+ if(collision?.hit){speed*=.22;message("CONTACT · Avoid the other Formula Vee cars.");}
  const projected=positionOnTrack(x,z);
  const grip=gripForDistance(projected.distance,projected.isPit);
  // PIT route is a real driveable road ONLY with P limiter enabled.
@@ -430,6 +474,7 @@ function update(dt){
   const lateral=(x-projected.x)*projected.normalX+(z-projected.z)*projected.normalZ;
   pos.y=projected.y+(projected.isPit?0:bankRise(projected.progress,lateral));
   if(inPitLane!==projected.isPit){
+   if(!projected.isPit){localPitUntil=0;localPitDone=false;}
    inPitLane=projected.isPit;
    updatePitHUD();
    message(inPitLane?"Entering pit lane at 40 km/h. Your lap timer is paused.":"Pit exit — back on the circuit.");
@@ -437,7 +482,8 @@ function update(dt){
  }else{
   speed*=.23; // Outside barrier prevents off-track shortcut.
  }
- kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;
+ updateRideHeightAndBank(dt);
+ localPitService();
  if(performance.now()-sendAt>600&&!telemetryPending){sendAt=performance.now();transmit();}
  $("kartTime").textContent=format(performance.now()-started);
 }
@@ -528,4 +574,4 @@ $("kartClose").addEventListener("click",close);
 $("kartRefresh").addEventListener("click",leaderboard);
 window.KartRacing={open,close,isOpen:()=>active,setCameraMode,meetingSectorUpdate,
  beginMeetingStage,clearMeetingStage,finishMeetingStage,meetingLapUpdate,updateRivals,
- getPose,pitBays:()=>PIT_BAYS,beginPractice:begin};
+ getPose,pitBays:()=>PIT_BAYS,beginPractice:begin,getLocalPitRemaining,resetLocalPit};
