@@ -3,7 +3,7 @@
    stacked cubes. Low-cost instancing retains frame rate on laptop GPUs. */
 import {bankRise,PIT,PIT_HALF_WIDTH,projectToRoute} from "./kart-track.js";
 export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
- const ps=ROAD.samples,N=ps.length,PI2=Math.PI*2;
+ const ps=ROAD.samples,N=ps.length,PI2=Math.PI*2,detail=ROAD.detail||1;
  const standard=(color,rough=.85,metal=0)=>new THREE.MeshStandardMaterial({color,roughness:rough,metalness:metal,side:THREE.DoubleSide});
  const makeMesh=(geo,mat,x=0,y=0,z=0)=>{
   const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.receiveShadow=true;scene.add(m);return m;
@@ -15,19 +15,28 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   const texture=new THREE.CanvasTexture(c);
   texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
   texture.colorSpace=THREE.SRGBColorSpace;
-  texture.anisotropy=4;
+  texture.anisotropy=16;
+  texture.generateMipmaps=true;
   return texture;
  }
- const asphalt=texturedCanvas(384,(ctx,s)=>{
-  ctx.fillStyle="#484a4e";ctx.fillRect(0,0,s,s);
-  for(let i=0;i<18000;i++){
-   const v=Math.round(55+rand()*45);
+ const asphalt=texturedCanvas(1024,(ctx,s)=>{
+  ctx.fillStyle="#383e43";ctx.fillRect(0,0,s,s);
+  // Fine aggregate, tire polishing and worn race-line rubber without tiling hard seams.
+  for(let i=0;i<100000;i++){
+   const v=Math.round(47+rand()*51);
    ctx.fillStyle="rgba("+v+","+v+","+v+","+(0.06+rand()*.16)+")";
    const x=rand()*s,y=rand()*s;ctx.fillRect(x,y,.5+rand()*2,.5+rand()*2);
   }
-  for(let i=0;i<65;i++){
+  for(let i=0;i<130;i++){
    ctx.strokeStyle="rgba(210,202,190,"+(rand()*.08)+")";
    ctx.beginPath();const x=rand()*s;ctx.moveTo(x,0);ctx.lineTo(x+(rand()-.5)*11,s);ctx.stroke();
+  }
+  // Parallel curved rubber deposits, the subtle dark band seen on used circuits.
+  for(let i=0;i<170;i++){
+   const x=rand()*s,y=rand()*s;
+   ctx.strokeStyle="rgba(9,13,17,"+(0.015+rand()*.045)+")";
+   ctx.lineWidth=1+rand()*3;
+   ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(x+12,y-14,x+16,y-35,x+27,y-48);ctx.stroke();
   }
  });
  const grass=texturedCanvas(256,(ctx,s)=>{
@@ -56,7 +65,7 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  }
  // Local curvature measured over several metres; sign determines inside turn.
  function bend(i){
-  const a=tangent((i-7+N)%N),b=tangent((i+7)%N);
+  const a=tangent((i-7*detail+N)%N),b=tangent((i+7*detail)%N);
   return a.x*b.z-a.z*b.x;
  }
  function addBand(from,to,mat,height=.08,condition=()=>true){
@@ -86,9 +95,11 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  }
  // Photographic reference: vivid green paint outside a flush red/white raised
  // kerb, itself at the corner apex, and gravel beyond. No kerbs on every straight.
- const roadMat=standard(0xffffff,.93);roadMat.map=asphalt;
+ const roadMat=standard(0xffffff,.83);roadMat.map=asphalt;
+ roadMat.bumpMap=asphalt;roadMat.bumpScale=.014;
  const greenMat=standard(0xffffff,.9);greenMat.map=paint;
- const gravelMat=standard(0xffffff,.95);gravelMat.map=gravel;
+ const gravelMat=standard(0xffffff,.98);gravelMat.map=gravel;
+ gravelMat.bumpMap=gravel;gravelMat.bumpScale=.03;
  const turfMat=standard(0xffffff,1);turfMat.map=grass;
  addBand(-halfWidth+.10,halfWidth-.10,roadMat,.041);
  for(const side of [-1,1]){
@@ -123,7 +134,7 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  const cornerSide=new Array(N).fill(0);
  const exitMask=new Array(N).fill(false);
  for(let i=0;i<N;i++){
-  const cur=bend(i),prev=bend((i-11+N)%N),next=bend((i+11)%N);
+  const cur=bend(i),prev=bend((i-11*detail+N)%N),next=bend((i+11*detail)%N);
   const strong=Math.max(Math.abs(cur),Math.abs(prev),Math.abs(next));
   cornerMask[i]=strong>.125;
   cornerSide[i]=Math.sign(Math.abs(cur)>.045?cur:(Math.abs(prev)>Math.abs(next)?prev:next))||1;
@@ -145,12 +156,12 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  for(let i=0;i<N;i++){
   const side=cornerSide[i],outside=-side;
   if(cornerMask[i]&&cornerMask[(i+1)%N]){
-   const mesh=kerbMeshes[Math.floor(i/6)%2];
+   const mesh=kerbMeshes[Math.floor(i/(6*detail))%2];
    // 1.7m apex kerb, a single alternating paint band every 6 road samples.
    curvedStrip(i,side,halfWidth-.22,halfWidth+1.48,mesh);
   }
   if(exitMask[i]&&exitMask[(i+1)%N]){
-   const mesh=kerbMeshes[Math.floor(i/8)%2];
+   const mesh=kerbMeshes[Math.floor(i/(8*detail))%2];
    // Wide 2.65m corner exit kerb like the provided real circuit photo.
    curvedStrip(i,outside,halfWidth-.18,halfWidth+2.46,mesh,.125,.167);
    // Dark-blue/red painted safety stripes run outside the exit kerb.
@@ -214,7 +225,7 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  for(let i=0;i<400;i++){
   const x=(rand()-.5)*410,z=(rand()-.5)*305;
   let near=Infinity;
-  for(let j=0;j<N;j+=3){const p=ps[j];near=Math.min(near,Math.hypot(x-p.x,z-p.z));}
+  for(let j=0;j<N;j+=3*detail){const p=ps[j];near=Math.min(near,Math.hypot(x-p.x,z-p.z));}
   // Keep the entire pit road, all garage fronts and their apron clear of trees.
   // Their trunks must never appear inside a service bay or behind the pit wall.
   if(near<halfWidth+runoffWidth+6||
