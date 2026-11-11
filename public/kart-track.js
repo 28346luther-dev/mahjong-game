@@ -19,14 +19,16 @@ export const ROAD_POINTS=[
  [-20,36,.65],[-31,27,.6],[-39,19,.95],[-53,30,1.25],
  [-65,28,1.45],[-72,12,1.55],[-67,-7,1.2],[-57,-18,.85]
 ].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y*1.35]);
-// PIT IN branches off the main straight. The continuous paved exit merges
-// farther along the next right-hand bend, without crossing grass or gravel.
-// The flat middle portion has separate FAST and SERVICE lanes.
+// Remodelled pit road: the entry peels gradually from the last part of
+// the long main straight; the two-lane garage section runs parallel to it,
+// and PIT OUT curves gently onto the next straight AFTER the opening turn.
+// Shared asphalt junctions do not terminate in grass or a tyre wall.
 export const PIT_POINTS=[
- [-46,-22,.8],[-43,-19,.8],[-40,-15,.8],[-36,-12,.8],
- [-28,-10,.8],[-16,-9.3,.82],[-3,-9.3,.83],
- [9,-9.5,.87],[18,-12,1.0],[24,-17,1.08],
- [28,-22,1.15],[34,-24,1.35],[37,-22,1.65]
+ [-46,-22,.8],[-42,-21.9,.8],[-35,-21.4,.81],[-28,-20.0,.82],
+ [-21,-17.7,.82],[-14,-14.8,.83],[-7,-12.0,.84],
+ [1,-10.5,.86],[10,-10.4,.9],[18,-10.9,.95],
+ [26,-12.5,1.05],[34,-15.0,1.25],[42,-17.2,1.55],
+ [49,-18.1,1.9],[53,-18,2.15]
 ].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y*1.35]);
 // The extended eastern right-hand sweeper has approximately 17 degrees of
 // progressive banking. Banking is tapered smoothly on entry and exit.
@@ -46,7 +48,7 @@ export function bankRise(progress,lateralOffset){
 // The drive-through portion of the pit route remains usable in free practice.
 // Bays are set back into the service apron, toward the garages (+normal)
 // while the fast lane stays open on the race-track side (-normal).
-export const PIT_BAYS=[.28,.38,.48,.58].map((fraction,i)=>{
+export const PIT_BAYS=[.38,.46,.54,.62].map((fraction,i)=>{
  const route=makeRoute(PIT_POINTS,96,false);
  const n=Math.min(route.samples.length-2,Math.round(fraction*96));
  const p=route.samples[n],q=route.samples[n+1],prev=route.samples[Math.max(0,n-1)];
@@ -127,7 +129,7 @@ export function refineRoute(route,subdivisions=VISUAL_SUBDIVISIONS){
  return {samples:result,length,closed,visual:true,detail:subdivisions};
 }
 
-export const PIT=makeRoute(PIT_POINTS,160,false);
+export const PIT=makeRoute(PIT_POINTS,240,false);
 export function cornerKerbGripWidth(progress){
  // Same local curvature criteria used by the visual apex and exit kerbs.
  const samples=ROAD.samples,n=samples.length;
