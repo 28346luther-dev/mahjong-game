@@ -97,53 +97,74 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   addBand(outer+side*1.23,outer+side*3.9,gravelMat,.018,i=>Math.abs(bend(i))>.14);
   addBand(outer+side*3.9,outer+side*runoffWidth,turfMat,.004);
  }
- const red=standard(0xd32937,.61),white=standard(0xfff6e5,.6);
- const kerbVerts=[[],[]];
- function stripVertex(out,p,t,offset,y){
-  out.push(p.x+t.nx*offset,p.y+y+bankRise((p.distance||0)/ROAD.length,offset),p.z+t.nz*offset);
+ // Broad, correctly alternating real-world corner kerbs. Each painted
+ // rectangle follows the spline and has a rounded cross-section (flush at
+ // either edge, 4cm high at its crown). The white/red bands alternate ALONG
+ // the direction of travel, rather than forming checkerboard triangles.
+ const red=standard(0xce2537,.76),white=standard(0xf9f3e9,.76);
+ const deepBlue=standard(0x25395b,.84),outerRed=standard(0xc52d43,.84);
+ const kerbMeshes=[[],[]],blueMeshes=[],redRunoffMeshes=[];
+ function kerbPoint(p,d,offset,height){
+  return [p.x+d.nx*offset,p.y+height+bankRise((p.distance||0)/ROAD.length,offset),
+   p.z+d.nz*offset];
  }
- // Side selection follows curvature, so apex kerbs sit inside a corner.
- // Triangles are merged into two draw calls (red and white) instead of
- // hundreds of heavy box meshes.
+ function triangle(arr,a,b,c){arr.push(...a,...b,...c);}
+ function quad(arr,a,b,c,d){
+  triangle(arr,a,c,b);triangle(arr,b,c,d);
+ }
+ function finishMesh(points,mat){
+  if(!points.length)return;
+  const g=new THREE.BufferGeometry();
+  g.setAttribute("position",new THREE.Float32BufferAttribute(points,3));
+  g.computeVertexNormals();
+  makeMesh(g,mat);
+ }
+ const cornerMask=new Array(N).fill(false);
+ const cornerSide=new Array(N).fill(0);
+ const exitMask=new Array(N).fill(false);
  for(let i=0;i<N;i++){
-  const b=bend(i);
-  if(Math.abs(b)<.14)continue;
-  const j=(i+1)%N,side=b>0?1:-1;
-  const p=ps[i],q=ps[j],d=tangent(i),e=tangent(j);
-  const inner=side*(halfWidth-.26),outer=side*(halfWidth+.95);
-  const arr=kerbVerts[Math.floor(i/3)%2];
-  const h=.09;
-  for(const [pt,t,offset] of [[p,d,inner],[p,d,outer],[q,e,inner],[q,e,inner],[p,d,outer],[q,e,outer]])
-   stripVertex(arr,pt,t,offset,h);
+  const cur=bend(i),prev=bend((i-11+N)%N),next=bend((i+11)%N);
+  const strong=Math.max(Math.abs(cur),Math.abs(prev),Math.abs(next));
+  cornerMask[i]=strong>.125;
+  cornerSide[i]=Math.sign(Math.abs(cur)>.045?cur:(Math.abs(prev)>Math.abs(next)?prev:next))||1;
+  // A longer outside exit kerb begins at the apex and continues onto exit.
+  exitMask[i]=Math.abs(prev)>.13&&Math.abs(cur)>.035&&
+    Math.abs(cur)<Math.abs(prev)*1.22;
  }
- for(let col=0;col<2;col++){
-  const vertices=kerbVerts[col],geometry=new THREE.BufferGeometry();
-  geometry.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));
-  geometry.computeVertexNormals();
-  makeMesh(geometry,col?white:red);
+ function curvedStrip(i,side,start,end,points,height=.12,crown=.155){
+  const j=(i+1)%N,p=ps[i],q=ps[j],t=tangent(i),u=tangent(j);
+  const low0=kerbPoint(p,t,side*start,height);
+  const mid0=kerbPoint(p,t,side*((start+end)/2),crown);
+  const high0=kerbPoint(p,t,side*end,height);
+  const low1=kerbPoint(q,u,side*start,height);
+  const mid1=kerbPoint(q,u,side*((start+end)/2),crown);
+  const high1=kerbPoint(q,u,side*end,height);
+  quad(points,low0,mid0,low1,mid1);
+  quad(points,mid0,high0,mid1,high1);
  }
- // Wide, fully driveable corner-exit kerbs: long alternating red/white
- // stripes following the OUTSIDE edge as steering unwinds. Asphalt, kerbs
- // and green paint are one full-grip surface; gravel begins farther out.
- const exitVertices=[[],[]];
  for(let i=0;i<N;i++){
-  const bendNow=bend(i),prior=bend((i-10+N)%N);
-  const exit=Math.abs(prior)>.13&&Math.abs(bendNow)>.065&&Math.abs(bendNow)<Math.abs(prior)*1.1;
-  if(!exit)continue;
-  const j=(i+1)%N,side=prior>0?-1:1;
-  const p=ps[i],q=ps[j],d=tangent(i),e=tangent(j);
-  const inside=side*(halfWidth-.18),outside=side*(halfWidth+2.3);
-  const vertices=exitVertices[Math.floor(i/5)%2];
-  for(const [point,t,off] of [[p,d,inside],[p,d,outside],[q,e,inside],
-   [q,e,inside],[p,d,outside],[q,e,outside]])
-   stripVertex(vertices,point,t,off,.11);
+  const side=cornerSide[i],outside=-side;
+  if(cornerMask[i]&&cornerMask[(i+1)%N]){
+   const mesh=kerbMeshes[Math.floor(i/6)%2];
+   // 1.7m apex kerb, a single alternating paint band every 6 road samples.
+   curvedStrip(i,side,halfWidth-.22,halfWidth+1.48,mesh);
+  }
+  if(exitMask[i]&&exitMask[(i+1)%N]){
+   const mesh=kerbMeshes[Math.floor(i/8)%2];
+   // Wide 2.65m corner exit kerb like the provided real circuit photo.
+   curvedStrip(i,outside,halfWidth-.18,halfWidth+2.46,mesh,.125,.167);
+   // Dark-blue/red painted safety stripes run outside the exit kerb.
+   const j=(i+1)%N,p=ps[i],q=ps[j],t=tangent(i),u=tangent(j);
+   for(const [begin,end,arr] of [
+    [halfWidth+2.46,halfWidth+3.13,blueMeshes],
+    [halfWidth+3.13,halfWidth+3.55,redRunoffMeshes]]){
+    quad(arr,kerbPoint(p,t,outside*begin,.074),kerbPoint(p,t,outside*end,.074),
+      kerbPoint(q,u,outside*begin,.074),kerbPoint(q,u,outside*end,.074));
+   }
+  }
  }
- for(let i=0;i<2;i++){
-  const geometry=new THREE.BufferGeometry();
-  geometry.setAttribute("position",new THREE.Float32BufferAttribute(exitVertices[i],3));
-  geometry.computeVertexNormals();
-  makeMesh(geometry,i?white:red);
- }
+ finishMesh(kerbMeshes[0],red);finishMesh(kerbMeshes[1],white);
+ finishMesh(blueMeshes,deepBlue);finishMesh(redRunoffMeshes,outerRed);
  // Painted white edge lines with actual curved mesh, not short floating rods.
  const line=standard(0xf9eee1,.65);
  addBand(-halfWidth+.12,-halfWidth+.19,line,.057);

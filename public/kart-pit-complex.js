@@ -1,7 +1,7 @@
 /* Trackside pit architecture inspired by modern circuits: not an exact copy of
  * any real venue. Long glazed hospitality level, garage roll-up doors, bays,
  * raised pit-wall fencing, lane markings and safe outboard signs. */
-import {PIT_HALF_WIDTH} from "./kart-track.js";
+import {PIT_HALF_WIDTH,PIT_FAST_LANE_WIDTH,PIT_SERVICE_LANE_WIDTH,PIT_SERVICE_OFFSET} from "./kart-track.js";
 export function addPitComplex(THREE,scene,PIT,bays){
  const mat=(color,roughness=.65,metalness=0,transparent=false,opacity=1)=>
   new THREE.MeshStandardMaterial({color,roughness,metalness,transparent,opacity,side:THREE.DoubleSide});
@@ -49,92 +49,130 @@ export function addPitComplex(THREE,scene,PIT,bays){
   // Reflective yellow bay guides and garage stops.
   for(const side of [-5.4,5.4])block(.13,.026,4,yellow,x+side,.055,frontZ-4.1);
  }
- // Kerb-separated pit lane with solid red safety boundary, blue timing line,
- // and each pit box outlined on the tarmac. No sign blocks the driving path.
- for(let i=1;i<PIT.samples.length-1;i+=2){
-  const p=PIT.samples[i],next=PIT.samples[Math.min(PIT.samples.length-1,i+1)];
-  const yaw=Math.atan2(next.x-p.x,next.z-p.z);
-  const redEdge=block(.13,.019,1.7,red,p.x,p.y+.08,p.z-2.25);
-  redEdge.rotation.y=yaw;
-  if(i%6===1){
-   const mark=block(.10,.017,1.15,stripe,p.x,p.y+.08,p.z+1.65);
-   mark.rotation.y=yaw;
-  }
+ // Pit lane is TWO genuinely separate paved channels: an unobstructed
+ // FAST LANE on the racetrack side, plus the garage-side SERVICE APRON.
+ // Roadway linework follows the pit centreline and never cuts across it.
+ const pitPs=PIT.samples;
+ function tangent(i){
+  const p=pitPs[Math.max(0,i-1)],q=pitPs[Math.min(pitPs.length-1,i+1)];
+  const dx=q.x-p.x,dz=q.z-p.z,length=Math.hypot(dx,dz)||1;
+  return {tx:dx/length,tz:dz/length,nx:-dz/length,nz:dx/length};
  }
+ function strip(offset,width,paintMaterial,first=9,last=pitPs.length-10){
+  const positions=[];
+  for(let i=first;i<last;i++){
+   const p=pitPs[i],q=pitPs[i+1],a=tangent(i),b=tangent(i+1);
+   const vertex=(pt,dir,lateral)=>[
+    pt.x+dir.nx*lateral,pt.y+.112,pt.z+dir.nz*lateral
+   ];
+   const p0=vertex(p,a,offset),p1=vertex(p,a,offset+width);
+   const q0=vertex(q,b,offset),q1=vertex(q,b,offset+width);
+   positions.push(...p0,...q0,...p1,...p1,...q0,...q1);
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
+  geo.computeVertexNormals();
+  const marking=new THREE.Mesh(geo,paintMaterial);scene.add(marking);
+ }
+ // A long yellow line separates moving cars (negative normal) from parked cars.
+ strip(.47,.13,yellow);
+ // Solid white boundary on each outer edge, with a red pit-lane apron edge.
+ strip(-PIT_HALF_WIDTH+.35,.13,stripe,3,pitPs.length-4);
+ strip(PIT_HALF_WIDTH-.36,.17,stripe,3,pitPs.length-4);
+ strip(PIT_HALF_WIDTH-.66,.22,red,14,pitPs.length-17);
+ // Broken white lane guides, drawn parallel to traffic (never across boxes).
+ for(let i=12;i<pitPs.length-11;i+=9){
+  const p=pitPs[i],d=tangent(i);
+  const mark=block(.11,.025,2.1,stripe,p.x-d.nx*2.15,p.y+.12,p.z-d.nz*2.15);
+  mark.rotation.y=Math.atan2(d.tx,d.tz);
+ }
+ // Bold entry and exit arrows sit on tarmac, and the junctions are unobstructed.
+ for(const [i,colour] of [[8,yellow],[pitPs.length-11,stripe]]){
+  const p=pitPs[i],d=tangent(i);
+  const arrow=block(1.5,.025,.12,colour,p.x-d.nx*2,p.y+.12,p.z-d.nz*2);
+  arrow.rotation.y=Math.atan2(d.tx,d.tz);
+ }
+ // Clean Formula-style service bay decals, individually aligned to each
+ // section of pit road. One 7.3m long by 5.4m wide bay per crew.
  for(const bay of bays){
-  const {x,z,y,index}=bay,signX=x,signZ=z+2.8;
-  const floor=block(5.2,.018,3.5,mat(index%2?0x535857:0x5d5f5a,.93),x,y+.075,z);
-  for(const dx of [-2.6,2.6])block(.1,.025,3.45,yellow,x+dx,y+.094,z);
-  block(5.1,.025,.1,yellow,x,y+.094,z+1.72);
-  block(.85,.05,1.45,red,x,y+.101,z-1.15);
-  const tire= item(new THREE.TorusGeometry(.28,.11,8,16),mat(0x23282c,.95),x+1.7,y+.25,z+1.06);
-  tire.rotation.x=Math.PI/2;
-  // Painted pit-box graphics sit on the tarmac rather than floating overhead.
-  // A translucent stop target shows a clear car-sized placement zone.
+  const {x,z,y,index}=bay;
+  const nearest=pitPs.reduce((best,p,i)=>{
+   const dist=Math.hypot(p.x-x,p.z-z);
+   return dist<best.distance?{distance:dist,i}:best;
+  },{distance:Infinity,i:0});
+  const dir=tangent(nearest.i),yaw=Math.atan2(dir.tx,dir.tz);
+  const space=new THREE.Group();space.position.set(x,y,z);space.rotation.y=yaw;scene.add(space);
+  // Reflective dark asphalt grounding, white service-lane edge and the yellow
+  // rectangle, with a genuine full-colour stopping target texture.
+  block(5.2,.018,7.25,asphalt,0,.093,0,space);
   const marking=document.createElement("canvas");
   marking.width=512;marking.height=512;
   const ctx=marking.getContext("2d");
   ctx.clearRect(0,0,512,512);
-  ctx.strokeStyle="#f9d15b";ctx.lineWidth=16;ctx.strokeRect(35,35,442,442);
-  ctx.fillStyle="#f5d15c";ctx.fillRect(40,352,432,18);
-  ctx.strokeStyle="#f6f2df";ctx.lineWidth=11;
-  ctx.beginPath();ctx.moveTo(256,75);ctx.lineTo(256,330);ctx.stroke();
-  ctx.fillStyle="#e53f4c";ctx.beginPath();ctx.moveTo(256,150);ctx.lineTo(206,220);
-  ctx.lineTo(306,220);ctx.closePath();ctx.fill();
-  ctx.fillStyle="#fff5cd";ctx.font="bold 62px Arial";ctx.textAlign="center";
-  ctx.fillText("PIT "+(index+1),256,443);
-  const texture=new THREE.CanvasTexture(marking);texture.colorSpace=THREE.SRGBColorSpace;
-  const zone=new THREE.Mesh(new THREE.PlaneGeometry(5.4,5.0),
-    new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,side:THREE.DoubleSide}));
-  zone.rotation.x=-Math.PI/2;zone.position.set(x,y+.145,z);scene.add(zone);
-  // Racing pit boom: an outboard steel mast and an overhead swing arm with
-  // a suspended pit-stop lamp, all outside the kart's collision envelope.
-  const boomX=x+3.65,boomZ=z+2.05;
-  block(.16,4.9,.16,steel,boomX,y+2.45,boomZ);
-  const arm=block(3.65,.16,.18,steel,boomX-1.8,y+4.65,boomZ);
-  block(.19,1.55,.19,steel,x+.22,y+4.0,boomZ);
-  block(.85,.36,.75,mat(0xe5b346,.47,.15),x+.22,y+3.18,boomZ);
-  for(const side of [-.2,.2])
-   block(.14,.13,.10,side<0?mat(0xe74751):mat(0x5dda8c),x+.22+side,y+3.10,boomZ-.4);
-  // Garage apron kept open: low tool trolley stands outside the marked bay.
-  block(.9,.45,.65,red,x+4.55,y+.31,z+2.5);
-  // Bay number on an outboard upright, nowhere near driving centerline.
-  const pole=block(.1,2.8,.1,steel,signX+2.75,y+1.45,signZ);
-  const label=block(1.7,.8,.13,red,signX+2.75,y+2.65,signZ);
+  ctx.lineJoin="round";
+  ctx.strokeStyle="#f8d85d";ctx.lineWidth=16;
+  ctx.strokeRect(27,22,458,466);
+  ctx.strokeStyle="#f8f6ef";ctx.lineWidth=8;
+  ctx.beginPath();ctx.moveTo(256,36);ctx.lineTo(256,342);ctx.stroke();
+  ctx.fillStyle="#f1d65f";ctx.fillRect(50,304,412,22);
+  ctx.fillStyle="#d63a46";
+  ctx.beginPath();ctx.moveTo(256,148);ctx.lineTo(207,222);ctx.lineTo(305,222);ctx.closePath();ctx.fill();
+  ctx.fillStyle="#fff7e7";ctx.font="bold 56px sans-serif";ctx.textAlign="center";
+  ctx.fillText("BOX "+(index+1),256,432);
+  const tex=new THREE.CanvasTexture(marking);tex.colorSpace=THREE.SRGBColorSpace;
+  const target=new THREE.Mesh(new THREE.PlaneGeometry(5.25,7.25),
+   new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,side:THREE.DoubleSide}));
+  target.rotation.x=-Math.PI/2;target.position.y=.135;space.add(target);
+  // Four low wheel stop markings, outside the centre of the box.
+  for(const lateral of [-1.55,1.55])
+   for(const fore of [-1.4,1.35])block(.72,.044,.26,yellow,lateral,.145,fore,space);
+  // Crew equipment and pit boom sit OUTBOARD, toward the garage, so they
+  // cannot physically obstruct a car entering from the fast lane.
+  const boomX=-3.25,boomZ=2.2;
+  block(.18,4.8,.18,steel,boomX,2.4,boomZ,space);
+  block(3.5,.16,.17,steel,-1.5,4.60,boomZ,space);
+  block(.13,1.3,.13,steel,.05,3.98,boomZ,space);
+  block(.72,.35,.55,mat(0xe8bc49,.4,.15),.05,3.30,boomZ,space);
+  block(.18,.11,.11,mat(0x51d692),-.16,3.20,boomZ-.28,space);
+  block(.18,.11,.11,mat(0xd84a50),.16,3.20,boomZ-.28,space);
+  block(.72,.52,.65,red,-3.55,.30,3.05,space);
+  const tire=item(new THREE.TorusGeometry(.29,.1,8,16),mat(0x20252b,.9),-3.38,.26,-2.55,space);
+  tire.rotation.x=Math.PI/2;
+  block(.14,2.6,.14,steel,-3.15,1.30,-2.85,space);
+  block(1.1,.65,.12,red,-3.15,2.52,-2.85,space);
  }
- function roadsideSign(sample,label,side=1){
-  const p=sample,signZ=p.z+side*5.6;
-  // Billboard is OUTSIDE the kerb/gravel and lateral to the pit driving lane.
-  const pole=block(.13,2.75,.13,steel,p.x,p.y+1.4,signZ);
-  const panel=block(4.25,1.15,.18,steel,p.x,p.y+2.93,signZ);
-  const canvas=document.createElement("canvas");canvas.width=640;canvas.height=180;
-  const ctx=canvas.getContext("2d");
-  ctx.fillStyle="#20363f";ctx.fillRect(0,0,640,180);
-  ctx.fillStyle="#f6dba5";ctx.font="bold 75px system-ui";ctx.textAlign="center";
-  ctx.fillText(label,320,120);
-  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
-  item(new THREE.PlaneGeometry(4.1,1.12),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}),
-   p.x,p.y+2.93,signZ-.115);
+ function roadsideSign(index,label){
+  const p=pitPs[index],d=tangent(index);
+  // Entire sign and both posts stand well OUTSIDE the widened service apron.
+  // This avoids the previous PIT IN billboard floating in the driving lane.
+  const offset=PIT_HALF_WIDTH+4;
+  const signX=p.x+d.nx*offset,signZ=p.z+d.nz*offset;
+  block(.14,2.85,.14,steel,signX,p.y+1.42,signZ);
+  const panel=block(4.2,1.13,.15,steel,signX,p.y+2.96,signZ);
+  panel.rotation.y=Math.atan2(d.tx,d.tz);
+  const c=document.createElement("canvas");c.width=640;c.height=180;
+  const ctx=c.getContext("2d");
+  ctx.fillStyle="#203642";ctx.fillRect(0,0,640,180);
+  ctx.fillStyle="#f7dfa7";ctx.font="bold 74px system-ui";ctx.textAlign="center";
+  ctx.fillText(label,320,122);
+  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+  const front=item(new THREE.PlaneGeometry(4.13,1.1),
+    new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}),
+    signX,p.y+2.96,signZ-.12);
+  front.rotation.y=Math.atan2(d.tx,d.tz);
  }
- roadsideSign(PIT.samples[4],"PIT ENTRY 40",1);
- roadsideSign(PIT.samples[PIT.samples.length-7],"PIT EXIT",1);
- // Pit wall sits OUTSIDE the driving envelope, not across its centreline.
- // Sections begin well past the pit entry and end before the pit exit.
- // Geometry follows the tangent AND uses the raceward normal of the pit lane.
- const fence=mat(0x89949b,.36,.73,true,.55);
- for(let i=15;i<PIT.samples.length-15;i+=4){
-  const p=PIT.samples[i],next=PIT.samples[Math.min(i+3,PIT.samples.length-1)];
-  const dx=next.x-p.x,dz=next.z-p.z,dist=Math.hypot(dx,dz)||1;
-  const tx=dx/dist,tz=dz/dist,nx=-tz,nz=tx;
-  const barrierOffset=PIT_HALF_WIDTH+3.35;
-  // On this circuit the race track lies toward the -normal side of pit road.
-  const bx=p.x-nx*barrierOffset,bz=p.z-nz*barrierOffset;
-  const angle=Math.atan2(tx,tz);
-  const base=block(.18,.72,Math.min(4.6,dist),white,bx,p.y+.36,bz);
-  base.rotation.y=angle;
-  block(.10,2.2,.10,steel,bx,p.y+1.56,bz);
-  const mesh=block(.06,1.35,Math.min(4.6,dist),fence,bx,p.y+1.55,bz);
-  mesh.rotation.y=angle;
+ roadsideSign(9,"PIT IN · 40");
+ roadsideSign(pitPs.length-11,"PIT OUT");
+ // Low pit wall separates race traffic from the fast lane along the
+ // straight only. Both PIT IN and PIT OUT are completely unblocked.
+ const fence=mat(0x89949b,.36,.73,true,.45);
+ for(let i=25;i<pitPs.length-27;i+=5){
+  const p=pitPs[i],d=tangent(i);
+  const bx=p.x-d.nx*(PIT_HALF_WIDTH+1.65),bz=p.z-d.nz*(PIT_HALF_WIDTH+1.65);
+  const angle=Math.atan2(d.tx,d.tz);
+  const base=block(.18,.62,3.3,white,bx,p.y+.31,bz);base.rotation.y=angle;
+  block(.10,1.75,.10,steel,bx,p.y+1.48,bz);
+  const panel=block(.05,1.2,3.2,fence,bx,p.y+1.29,bz);panel.rotation.y=angle;
  }
  return {pitBuilding:true,bays:bays.length};
 }

@@ -5,7 +5,11 @@
 export const ROAD_HALF_WIDTH=4.2;
 export const RUNOFF_WIDTH=7.5;
 export const TRACK_SCALE=1.65;
-export const PIT_HALF_WIDTH=3.15;
+export const PIT_FAST_LANE_WIDTH=4.4;
+export const PIT_SERVICE_LANE_WIDTH=5.6;
+export const PIT_LANE_MARGIN=1.3;
+export const PIT_HALF_WIDTH=6.35;
+export const PIT_SERVICE_OFFSET=3.3;
 export const PIT_BAY_TOLERANCE=3.65;
 export const ROAD_POINTS=[
  [-47,-22,0.8],[-30,-22,0.8],[-10,-22,0.9],[5,-22,0.9],
@@ -15,9 +19,14 @@ export const ROAD_POINTS=[
  [-20,36,.65],[-31,27,.6],[-39,19,.95],[-53,30,1.25],
  [-65,28,1.45],[-72,12,1.55],[-67,-7,1.2],[-57,-18,.85]
 ].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y*1.35]);
+// PIT IN branches off the main straight. The continuous paved exit merges
+// farther along the next right-hand bend, without crossing grass or gravel.
+// The flat middle portion has separate FAST and SERVICE lanes.
 export const PIT_POINTS=[
- [-46,-22,.8],[-40,-16,.8],[-29,-10,.8],[-12,-9,.8],
- [3,-9,.82],[11,-12,.85],[19,-22,1.05]
+ [-46,-22,.8],[-43,-19,.8],[-40,-15,.8],[-36,-12,.8],
+ [-28,-10,.8],[-16,-9.3,.82],[-3,-9.3,.83],
+ [9,-9.5,.87],[18,-12,1.0],[24,-17,1.08],
+ [28,-22,1.15],[34,-24,1.35],[37,-22,1.65]
 ].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y*1.35]);
 // The extended eastern right-hand sweeper has approximately 17 degrees of
 // progressive banking. Banking is tapered smoothly on entry and exit.
@@ -35,10 +44,16 @@ export function bankRise(progress,lateralOffset){
 }
 // Four protected service boxes off the fast lane, facing the pit garages.
 // The drive-through portion of the pit route remains usable in free practice.
-export const PIT_BAYS=[.31,.43,.55,.67].map((fraction,i)=>{
- const n=Math.round(fraction*72),route=makeRoute(PIT_POINTS,72,false);
- const p=route.samples[Math.min(n,route.samples.length-1)];
- return {index:i,x:p.x,z:p.z+1.15,y:p.y,label:"BAY "+(i+1),radius:PIT_BAY_TOLERANCE};
+// Bays are set back into the service apron, toward the garages (+normal)
+// while the fast lane stays open on the race-track side (-normal).
+export const PIT_BAYS=[.28,.38,.48,.58].map((fraction,i)=>{
+ const route=makeRoute(PIT_POINTS,96,false);
+ const n=Math.min(route.samples.length-2,Math.round(fraction*96));
+ const p=route.samples[n],q=route.samples[n+1],prev=route.samples[Math.max(0,n-1)];
+ const dx=q.x-prev.x,dz=q.z-prev.z,len=Math.hypot(dx,dz)||1;
+ return {index:i,x:p.x-dz/len*PIT_SERVICE_OFFSET,
+  z:p.z+dx/len*PIT_SERVICE_OFFSET,y:p.y,
+  label:"BAY "+(i+1),radius:PIT_BAY_TOLERANCE};
 });
 export const TRACK_SAMPLES=480;
 function point(p){return {x:p[0],z:p[1],y:p[2]};}
@@ -71,7 +86,25 @@ export function makeRoute(points=ROAD_POINTS,count=TRACK_SAMPLES,closed=true){
  return {samples,length:distance,closed};
 }
 export const ROAD=makeRoute();
-export const PIT=makeRoute(PIT_POINTS,72,false);
+export const PIT=makeRoute(PIT_POINTS,160,false);
+export function cornerKerbGripWidth(progress){
+ // Same local curvature criteria used by the visual apex and exit kerbs.
+ const samples=ROAD.samples,n=samples.length;
+ const i=Math.max(0,Math.min(n-1,Math.floor(Math.max(0,Math.min(.999999,progress))*n)));
+ const tangent=j=>{
+  const a=samples[(j-1+n)%n],b=samples[(j+1)%n],dx=b.x-a.x,dz=b.z-a.z;
+  const d=Math.hypot(dx,dz)||1;return {x:dx/d,z:dz/d};
+ };
+ const bend=j=>{
+  const a=tangent((j-7+n)%n),b=tangent((j+7)%n);
+  return a.x*b.z-a.z*b.x;
+ };
+ const prior=Math.abs(bend((i-11+n)%n)),now=Math.abs(bend(i));
+ if(prior>.13&&now>.035&&now<prior*1.22)return 3.56;
+ const next=Math.abs(bend((i+11)%n));
+ return Math.max(prior,now,next)>.125?1.5:1.23;
+}
+
 export function projectToRoute(x,z,route=ROAD){
  let best={distance:Infinity,index:0,t:0,progress:0,y:0,x:0,z:0,normalX:0,normalZ:0};
  const ps=route.samples,n=ps.length,segments=route.closed?n:n-1;

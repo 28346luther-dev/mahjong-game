@@ -41,9 +41,9 @@ test("pit barriers stay outboard, pit boxes have graphical markings and pit boom
  const client=readFileSync("public/kart-racing.js","utf8");
  const track=readFileSync("public/kart-track.js","utf8");
  assert.match(complex,/new THREE\.CanvasTexture\(marking\)/);
- assert.match(complex,/new THREE\.PlaneGeometry\(5\.4,5\.0\)/);
- assert.match(complex,/boomX=x\+3\.65/);
- assert.match(complex,/barrierOffset=PIT_HALF_WIDTH\+3\.35/);
+ assert.match(complex,/new THREE\.PlaneGeometry\(5\.25,7\.25\)/);
+ assert.match(complex,/boomX=-3\.25/);
+ assert.match(complex,/PIT_HALF_WIDTH\+1\.65/);
  assert.match(safety,/projectToRoute\(guardX,guardZ,PIT\)/);
  assert.match(client,/addCircuitGrandstands/);
  assert.match(client,/addPitComplex/);
@@ -56,10 +56,10 @@ test("grass terrain stays beyond the runoff; wide exit kerbs preserve grip",()=>
  const graphics=readFileSync("public/kart-graphics.js","utf8");
  const stands=readFileSync("public/kart-grandstands.js","utf8");
  assert.match(client,/ROAD_HALF_WIDTH\+RUNOFF_WIDTH\+\.35/);
- assert.match(graphics,/exitVertices/);
- assert.match(graphics,/inside=side\*\(halfWidth-\.18\)/);
+ assert.match(graphics,/exitMask/);
+ assert.match(graphics,/curvedStrip\(i,outside,halfWidth-\.18,halfWidth\+2\.46/);
  assert.match(graphics,/projectToRoute\(x,z,PIT\)\.distance<PIT_HALF_WIDTH\+17/);
- assert.match(client,/if\(isPit\|\|distance<=ROAD_HALF_WIDTH\+1\.23\)return \{drag:0/);
+ assert.match(client,/if\(isPit\|\|distance<=ROAD_HALF_WIDTH\+kerbWidth\)return \{drag:0/);
  assert.match(stands,/grandstandSections/);
  assert.match(stands,/seatPools/);
 });
