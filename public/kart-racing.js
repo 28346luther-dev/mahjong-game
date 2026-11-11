@@ -38,7 +38,7 @@ function updateRivals(racers,myId){
 async function beginMeetingStage(phase,mine){
  if(!active)return;
  try{
-  await init();driveMode="meeting";meetingPhase=phase;
+  await init();driveMode="meeting";meetingPhase=phase;personalSectorBests=[null,null,null];
   playing=true;raceId=null;reportedFinish=false;
   reset();
   if(phase==="race"&&Number.isFinite(mine?.x)){
@@ -66,6 +66,12 @@ function finishMeetingStage(mine){
   "Race completed but disqualified: mandatory pit stop not completed.":
   "CHEQUERED FLAG! You finished P"+mine.position+" of the 10-lap race.");
 }
+function meetingSectorUpdate(data){
+ if(driveMode!=="meeting"||!data)return;
+ showSector(data.index,data.timeMs,data.color);
+ const legend={purple:"SESSION BEST",green:"PERSONAL BEST",yellow:"NO IMPROVEMENT"};
+ message("S"+data.index+" · "+format(data.timeMs)+" · "+(legend[data.color]||"SPLIT"));
+}
 function meetingLapUpdate(data){
  if(driveMode!=="meeting")return;
  if(data.type==="qualifying"){
@@ -81,19 +87,28 @@ function meetingLapUpdate(data){
 
 const PIT_LIMIT_MS=11.1; // 40 km/h
 let pitLimiter=false,inPitLane=false;
-let currentSector=1,sectorStarted=0;
+let currentSector=1,sectorStarted=0,personalSectorBests=[null,null,null];
 function resetSectors(){
  currentSector=1;sectorStarted=performance.now();
  for(let i=1;i<=3;i++){
   const el=$("kartSector"+i);
-  if(el){el.textContent="--:--.---";el.classList.remove("sector-current");}
+  if(el){el.textContent="--:--.---";el.classList.remove("sector-current","sector-purple","sector-green","sector-yellow");el.parentElement?.removeAttribute("data-sector-color");}
  }
  $("kartSector1")?.classList.add("sector-current");
  const live=$("kartSectorLive");if(live)live.textContent="SECTOR 1";
 }
-function showSector(index,ms){
+function showSector(index,ms,color=null){
+ const idx=index-1;
+ const prior=personalSectorBests[idx];
+ const result=color||((prior===null||ms<prior)?"purple":"yellow");
+ personalSectorBests[idx]=Math.min(prior??Infinity,ms);
  const el=$("kartSector"+index);
- if(el){el.textContent=format(ms);el.classList.remove("sector-current");}
+ if(el){
+  el.textContent=format(ms);
+  el.classList.remove("sector-current","sector-purple","sector-green","sector-yellow");
+  el.classList.add("sector-"+result);
+  el.parentElement?.setAttribute("data-sector-color",result);
+ }
  currentSector=Math.min(3,index+1);
  sectorStarted=performance.now();
  $("kartSector"+currentSector)?.classList.add("sector-current");
@@ -511,6 +526,6 @@ $("kartPitLimiter").addEventListener("click",togglePitLimiter);
 $("kartStart").addEventListener("click",begin);
 $("kartClose").addEventListener("click",close);
 $("kartRefresh").addEventListener("click",leaderboard);
-window.KartRacing={open,close,isOpen:()=>active,setCameraMode,
+window.KartRacing={open,close,isOpen:()=>active,setCameraMode,meetingSectorUpdate,
  beginMeetingStage,clearMeetingStage,finishMeetingStage,meetingLapUpdate,updateRivals,
  getPose,pitBays:()=>PIT_BAYS,beginPractice:begin};
