@@ -141,22 +141,28 @@ export function addPitComplex(THREE,scene,PIT,bays){
   block(.14,2.6,.14,steel,-3.15,1.30,-2.85,space);
   block(1.1,.65,.12,red,-3.15,2.52,-2.85,space);
  }
- function roadsideSign(sample,label,side=1){
-  const p=sample,signZ=p.z+side*5.6;
-  // Billboard is OUTSIDE the kerb/gravel and lateral to the pit driving lane.
-  const pole=block(.13,2.75,.13,steel,p.x,p.y+1.4,signZ);
-  const panel=block(4.25,1.15,.18,steel,p.x,p.y+2.93,signZ);
-  const canvas=document.createElement("canvas");canvas.width=640;canvas.height=180;
-  const ctx=canvas.getContext("2d");
-  ctx.fillStyle="#20363f";ctx.fillRect(0,0,640,180);
-  ctx.fillStyle="#f6dba5";ctx.font="bold 75px system-ui";ctx.textAlign="center";
-  ctx.fillText(label,320,120);
-  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
-  item(new THREE.PlaneGeometry(4.1,1.12),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}),
-   p.x,p.y+2.93,signZ-.115);
+ function roadsideSign(index,label){
+  const p=pitPs[index],d=tangent(index);
+  // Entire sign and both posts stand well OUTSIDE the widened service apron.
+  // This avoids the previous PIT IN billboard floating in the driving lane.
+  const offset=PIT_HALF_WIDTH+4;
+  const signX=p.x+d.nx*offset,signZ=p.z+d.nz*offset;
+  block(.14,2.85,.14,steel,signX,p.y+1.42,signZ);
+  const panel=block(4.2,1.13,.15,steel,signX,p.y+2.96,signZ);
+  panel.rotation.y=Math.atan2(d.tx,d.tz);
+  const c=document.createElement("canvas");c.width=640;c.height=180;
+  const ctx=c.getContext("2d");
+  ctx.fillStyle="#203642";ctx.fillRect(0,0,640,180);
+  ctx.fillStyle="#f7dfa7";ctx.font="bold 74px system-ui";ctx.textAlign="center";
+  ctx.fillText(label,320,122);
+  const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
+  const front=item(new THREE.PlaneGeometry(4.13,1.1),
+    new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}),
+    signX,p.y+2.96,signZ-.12);
+  front.rotation.y=Math.atan2(d.tx,d.tz);
  }
- roadsideSign(PIT.samples[4],"PIT ENTRY 40",1);
- roadsideSign(PIT.samples[PIT.samples.length-7],"PIT EXIT",1);
+ roadsideSign(9,"PIT IN · 40");
+ roadsideSign(pitPs.length-11,"PIT OUT");
  // Low pit wall separates race traffic from the fast lane along the
  // straight only. Both PIT IN and PIT OUT are completely unblocked.
  const fence=mat(0x89949b,.36,.73,true,.45);
