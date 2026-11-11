@@ -37,3 +37,46 @@
 .kart-grid-notice{background:#123d38;color:#b3f3dd;border:1px solid #79cebb;border-radius:8px;padding:8px;font-size:12px;font-weight:700}
 .kart-pit-building-tag{font-size:11px;color:#efd0a1}
 @media(max-width:850px){.kart-meeting-main{grid-template-columns:1fr}.kart-event-item{min-width:155px}.kart-meetings{padding:9px}.kart-roster{max-height:140px}}
+
+/* Motorsport broadcast-inspired timing design: restrained black glass,
+   sharp timing bars, legible numeric figures, status colour not brand logos. */
+.kart-meetings{background:linear-gradient(135deg,#111925,#24222d);border:1px solid #455667;box-shadow:inset 0 3px #e34e45,0 7px 30px #0008}
+.kart-meeting-head h3{font:900 18px system-ui;letter-spacing:.045em;text-transform:uppercase}
+.kart-live{font-variant-numeric:tabular-nums;background:#192c34;padding:7px 13px;border-left:3px solid #4ae4c4}
+.kart-event-item{background:#101a25;border:1px solid #415260;border-radius:4px;box-shadow:inset 3px 0 #e85352}
+.kart-event-item.current{background:#283043;border-color:#71d3bd;box-shadow:inset 3px 0 #71d3bd}
+.kart-event-item strong{font-family:system-ui;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.kart-event-item button,.kart-events-actions button{border-radius:4px;background:#e3d2bd;color:#18202b}
+.kart-meeting-status{background:#121d29;border:1px solid #3d5160;border-radius:5px}
+.kart-meeting-status strong{font-family:system-ui;letter-spacing:.035em;text-transform:uppercase}
+.kart-meeting-count{font-size:25px;font-weight:950;color:#85e7d0}
+.kart-roster{background:#101a25;border:1px solid #465565;border-radius:5px}
+.kart-roster h4{font:900 13px system-ui;text-transform:uppercase;letter-spacing:.06em}
+.kart-roster li{border-bottom:1px solid #374651;border-radius:0}
+.kart-roster li.timing-row{gap:5px;align-items:center;padding:7px 3px}
+.kart-roster li.timing-row strong{background:#e4dacb;color:#1a212c;padding:5px 7px;min-width:31px;text-align:center}
+.kart-roster li.timing-row.driver-self{background:#253b48}
+.kart-roster li.timing-row.driver-self strong{background:#5cd5c9}
+.timing-mini-sectors{display:flex!important;flex:none!important;gap:3px;overflow:visible!important}
+.sector-chip{font-style:normal;font:800 9px system-ui;padding:2px 3px;border-radius:2px;border:1px solid #51606a;color:#aaa}
+.sector-chip.purple{background:#9337d5;color:white;border-color:#bc72ed}
+.sector-chip.green{background:#16a866;color:white;border-color:#48d99c}
+.sector-chip.yellow{background:#e9cc50;color:#23212d;border-color:#ffea8d}
+.sector-chip.neutral{color:#8796a1;background:#2b3440}
+.kart-service-card{border-radius:5px;background:#101821;border-color:#edc456;box-shadow:inset 0 5px #edc456,0 18px 60px #000a}
+.kart-service-card strong{font-weight:950;color:#f3da79}
+.kart-service-card span{color:#e9c85b}
+.kart-overlay>div{border-radius:3px!important;background:#131923e6!important;border-color:#667985!important;border-left:3px solid #e5a34f!important}
+.kart-overlay>div strong{font-family:system-ui;font-weight:900;letter-spacing:.03em}
+.kart-sector-splits>div{background:#111c28!important;border:1px solid #526775!important;border-top:3px solid #6c8190!important;border-radius:3px!important}
+.kart-sector-splits strong{font-family:system-ui!important;font-weight:950!important}
+.kart-sector-splits>div[data-sector-color="purple"]{border-top-color:#b65bf0!important;background:#342244!important}
+.kart-sector-splits>div[data-sector-color="green"]{border-top-color:#37d69b!important;background:#153c38!important}
+.kart-sector-splits>div[data-sector-color="yellow"]{border-top-color:#ecd45e!important;background:#373323!important}
+.kart-sector-splits strong.sector-purple{color:#dca2ff!important}
+.kart-sector-splits strong.sector-green{color:#80f7c0!important}
+.kart-sector-splits strong.sector-yellow{color:#ffe78a!important}
+.kart-board-head h3{letter-spacing:.07em;text-transform:uppercase}
+.kart-leaderboard{background:#111a25;border-color:#586575;border-radius:4px}
+.kart-leaderboard li{background:#1c2835;border-color:#374958;border-radius:3px}
+@media(max-width:600px){.timing-mini-sectors{gap:1px}.sector-chip{font-size:8px;padding:2px}.kart-meeting-head h3{font-size:15px}}
