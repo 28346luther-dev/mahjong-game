@@ -128,18 +128,18 @@ export function addPitComplex(THREE,scene,PIT,bays){
    for(const fore of [-1.4,1.35])block(.72,.044,.26,yellow,lateral,.145,fore,space);
   // Crew equipment and pit boom sit OUTBOARD, toward the garage, so they
   // cannot physically obstruct a car entering from the fast lane.
-  const boomX=3.25,boomZ=2.2;
+  const boomX=-3.25,boomZ=2.2;
   block(.18,4.8,.18,steel,boomX,2.4,boomZ,space);
-  block(3.5,.16,.17,steel,1.5,4.60,boomZ,space);
+  block(3.5,.16,.17,steel,-1.5,4.60,boomZ,space);
   block(.13,1.3,.13,steel,.05,3.98,boomZ,space);
   block(.72,.35,.55,mat(0xe8bc49,.4,.15),.05,3.30,boomZ,space);
   block(.18,.11,.11,mat(0x51d692),-.16,3.20,boomZ-.28,space);
   block(.18,.11,.11,mat(0xd84a50),.16,3.20,boomZ-.28,space);
-  block(.72,.52,.65,red,3.55,.30,3.05,space);
-  const tire=item(new THREE.TorusGeometry(.29,.1,8,16),mat(0x20252b,.9),3.38,.26,-2.55,space);
+  block(.72,.52,.65,red,-3.55,.30,3.05,space);
+  const tire=item(new THREE.TorusGeometry(.29,.1,8,16),mat(0x20252b,.9),-3.38,.26,-2.55,space);
   tire.rotation.x=Math.PI/2;
-  block(.14,2.6,.14,steel,3.15,1.30,-2.85,space);
-  block(1.1,.65,.12,red,3.15,2.52,-2.85,space);
+  block(.14,2.6,.14,steel,-3.15,1.30,-2.85,space);
+  block(1.1,.65,.12,red,-3.15,2.52,-2.85,space);
  }
  function roadsideSign(sample,label,side=1){
   const p=sample,signZ=p.z+side*5.6;
