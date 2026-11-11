@@ -19,6 +19,7 @@ const countdown=ms=>Math.max(0,Math.ceil(ms/1000));
 function timeRemaining(){
  if(!snapshot)return;
  const now=Date.now()+serverOffset;
+ const clock=$("kartMeetingClock");if(clock)clock.textContent=new Date(now).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
  const el=$("kartMeetingCountdown");
  if(snapshot.phase==="registration")el.textContent=countdown(snapshot.qualifyingAt-now)+"s until qualifying";
  else if(snapshot.phase==="qualifying")el.textContent=countdown(snapshot.raceAt-now)+"s until grid start";
@@ -44,7 +45,8 @@ function renderRoster(state){
  const racers=state.racers||[];
  if(!racers.length){const li=document.createElement("li");li.textContent="No registrations yet. Be first on the grid!";listEl.append(li);return;}
  for(const [i,p] of racers.entries()){
-  const li=document.createElement("li");
+  const li=document.createElement("li");li.className="timing-row";
+  if(p.id===state.you)li.classList.add("driver-self");
   const rank=document.createElement("strong");rank.textContent=p.grid?"P"+p.grid:"#"+(i+1);
   const name=document.createElement("span");
   name.textContent=p.name+(p.id===state.you?" (YOU)":"")+
@@ -52,7 +54,13 @@ function renderRoster(state){
   const value=document.createElement("b");
   value.textContent=state.phase==="qualifying"||state.phase==="registration"?fmt(p.qualifiedMs):
    p.finishedAt?fmt(p.finishedMs):"LAP "+Math.min(p.lap+1,10)+"/10";
-  li.append(rank,name,value);listEl.append(li);
+  const split=document.createElement("span");split.className="timing-mini-sectors";
+  for(let j=0;j<3;j++){
+   const cell=document.createElement("i");
+   cell.className="sector-chip "+(p.sectorColors?.[j]||"neutral");
+   cell.textContent="S"+(j+1);split.append(cell);
+  }
+  li.append(rank,name,split,value);listEl.append(li);
  }
 }
 function renderSchedule(){
@@ -102,6 +110,7 @@ function stateUpdate(data){
  if(mine?.pitUntil)serviceUntil=mine.pitUntil;
  if(mine?.finishedAt)window.KartRacing?.finishMeetingStage?.(mine);
  if(data.lapUpdate)window.KartRacing?.meetingLapUpdate?.(data.lapUpdate);
+ if(data.sectorUpdate)window.KartRacing?.meetingSectorUpdate?.(data.sectorUpdate);
 }
 async function refreshSchedule(){
  if(!open)return;
