@@ -27,7 +27,9 @@ test("meetings launch every ten minutes with two-minute qualification and ten-la
  assert.equal(PIT_SERVICE_MS,10000);assert.equal(RACE_LAPS,10);
  assert.equal(eventPhase(origin,origin-10),"registration");
  assert.equal(eventPhase(origin,origin+119999),"qualifying");
- assert.equal(eventPhase(origin,origin+120000),"race");
+ assert.equal(eventPhase(origin,origin+120000),"grid");
+ assert.equal(eventPhase(origin,origin+127999),"grid");
+ assert.equal(eventPhase(origin,origin+128000),"race");
  const events=scheduledEvents(origin+35000);
  assert.ok(events.some(e=>e.id===origin));
  assert.ok(events.some(e=>e.id===origin+600000));
@@ -49,7 +51,9 @@ test("register drivers and schedule real qualifying classifications",async()=>{
   data.set("meeting:"+base,meeting);
   Date.now=()=>base+120100;
   const grid=await request(storage,"/event/state",{eventId:base,user:user("a")});
-  assert.equal(grid.status,200);assert.equal(grid.result.phase,"race");
+  assert.equal(grid.status,200);assert.equal(grid.result.phase,"grid");
+  assert.equal(grid.result.redLights,1);
+  assert.equal(grid.result.lightsOutAt,base+128000);
   const drivers=grid.result.racers;
   assert.equal(drivers[0].name,"Other racer");
   assert.equal(drivers[0].grid,1);
@@ -64,7 +68,7 @@ test("pit stop needs a marked bay, zero speed and ten seconds of service",async(
  try{
   Date.now=()=>base-5000;
   assert.equal((await request(storage,"/event/register",{eventId:base,user:id,name:"Racer"})).status,200);
-  Date.now=()=>base+QUALIFY_MS+5000;
+  Date.now=()=>base+QUALIFY_MS+9000;
   const first=await request(storage,"/event/state",{eventId:base,user:id});
   assert.equal(first.status,200);
   const meeting=data.get("meeting:"+base);
@@ -79,7 +83,7 @@ test("pit stop needs a marked bay, zero speed and ten seconds of service",async(
   assert.equal(stop.result.serviceUntil,Date.now()+10000);
   const waiting=await request(storage,"/event/sample",{eventId:base,user:id,pit:true,x:bay.x,z:bay.z,speed:0});
   assert.equal(waiting.status,200);assert.ok(waiting.result.pitServiceRemainingMs>0);
-  Date.now=()=>base+QUALIFY_MS+16000;
+  Date.now=()=>base+QUALIFY_MS+20000;
   const finished=await request(storage,"/event/sample",{eventId:base,user:id,pit:true,x:bay.x,z:bay.z,speed:0});
   assert.equal(finished.status,200,JSON.stringify(finished.result));
   assert.equal(data.get("meeting:"+base).players[0].pitComplete,true);
