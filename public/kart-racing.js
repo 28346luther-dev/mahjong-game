@@ -1,27 +1,114 @@
-import {ROAD,PIT,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,projectToRoute,raceStart} from "./kart-track.js";
+import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,projectToRoute,raceStart} from "./kart-track.js";
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
+import {addPitComplex} from "./kart-pit-complex.js";
+import {createFormulaVee} from "./kart-formula-vee.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
 let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPending=false,lastStatusAt=0;
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
+let driveMode="practice",meetingPhase=null,remoteKarts=new Map();
+function getPose(){return {x:pos.x,z:pos.z,yaw,speed,pit:inPitLane};}
+function createRival(p){
+ const palette=[0xb33749,0x2a739d,0x3f8a6b,0xd2ac51,0x805b98,0xdc7b39];
+ const index=parseInt(p.id.slice(0,7),16)%palette.length;
+ const model=createFormulaVee(THREE,{color:palette[index],number:index+1});
+ scene.add(model.group);return model.group;
+}
+function updateRivals(racers,myId){
+ if(!scene)return;
+ const present=new Set();
+ for(const driver of racers||[]){
+  if(driver.id===myId||driver.finishedAt||!Number.isFinite(driver.x)||!Number.isFinite(driver.z))continue;
+  present.add(driver.id);
+  let g=remoteKarts.get(driver.id);
+  if(!g){g=createRival(driver);remoteKarts.set(driver.id,g);}
+  const road=projectToRoute(driver.x,driver.z,ROAD);
+  const pit=projectToRoute(driver.x,driver.z,PIT);
+  const route=pit.distance<road.distance?pit:road;
+  g.position.set(driver.x,route.y,driver.z);
+  g.rotation.y=(driver.yaw||0)+Math.PI;
+ }
+ for(const [id,g] of remoteKarts)if(!present.has(id)){
+  scene.remove(g);remoteKarts.delete(id);
+ }
+}
+async function beginMeetingStage(phase,mine){
+ if(!active)return;
+ try{
+  await init();driveMode="meeting";meetingPhase=phase;personalSectorBests=[null,null,null];
+  playing=true;raceId=null;reportedFinish=false;
+  reset();
+  if(phase==="race"&&Number.isFinite(mine?.x)){
+   pos.x=mine.x;pos.z=mine.z;
+   pos.y=projectToRoute(pos.x,pos.z,ROAD).y;
+   yaw=mine.yaw||yaw;
+   kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;
+  }
+  started=performance.now();sendAt=performance.now();lapCount=1;resetSectors();
+  $("kartRacePhase").textContent=phase.toUpperCase();
+  $("kartLap").textContent="1";$("kartProgress").textContent="0%";
+  message(phase==="qualifying"?"QUALIFYING: Set your best full lap before the race starts.":
+    "LIGHTS OUT! Grid P"+mine.grid+" · ten laps · mandatory pit service.");
+ }catch(error){message("Could not start multiplayer session: "+error.message);}
+}
+function clearMeetingStage(){
+ if(driveMode==="meeting"){playing=false;driveMode="practice";meetingPhase=null;speed=0;}
+ for(const group of remoteKarts.values())scene?.remove(group);
+ remoteKarts.clear();
+}
+function finishMeetingStage(mine){
+ if(driveMode!=="meeting"||!mine?.finishedAt)return;
+ playing=false;speed=0;
+ message(mine.disqualified?
+  "Race completed but disqualified: mandatory pit stop not completed.":
+  "CHEQUERED FLAG! You finished P"+mine.position+" of the 10-lap race.");
+}
+function meetingSectorUpdate(data){
+ if(driveMode!=="meeting"||!data)return;
+ showSector(data.index,data.timeMs,data.color);
+ const legend={purple:"SESSION BEST",green:"PERSONAL BEST",yellow:"NO IMPROVEMENT"};
+ message("S"+data.index+" · "+format(data.timeMs)+" · "+(legend[data.color]||"SPLIT"));
+}
+function meetingLapUpdate(data){
+ if(driveMode!=="meeting")return;
+ if(data.type==="qualifying"){
+  $("kartBest").textContent="QUALI BEST "+format(data.bestMs);
+  message("Qualifying: "+format(data.timeMs)+" · best "+format(data.bestMs));
+ }else if(data.type==="race"){
+  $("kartLast").textContent="LAST "+format(data.timeMs);
+  $("kartLap").textContent=String(Math.min(10,data.lap+1));
+  message("RACE LAP "+data.lap+"/10 · "+format(data.timeMs));
+ }
+ started=performance.now();
+}
+
 const PIT_LIMIT_MS=11.1; // 40 km/h
 let pitLimiter=false,inPitLane=false;
-let currentSector=1,sectorStarted=0;
+let currentSector=1,sectorStarted=0,personalSectorBests=[null,null,null];
 function resetSectors(){
  currentSector=1;sectorStarted=performance.now();
  for(let i=1;i<=3;i++){
   const el=$("kartSector"+i);
-  if(el){el.textContent="--:--.---";el.classList.remove("sector-current");}
+  if(el){el.textContent="--:--.---";el.classList.remove("sector-current","sector-purple","sector-green","sector-yellow");el.parentElement?.removeAttribute("data-sector-color");}
  }
  $("kartSector1")?.classList.add("sector-current");
  const live=$("kartSectorLive");if(live)live.textContent="SECTOR 1";
 }
-function showSector(index,ms){
+function showSector(index,ms,color=null){
+ const idx=index-1;
+ const prior=personalSectorBests[idx];
+ const result=color||((prior===null||ms<prior)?"purple":"yellow");
+ personalSectorBests[idx]=Math.min(prior??Infinity,ms);
  const el=$("kartSector"+index);
- if(el){el.textContent=format(ms);el.classList.remove("sector-current");}
+ if(el){
+  el.textContent=format(ms);
+  el.classList.remove("sector-current","sector-purple","sector-green","sector-yellow");
+  el.classList.add("sector-"+result);
+  el.parentElement?.setAttribute("data-sector-color",result);
+ }
  currentSector=Math.min(3,index+1);
  sectorStarted=performance.now();
  $("kartSector"+currentSector)?.classList.add("sector-current");
@@ -188,38 +275,8 @@ function track(){
  // and the longitudinal start line, are intentionally removed.
  addCircuitGraphics(THREE,scene,ROAD,PIT,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  addKartSafety(THREE,scene,ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
- // Pit-lane entry, pit-speed signs and road markings: use P before entering.
- const pitEntry=PIT.samples[0],pitExit=PIT.samples[PIT.samples.length-1];
- for(const [point,label] of [[pitEntry,"PIT IN 40"],[pitExit,"PIT OUT"]]){
-  const signCanvas=document.createElement("canvas");signCanvas.width=512;signCanvas.height=128;
-  const ctx=signCanvas.getContext("2d");ctx.fillStyle="#1b3542";ctx.fillRect(0,0,512,128);
-  ctx.fillStyle="#ffe3a4";ctx.font="bold 62px Arial";ctx.textAlign="center";ctx.fillText(label,256,88);
-  const texture=new THREE.CanvasTexture(signCanvas);texture.colorSpace=THREE.SRGBColorSpace;
-  const sign=object(new THREE.PlaneGeometry(3.9,1),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}),
-   point.x,point.y+2.15,point.z);
-  const pole=post(.09,2.3,0xb8bdc0,point.x,point.y+1.0,point.z);
- }
- // Pit lane: visibly separated from the main straight, complete with garages and pit wall.
- for(let i=8;i<PIT.samples.length-10;i+=4){
-  const p=PIT.samples[i],d=tangent(PIT,Math.min(PIT.samples.length-2,i));
-  const stripe=box(.13,.02,.85,0xe9c775,p.x+d.nx*2.2,p.y+.06,p.z+d.nz*2.2);
-  stripe.rotation.y=Math.atan2(d.tx,d.tz);
- }
- for(let i=0;i<5;i++){
-  const x=(-32+i*9)*TRACK_SCALE,z=-1.2*TRACK_SCALE;
-  box(8.4,2.7,3.8,0x554356,x,1.35,z);
-  box(7.5,1.7,.08,0x202b34,x,1.26,z-1.98);
-  box(8.7,.34,4.1,0xdac6a0,x,2.8,z);
-  box(7.2,.12,.3,0xe4bc78,x,2.46,z-2.09);
-  const roof=box(8.5,.2,1.4,0x8a304b,x,3.05,z-1.3);roof.rotation.x=-.1;
- }
- for(let i=0;i<12;i++){
-  const p=PIT.samples[Math.min(PIT.samples.length-2,5+i*5)];
-  const d=tangent(PIT,Math.min(PIT.samples.length-2,5+i*5));
-  const wall=box(.18,.52,1.65,i%2?0xf4e5d4:0xc84955,
-   p.x+d.nx*3,p.y+.26,p.z+d.nz*3);
-  wall.rotation.y=Math.atan2(d.tx,d.tz);
- }
+ // Detailed two-level garage building, safe entry signs and four marked service bays.
+ addPitComplex(THREE,scene,PIT,PIT_BAYS);
  // Physical starting gantry on the outside of the racing line.
  const p=ROAD.samples[0],d=tangent(ROAD,0);
  for(const side of [-1,1])post(.16,4.1,0xd4ad79,p.x+d.nx*side*4.8,p.y+2,p.z+d.nz*side*4.8);
@@ -240,45 +297,9 @@ function track(){
  }
 }
 function kartModel(){
- kart=new THREE.Group();scene.add(kart);
- const paint=new THREE.MeshPhysicalMaterial({color:0x9d284b,metalness:.35,roughness:.28,clearcoat:1,clearcoatRoughness:.11});
- const chrome=new THREE.MeshStandardMaterial({color:0xc9c6c1,metalness:.82,roughness:.2});
- const rubber=material(0x191b21,.98),leather=material(0x372735,.84);
- const body=object(new THREE.SphereGeometry(1,24,16),paint,0,.66,0,kart);
- body.scale.set(.83,.24,1.36);
- const nose=object(new THREE.SphereGeometry(1,24,16),paint,0,.52,-.91,kart);
- nose.scale.set(.68,.21,.54);
- const frontBumper=box(1.75,.11,.18,0xdab989,0,.42,-1.36,kart);
- box(1.85,.12,.18,0x23252b,0,.43,1.21,kart);
- box(1.08,.28,.95,0x29232c,0,.85,.42,kart);
- const seat=object(new THREE.SphereGeometry(1,16,12),leather,0,1.06,.45,kart);
- seat.scale.set(.48,.46,.37);
- for(const x of [-.79,.79])for(const z of [-.85,.85]){
-  const wheel=object(new THREE.CylinderGeometry(.33,.33,.28,18),rubber,x,.35,z,kart);
-  wheel.rotation.z=Math.PI/2;
-  const hub=object(new THREE.CylinderGeometry(.14,.14,.295,16),chrome,x,.35,z,kart);
-  hub.rotation.z=Math.PI/2;
- }
- const helmet=new THREE.Mesh(new THREE.SphereGeometry(.31,22,16),new THREE.MeshPhysicalMaterial({
-  color:0xf2c77e,metalness:.35,roughness:.25,clearcoat:1}));
- helmet.position.set(0,1.57,.37);kart.add(helmet);cockpitOccluders.push(helmet);
- const visor=object(new THREE.SphereGeometry(.26,20,12),material(0x1b313c,.09,.48),0,1.56,.19,kart);
- visor.scale.set(.95,.47,.42);cockpitOccluders.push(visor);
- const wheel=object(new THREE.TorusGeometry(.23,.045,8,22),rubber,0,1.04,-.38,kart);
- wheel.rotation.x=Math.PI*.27;
- for(const x of [-.39,.39]){
-  const arm=object(new THREE.CapsuleGeometry(.065,.36,5,9),material(0xdbc6a7,.75),x*.75,1.1,-.07,kart);
-  arm.rotation.x=Math.PI/4;
-  box(.11,.1,.14,0xf9eed5,x,.54,-1.31,kart);
- }
- const label=box(.75,.035,.55,0xf5e9d5,0,.93,-.7,kart);
- label.rotation.x=-.06;
- const number=box(.33,.014,.34,0x33333b,0,.961,-.7,kart);
- number.rotation.x=-.06;
- const shadow=new THREE.Mesh(new THREE.CircleGeometry(1.12,28),new THREE.MeshBasicMaterial({
-  color:0x111219,transparent:true,opacity:.21,depthWrite:false}));
- shadow.rotation.x=-Math.PI/2;shadow.position.y=.024;
- kart.add(shadow);
+ const vee=createFormulaVee(THREE,{color:0xa62c46,number:7});
+ kart=vee.group;scene.add(kart);
+ cockpitOccluders.push(...vee.hiddenInCockpit);
 }
 function construct(){
  scene=new THREE.Scene();scene.background=new THREE.Color(0xa2c6d0);scene.fog=new THREE.FogExp2(0xa2c6d0,.0034);
@@ -326,6 +347,10 @@ function positionOnTrack(x,z){
  return {...road,isPit:false};
 }
 async function transmit(){
+ if(driveMode==="meeting"){
+  if(playing)await window.KartMeetings?.sendTelemetry?.(getPose());
+  return;
+ }
  if(telemetryPending||!raceId||!playing)return;
  telemetryPending=true;
  const current=raceId,position={x:pos.x,z:pos.z,pit:inPitLane};
@@ -376,6 +401,11 @@ async function transmit(){
 }
 function update(dt){
  if(!playing)return;
+ if(driveMode==="meeting"&&!window.KartMeetings?.canDrive?.()){
+  speed=0;
+  if(performance.now()-sendAt>950){sendAt=performance.now();transmit();}
+  return;
+ }
  const accelerate=down("w")||down("arrowup");
  const brake=down("s")||down("arrowdown")||down(" ");
  const steer=Number(down("d")||down("arrowright"))-Number(down("a")||down("arrowleft"));
@@ -426,9 +456,9 @@ function frame(){
   // behind the kart: chase-style interpolation exposed the driver's head
   // whenever acceleration caused the vehicle to pull ahead of the camera.
   const forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw);
-  camera.position.set(pos.x+forwardX*1.08,pos.y+1.44,pos.z+forwardZ*1.08);
+  camera.position.set(pos.x+forwardX*.40,pos.y+1.27,pos.z+forwardZ*.40);
   camera.lookAt(pos.x+forwardX*28,pos.y+1.42,pos.z+forwardZ*28);
-  // Constant field of view: no acceleration-induced zoom or head clipping.
+  // Fixed FOV: the tapered Formula Vee nose and front wheels remain visible.
   if(camera.fov!==73){camera.fov=73;camera.updateProjectionMatrix();}
  }else{
   const target=new THREE.Vector3(pos.x-Math.sin(yaw)*11,pos.y+7.3,pos.z-Math.cos(yaw)*11);
@@ -437,10 +467,13 @@ function frame(){
   if(camera.fov!==64){camera.fov=64;camera.updateProjectionMatrix();}
  }
  renderer.render(scene,camera);
+ window.KartMeetings?.tick?.();
  if(performance.now()-lastLeaderboardRefresh>15000){lastLeaderboardRefresh=performance.now();leaderboard();}
  $("kartSpeed").textContent=Math.round(Math.abs(speed)*3.6)+" km/h";
 }
 async function begin(){
+ if(driveMode==="meeting")clearMeetingStage();
+ driveMode="practice";
  if(busy)return;busy=true;$("kartStart").disabled=true;
  try{
   await init();
@@ -460,8 +493,10 @@ function open(){
  document.body.classList.add("kart-open");document.exitPointerLock?.();
  message("Race the redesigned Velvet Circuit — corners, chicanes, hills and a pit lane.");
  leaderboard();lastLeaderboardRefresh=performance.now();init().catch(error=>message("Track unavailable: "+error.message));
+ window.KartMeetings?.open?.();
 }
 function close(){
+ window.KartMeetings?.close?.();clearMeetingStage();
  if(document.fullscreenElement===$("kartGame"))document.exitFullscreen().catch(()=>{});
  active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;pitLimiter=false;inPitLane=false;updatePitHUD();
  $("kartGame").classList.add("hidden");document.body.classList.remove("kart-open");
@@ -491,4 +526,6 @@ $("kartPitLimiter").addEventListener("click",togglePitLimiter);
 $("kartStart").addEventListener("click",begin);
 $("kartClose").addEventListener("click",close);
 $("kartRefresh").addEventListener("click",leaderboard);
-window.KartRacing={open,close,isOpen:()=>active,setCameraMode};
+window.KartRacing={open,close,isOpen:()=>active,setCameraMode,meetingSectorUpdate,
+ beginMeetingStage,clearMeetingStage,finishMeetingStage,meetingLapUpdate,updateRivals,
+ getPose,pitBays:()=>PIT_BAYS,beginPractice:begin};

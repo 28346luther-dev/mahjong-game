@@ -1,3 +1,4 @@
+import {handleRaceEvent} from "./kart-race-events.js";
 import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,raceStart} from "../public/kart-track.js";
 
 // Continuous on-road progress verification. No checkpoint gates or checkpoints UI.
@@ -41,6 +42,7 @@ export class KartLeaderboard {
  async read(){return await this.storage.get("best-times-v3")||{};}
  async fetch(request){
   const url=new URL(request.url);
+  if(url.pathname==="/events"||url.pathname.startsWith("/event/"))return handleRaceEvent(request,this.storage);
   if(request.method==="GET"&&url.pathname==="/leaderboard"){
    const records=await this.read();
    return Response.json({track:"Velvet Circuit Extended",laps:"unlimited",entries:leaderboardEntries(records)},

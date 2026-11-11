@@ -191,6 +191,11 @@ export default {
       }
       return new Response("Not found",{status:404});
     }
+    // Public event timetable and entry lists are readable by the clubhouse.
+    if(url.pathname==="/api/kart/events"&&request.method==="GET"){
+      return env.KART.get(env.KART.idFromName("velvet-circuit-global"))
+        .fetch("https://kart/events",{method:"GET"});
+    }
     // Read-only public rankings; no account identity or personal data exposed.
     if(url.pathname==="/api/kart/leaderboard"&&request.method==="GET"){
       return env.KART.get(env.KART.idFromName("velvet-circuit-global"))
@@ -203,21 +208,27 @@ export default {
         if(request.method!=="GET"&&request.method!=="POST")
           return Response.json({error:"Method not allowed"},{status:405});
         const action=url.pathname.slice("/api/kart".length);
-        if(!["/leaderboard","/start","/sample","/finish","/abort"].includes(action))
+        if(!["/leaderboard","/start","/sample","/finish","/abort","/events","/event/register","/event/state","/event/sample","/event/pit","/event/leave"].includes(action))
           return Response.json({error:"Unknown kart endpoint"},{status:404});
         const origin=request.headers.get("origin");
         if(origin&&origin!==url.origin)return Response.json({error:"Invalid origin"},{status:403});
         const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(viewer.email));
         const userId=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
         const stub=env.KART.get(env.KART.idFromName("velvet-circuit-global"));
-        if(action==="/leaderboard"){
-          return stub.fetch("https://kart/leaderboard",{method:"GET"});
+        if(action==="/leaderboard"||action==="/events"){
+          return stub.fetch("https://kart"+action,{method:"GET"});
+        }
+        if(action==="/event/state"&&request.method==="GET"){
+          const eventId=Number(url.searchParams.get("id"));
+          return stub.fetch("https://kart/event/state?id="+encodeURIComponent(eventId),{
+            method:"POST",body:JSON.stringify({eventId,user:userId})
+          });
         }
         if(request.method!=="POST")return Response.json({error:"POST required"},{status:405});
         if(Number(request.headers.get("content-length")||0)>2048)
           return Response.json({error:"Invalid kart request"},{status:413});
         let body={};try{body=await request.json();}catch{return Response.json({error:"Invalid JSON"},{status:400});}
-        if(action==="/start"){
+        if(action==="/start"||action==="/event/register"){
           const profileRes=await authStub.fetch("https://auth/profile",{
             method:"POST",body:JSON.stringify({token})
           });
@@ -226,7 +237,8 @@ export default {
         }
         return stub.fetch("https://kart"+action,{
           method:"POST",body:JSON.stringify({user:userId,
-            raceId:body.raceId,index:body.index,x:body.x,z:body.z,pit:body.pit===true,name:body.name})
+            raceId:body.raceId,index:body.index,x:body.x,z:body.z,pit:body.pit===true,name:body.name,
+            eventId:body.eventId,yaw:body.yaw,speed:body.speed,bay:body.bay})
         });
       }
       if(["/api/sana/wallet","/api/sana/spin","/api/blackjack/join"].includes(url.pathname)){

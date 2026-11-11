@@ -18,9 +18,9 @@ export const PIT_POINTS=[
  [-46,-22,.8],[-40,-16,.8],[-29,-10,.8],[-12,-9,.8],
  [3,-9,.82],[11,-12,.85],[19,-22,1.05]
 ].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y*1.35]);
-// The extended eastern right-hand sweeper has approximately 9 degrees of
+// The extended eastern right-hand sweeper has approximately 17 degrees of
 // progressive banking. Banking is tapered smoothly on entry and exit.
-export const BANK_START=.20,BANK_END=.40,BANK_MAX_DEGREES=9;
+export const BANK_START=.20,BANK_END=.40,BANK_MAX_DEGREES=17;
 export function bankAngle(progress){
  const p=((progress%1)+1)%1;
  if(p<=BANK_START||p>=BANK_END)return 0;
@@ -32,6 +32,13 @@ export function bankRise(progress,lateralOffset){
  // Outside of this right-hander lies on the negative normal side.
  return -lateralOffset*Math.tan(bankAngle(progress));
 }
+// Four protected service boxes off the fast lane, facing the pit garages.
+// The drive-through portion of the pit route remains usable in free practice.
+export const PIT_BAYS=[.31,.43,.55,.67].map((fraction,i)=>{
+ const n=Math.round(fraction*72),route=makeRoute(PIT_POINTS,72,false);
+ const p=route.samples[Math.min(n,route.samples.length-1)];
+ return {index:i,x:p.x,z:p.z+1.15,y:p.y,label:"BAY "+(i+1)};
+});
 export const TRACK_SAMPLES=480;
 function point(p){return {x:p[0],z:p[1],y:p[2]};}
 function catmull(a,b,c,d,t){
