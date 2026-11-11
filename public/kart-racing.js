@@ -12,6 +12,7 @@ let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPendi
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
 let driveMode="practice",meetingPhase=null,remoteKarts=new Map();
+let selectedMode="practice",timeTrial=false,selectorVisible=true;
 let localPitUntil=0,localPitBay=null,localPitDone=false;
 function getLocalPitRemaining(){return Math.max(0,localPitUntil-Date.now());}
 function resetLocalPit(){localPitUntil=0;localPitBay=null;localPitDone=false;}
@@ -32,6 +33,16 @@ function createRival(p){
  scene.add(model.group);return model.group;
 }
 function updateRivals(racers,myId){
+ const list=$("kartTrackPositions");
+ if(list){
+  list.replaceChildren();
+  for(const [index,p] of (racers||[]).entries()){
+   const li=document.createElement("li");
+   li.textContent="P"+(p.position||index+1)+"  "+p.name+(p.id===myId?" · YOU":"")+"  L"+(p.lap||0)+"/10";
+   if(p.id===myId)li.className="my-position";
+   list.append(li);
+  }
+ }
  if(!scene)return;
  const present=new Set();
  for(const driver of racers||[]){
@@ -50,6 +61,7 @@ function updateRivals(racers,myId){
  }
 }
 async function beginMeetingStage(phase,mine){
+ enterTrack("races");
  if(!active)return;
  try{
   await init();driveMode="meeting";meetingPhase=phase;personalSectorBests=[null,null,null];
@@ -425,6 +437,7 @@ async function transmit(){
      format(finish.elapsedMs)+" · Lap "+lapCount+" now running.");
    standings(finish.entries);
    lastLeaderboardRefresh=performance.now();
+   if(timeTrial){playing=false;speed=0;message("Time trial complete — "+format(finish.elapsedMs)+". Choose Start timed lap to go again.");}
   }
  }catch(error){
   if(raceId===current){playing=false;message(error.message+" Restart the lap to try again.");}
@@ -548,22 +561,51 @@ async function begin(){
   $("kartProgress").textContent="0%";
   $("kartStart").textContent="Restart session";
   if(result.bestMs)$("kartBest").textContent="BEST "+format(result.bestMs);
+  $("kartRacePhase").textContent=timeTrial?"TIME TRIAL":"FREE PRACTICE";
   message("GO! Hit the apex kerbs, keep clear of the gravel, and stay out for unlimited timed laps.");
  }catch(error){message(error.message);}
  finally{busy=false;$("kartStart").disabled=false;}
 }
+function enterTrack(mode="practice"){
+ selectedMode=mode;timeTrial=mode==="timetrial";selectorVisible=false;
+ $("kartGame").classList.add("kart-driving");
+ $("kartGame").classList.remove("kart-selector");
+ $("kartDrivingMode").textContent=mode==="timetrial"?"TIME TRIAL":mode==="races"?"CHAMPIONSHIP":"FREE PRACTICE";
+ $("kartTrackPositions").replaceChildren();
+ if(mode!=="races"){
+  const item=document.createElement("li");item.textContent=mode==="timetrial"?"GLOBAL TIME TRIAL":"SOLO PRACTICE";
+  $("kartTrackPositions").append(item);
+ }
+ if(mode==="practice"||mode==="timetrial"){begin();}
+ else message("Race meeting selected. Qualifying begins at the scheduled time.");
+}
+function backToSelector(){
+ if(document.fullscreenElement===$("kartGame"))document.exitFullscreen().catch(()=>{});
+ playing=false;speed=0;raceId=null;clearMeetingStage();keys.clear();touch.clear();
+ selectorVisible=true;
+ $("kartGame").classList.remove("kart-driving","kart-races-hub");
+ $("kartGame").classList.add("kart-selector");
+ window.KartMeetings?.refresh?.();
+}
+function showRaceMeetings(){
+ selectorVisible=true;$("kartGame").classList.add("kart-selector","kart-races-hub");
+ $("kartGame").classList.remove("kart-driving");
+ window.KartMeetings?.refresh?.();
+}
 function open(){
  if(active)return;active=true;$("kartGame").classList.remove("hidden");
  document.body.classList.add("kart-open");document.exitPointerLock?.();
- message("Race the redesigned Velvet Circuit — corners, chicanes, hills and a pit lane.");
- leaderboard();lastLeaderboardRefresh=performance.now();init().catch(error=>message("Track unavailable: "+error.message));
+ $("kartGame").classList.add("kart-selector");
+ $("kartGame").classList.remove("kart-driving","kart-races-hub");
+ selectorVisible=true;message("Choose your racing mode to begin.");
+ leaderboard();lastLeaderboardRefresh=performance.now();
  window.KartMeetings?.open?.();
 }
 function close(){
  window.KartMeetings?.close?.();clearMeetingStage();
  if(document.fullscreenElement===$("kartGame"))document.exitFullscreen().catch(()=>{});
- active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;pitLimiter=false;inPitLane=false;updatePitHUD();
- $("kartGame").classList.add("hidden");document.body.classList.remove("kart-open");
+ active=false;playing=false;raceId=null;keys.clear();touch.clear();speed=0;selectorVisible=true;pitLimiter=false;inPitLane=false;updatePitHUD();
+ $("kartGame").classList.add("hidden");$("kartGame").classList.remove("kart-driving","kart-selector","kart-races-hub");document.body.classList.remove("kart-open");
 }
 window.addEventListener("keydown",e=>{
  if(!active||["INPUT","TEXTAREA"].includes(document.activeElement?.tagName))return;
@@ -573,9 +615,9 @@ window.addEventListener("keydown",e=>{
  }
  if(k==="c"){setCameraMode(cameraMode==="chase"?"cockpit":"chase");e.preventDefault();}
  if(k==="p"){togglePitLimiter();e.preventDefault();}
- if(k==="f"){toggleFullscreen();e.preventDefault();}
- if(k==="r"){reset();playing=false;message("Kart reset. Start a new timed lap to record a result.");}
- if(k==="escape"){e.preventDefault();close();}
+ if(k==="f"&&!selectorVisible){toggleFullscreen();e.preventDefault();}
+ if(k==="r"&&!selectorVisible){reset();playing=false;message("Kart reset. Start a new timed lap to record a result.");}
+ if(k==="escape"){e.preventDefault();if(!selectorVisible)backToSelector();else close();}
 });
 window.addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));
 window.addEventListener("blur",()=>keys.clear());
@@ -589,7 +631,15 @@ $("kartFullscreen").addEventListener("click",toggleFullscreen);
 $("kartPitLimiter").addEventListener("click",togglePitLimiter);
 $("kartStart").addEventListener("click",begin);
 $("kartClose").addEventListener("click",close);
+$("kartBackSelector").addEventListener("click",backToSelector);
+for(const card of document.querySelectorAll("[data-kart-mode]")){
+ card.addEventListener("click",()=>{
+  const mode=card.dataset.kartMode;
+  if(mode==="races")showRaceMeetings();
+  else enterTrack(mode);
+ });
+}
 $("kartRefresh").addEventListener("click",leaderboard);
 window.KartRacing={open,close,isOpen:()=>active,setCameraMode,meetingSectorUpdate,
  beginMeetingStage,clearMeetingStage,finishMeetingStage,meetingLapUpdate,updateRivals,
- getPose,pitBays:()=>PIT_BAYS,beginPractice:begin,getLocalPitRemaining,resetLocalPit};
+ getPose,pitBays:()=>PIT_BAYS,beginPractice:()=>enterTrack("practice"),enterTrack,backToSelector,getLocalPitRemaining,resetLocalPit};
