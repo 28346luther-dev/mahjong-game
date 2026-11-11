@@ -48,7 +48,7 @@ test("pit barriers stay outboard, pit boxes have graphical markings and pit boom
  assert.match(client,/addCircuitGrandstands/);
  assert.match(client,/addPitComplex/);
  assert.match(client,/getLocalPitRemaining/);
- assert.match(client,/pit\.progress>\.02/);
+ assert.match(client,/pit\.progress>\.012/);
  assert.match(track,/PIT_BAY_TOLERANCE=3\.65/);
 });
 test("grass terrain stays beyond the runoff; wide exit kerbs preserve grip",()=>{
