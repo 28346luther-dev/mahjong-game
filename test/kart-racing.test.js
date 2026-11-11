@@ -155,10 +155,11 @@ test("racing kerbs do not slow down, while gravel and grass do",()=>{
 });
 test("first-person camera stays forward of driver head with a fixed FOV",()=>{
  const client=readFileSync("public/kart-racing.js","utf8");
- assert.match(client,/camera\.position\.set\(pos\.x\+forwardX\*1\.08,pos\.y\+1\.44,pos\.z\+forwardZ\*1\.08\)/);
+ assert.match(client,/camera\.position\.set\(pos\.x\+forwardX\*\.40,pos\.y\+1\.27,pos\.z\+forwardZ\*\.40\)/);
  assert.match(client,/camera\.fov!==73/);
  assert.doesNotMatch(client,/camera\.position\.lerp\(eye/);
- assert.match(client,/cockpitOccluders\.push\(helmet\)/);
+ assert.match(client,/cockpitOccluders\.push\(\.\.\.vee\.hiddenInCockpit\)/);
+ assert.match(readFileSync("public/kart-formula-vee.js","utf8"),/hiddenInCockpit\.push\(helmet\)/);
 });
 test("P toggles pit speed limiter, exposes pit HUD and forwards session telemetry",()=>{
  const client=readFileSync("public/kart-racing.js","utf8");
