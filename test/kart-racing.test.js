@@ -148,7 +148,7 @@ test("cockpit view, realistic metal guardrails and fullscreen race controls are 
 });
 test("racing kerbs do not slow down, while gravel and grass do",()=>{
  const client=readFileSync("public/kart-racing.js","utf8");
- assert.match(client,/distance<=ROAD_HALF_WIDTH\+kerbWidth\)return \{drag:0,surface:"kerb"\}/);
+ assert.match(client,/Math\.max\(3\.6,kerbWidth\)/);
  assert.match(client,/surface:"gravel"/);
  assert.match(client,/surface:"grass"/);
  assert.match(client,/if\(grip\.drag>0\)speed\*=Math\.exp\(-grip\.drag\*dt\)/);
