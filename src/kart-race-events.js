@@ -73,7 +73,7 @@ export function eventSnapshot(meeting,now=Date.now(),user=null){
 }
 function gridPosition(index){
  // Starting grid on the main straight, staggered behind the finish line.
- const lane=(index%2?1:-1)*1.3,forward=8+Math.floor(index/2)*5.1;
+ const lane=(index%2?1:-1)*2.25,forward=8+Math.floor(index/2)*5.7;
  const start=ROAD.samples[0],ahead=ROAD.samples[4];
  const dx=ahead.x-start.x,dz=ahead.z-start.z,len=Math.hypot(dx,dz)||1;
  const tx=dx/len,tz=dz/len;
@@ -252,6 +252,16 @@ export async function handleRaceEvent(request,storage){
  if(crossed&&player.travel>.89){
   const elapsed=now-player.lapStarted;
   if(elapsed>=MIN_LAP_MS){
+   // Rankings are based only on complete, server-verified laps. Sectors do
+   // not write to the global board or reset the lap clock.
+   if(elapsed>=22000&&elapsed<=600000){
+    const records=await storage.get("best-times-v3")||{};
+    const best=records[user]?.bestMs??Infinity;
+    if(elapsed<best){
+     records[user]={name:player.name,bestMs:elapsed,at:now,version:3};
+     await storage.put("best-times-v3",records);
+    }
+   }
    if(phase==="qualifying"){
     player.qualifiedMs=Math.min(player.qualifiedMs??Infinity,elapsed);
     lapUpdate={type:"qualifying",timeMs:elapsed,bestMs:player.qualifiedMs};
