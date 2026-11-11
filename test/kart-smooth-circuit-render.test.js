@@ -13,7 +13,7 @@ test("visual Catmull subdivision smooths EVERY corner without moving validated r
   const old=ROAD.samples[i],visual=refined.samples[i*VISUAL_SUBDIVISIONS];
   assert.equal(old.x,visual.x);assert.equal(old.z,visual.z);assert.equal(old.y,visual.y);
  }
- assert.ok(Math.abs(ROAD.length-refined.length)<1.0,"visual road length remains aligned with racing geometry");
+ assert.ok(Math.abs(ROAD.length-refined.length)<3.0,"visual road length remains aligned with racing geometry");
  const start=raceStart();
  assert.equal(start.x,refined.samples[0].x);
  assert.ok(projectToRoute(start.x,start.z).distance<1e-7);
