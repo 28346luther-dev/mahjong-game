@@ -636,6 +636,9 @@ function showRaceMeetings(){
  $("kartGame").classList.remove("kart-driving");
  window.KartMeetings?.refresh?.();
 }
+function mayAutoJoinMeeting(){
+ return active&&(!selectorVisible||$("kartGame").classList.contains("kart-races-hub"));
+}
 function open(){
  if(active)return;active=true;$("kartGame").classList.remove("hidden");
  document.body.classList.add("kart-open");document.exitPointerLock?.();
@@ -676,6 +679,7 @@ $("kartPitLimiter").addEventListener("click",togglePitLimiter);
 $("kartStart").addEventListener("click",begin);
 $("kartClose").addEventListener("click",close);
 $("kartBackSelector").addEventListener("click",backToSelector);
+$("kartRaceModesBack").addEventListener("click",backToSelector);
 for(const card of document.querySelectorAll("[data-kart-mode]")){
  card.addEventListener("click",()=>{
   const mode=card.dataset.kartMode;
@@ -686,4 +690,4 @@ for(const card of document.querySelectorAll("[data-kart-mode]")){
 $("kartRefresh").addEventListener("click",leaderboard);
 window.KartRacing={open,close,isOpen:()=>active,setCameraMode,meetingSectorUpdate,
  beginMeetingStage,clearMeetingStage,finishMeetingStage,meetingLapUpdate,updateRivals,
- getPose,pitBays:()=>PIT_BAYS,beginPractice:()=>enterTrack("practice"),enterTrack,backToSelector,getLocalPitRemaining,resetLocalPit};
+ getPose,pitBays:()=>PIT_BAYS,beginPractice:()=>enterTrack("practice"),enterTrack,backToSelector,mayAutoJoinMeeting,getLocalPitRemaining,resetLocalPit};
