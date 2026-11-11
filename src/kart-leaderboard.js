@@ -99,7 +99,7 @@ export class KartLeaderboard {
   if(session.pitMode&&url.pathname==="/sample"){
    const road=projectToRoute(x,z,ROAD);
    const dt=now-session.lastAt;
-   if(road.distance>ROAD_HALF_WIDTH+1.23||
+   if(road.distance>ROAD_HALF_WIDTH+3.0||
       Math.hypot(x-session.x,z-session.z)>MAX_SPEED_MPS*dt/1000+7){
     return Response.json({error:"Rejoin the main track safely at pit exit."},{status:422});
    }
@@ -143,17 +143,17 @@ export class KartLeaderboard {
    }
    await this.storage.put(key,session);
    return Response.json({ok:true,progress:Math.min(100,Math.floor(session.travel*100)),
-    readyToFinish:!!session.crossed,sectorUpdate});
+    readyToFinish:!!session.crossed,lapElapsedMs:now-session.start,sectorUpdate});
   }
   if(!check.complete&&!session.crossed)
    return Response.json({error:"Cross the start/finish line after a full lap."},{status:422});
   const elapsed=now-session.start;
   if(elapsed<MIN_LAP_MS||session.travel<.93||session.travel>1.2)
    return Response.json({error:"Lap must complete the circuit at racing speed."},{status:422});
+  // Split display is OPTIONAL telemetry. Only the full verified lap time
+  // determines the personal best; a missing sector message cannot reject it.
   const sectorTimes=[...(session.sectorTimes||[])];
-  if(sectorTimes.length!==2)return Response.json({error:"Complete all three timing sectors to set a lap."},{status:422});
-  sectorTimes.push(elapsed-sectorTimes[0]-sectorTimes[1]);
-  if(sectorTimes.some(n=>n<=0))return Response.json({error:"Invalid sector split."},{status:422});
+  if(sectorTimes.length===2)sectorTimes.push(Math.max(1,elapsed-sectorTimes[0]-sectorTimes[1]));
   const result=await this.storage.transaction(async txn=>{
    const records=await txn.get("best-times-v3")||{};
    const previous=records[id]?.bestMs??Infinity;
