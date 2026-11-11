@@ -33,7 +33,7 @@ export function addStraightGlassBarriers(THREE,scene,road,roadHalfWidth,pitRoute
    // along the two edges of the racing asphalt, not on the far-away grass.
    const p=samples[i],dir=tangent(i),edge=side*(roadHalfWidth+.27);
    const x=p.x+dir.nx*edge,z=p.z+dir.nz*edge;
-   if(pitRoute&&projectToRoute(x,z,pitRoute).distance<2.7)continue;
+   if(pitRoute&&projectToRoute(x,z,pitRoute).distance<8.5)continue;
    const a0=point(i,side,.06),b0=point(i+1,side,.06);
    const a1=point(i,side,.84),b1=point(i+1,side,.84);
    const a2=point(i,side,2.75),b2=point(i+1,side,2.75);
