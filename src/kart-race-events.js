@@ -42,10 +42,13 @@ function rankPlayers(players){
  return grid;
 }
 function raceStanding(players){
- return [...players].sort((a,b)=>
-  Boolean(a.finishedAt)!==Boolean(b.finishedAt)?a.finishedAt?-1:1:
-  a.finishedAt&&b.finishedAt?a.finishedAt-b.finishedAt:
-  (b.lap||0)-(a.lap||0)||(b.progress||0)-(a.progress||0));
+ return [...players].sort((a,b)=>{
+  if(Boolean(a.finishedAt)!==Boolean(b.finishedAt))return a.finishedAt?-1:1;
+  if(a.finishedAt&&b.finishedAt)return a.finishedAt-b.finishedAt;
+  // Grid positions remain stable until the race actually gets underway.
+  if(!a.startedDriving&&!b.startedDriving)return (a.grid||99)-(b.grid||99);
+  return (b.lap||0)-(a.lap||0)||(b.progress||0)-(a.progress||0);
+ });
 }
 export function eventSnapshot(meeting,now=Date.now(),user=null){
  const phase=eventPhase(meeting.id,now);
@@ -80,7 +83,7 @@ function advance(meeting,now){
    const p=order[i],grid=gridPosition(i),proj=projectToRoute(grid.x,grid.z);
    Object.assign(p,grid,{progress:proj.progress,travel:0,lastAt:now,
     lapStarted:meeting.id+QUALIFY_MS,lap:0,finishedAt:null,finishedMs:null,
-    pitComplete:false,pitUntil:0,pitBay:null,pitMode:false,disqualified:false,
+    pitComplete:false,pitUntil:0,pitBay:null,pitMode:false,disqualified:false,startedDriving:false,
     sectorTimes:[],sectorColors:[],sectorIndex:0,sectorLastAt:now});
   }
   meeting.gridStarted=true;
@@ -227,6 +230,7 @@ export async function handleRaceEvent(request,storage){
  player.travel+=Math.max(0,movement.delta);
  player.progress=movement.progress;player.x=x;player.z=z;player.lastAt=now;
  player.yaw=Number.isFinite(body.yaw)?body.yaw:player.yaw;
+ player.startedDriving=true;
  let lapUpdate=null;
  if(crossed&&player.travel>.89){
   const elapsed=now-player.lapStarted;
