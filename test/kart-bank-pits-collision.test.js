@@ -56,10 +56,10 @@ test("grass terrain stays beyond the runoff; wide exit kerbs preserve grip",()=>
  const graphics=readFileSync("public/kart-graphics.js","utf8");
  const stands=readFileSync("public/kart-grandstands.js","utf8");
  assert.match(client,/ROAD_HALF_WIDTH\+RUNOFF_WIDTH\+\.35/);
- assert.match(graphics,/exitMask/);
- assert.match(graphics,/curvedStrip\(i,outside,halfWidth-\.18,halfWidth\+2\.46/);
- assert.match(graphics,/projectToRoute\(x,z,PIT\)\.distance<PIT_HALF_WIDTH\+17/);
- assert.match(client,/if\(isPit\|\|distance<=ROAD_HALF_WIDTH\+kerbWidth\)return \{drag:0/);
+ assert.match(graphics,/kerbWeight/);
+ assert.match(graphics,/\[\[side,1\.6\],\[-side,2\.35\]\]/);
+ assert.match(graphics,/projectToRoute\(x,z,PIT\)\.distance<PIT_HALF_WIDTH\+26/);
+ assert.match(client,/Math\.max\(3\.6,kerbWidth\)/);
  assert.match(stands,/grandstandSections/);
  assert.match(stands,/seatPools/);
 });
