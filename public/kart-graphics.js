@@ -214,10 +214,10 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   if(Math.abs(bend(i))<.17)continue;
   const point=ps[i],t=tangent(i),side=Math.sign(bend(i));
   for(let n=0;n<3;n++){
-   const off=side*(halfWidth+runoffWidth+1.5);
+   const off=side*(halfWidth+runoffWidth+8);
    const x=point.x+t.nx*off,z=point.z+t.nz*off;
    // Keep all tyre stacks well outside both entry and pit-exit junctions.
-   if(projectToRoute(x,z,PIT).distance<PIT_HALF_WIDTH+17)continue;
+   if(projectToRoute(x,z,PIT).distance<PIT_HALF_WIDTH+26)continue;
    tyrePositions.push({x,y:point.y+.42+n*.31,z});
   }
  }
