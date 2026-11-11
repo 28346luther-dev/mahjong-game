@@ -1,5 +1,5 @@
 import {deck,shuffle,evaluateSeven,distributePots,botDecision} from "./poker-rules.js";
-import {INITIAL_SANA,POKER_BUYIN,SLOT_PRICE,newBlackjack,blackjackView,joinBlackjack,readyBlackjack,beginBlackjack,moveBlackjack,chooseBlackjackMode} from "./blackjack-multiplayer.js";
+import {INITIAL_SANA,POKER_BUYIN,SLOT_PRICE,newBlackjack,blackjackView,joinBlackjack,readyBlackjack,beginBlackjack,moveBlackjack,chooseBlackjackMode,disconnectBlackjack,reconcileBlackjack} from "./blackjack-multiplayer.js";
 import {spinSlots} from "../public/salon-rules.js";
 const START_STACK=POKER_BUYIN,SMALL_BLIND=10,BIG_BLIND=20,MAX_PLAYERS=4;
 const cleanName=name=>String(name||"Guest").replace(/[^\p{L}\p{N} ._-]/gu,"").slice(0,22)||"Guest";
@@ -21,6 +21,7 @@ export class PokerTable{
   };
   if(!this.data.wallets)this.data.wallets={};
   if(!this.data.blackjack)this.data.blackjack=newBlackjack();
+  if(reconcileBlackjack(this.data.blackjack,new Set(this.blackjackSockets.keys()),this.data.wallets))await this.save();
   if(!this.data.casinoVersion||this.data.casinoVersion<2){
    for(const p of this.data.players.filter(p=>p.kind==="human")){
     this.data.wallets[p.id]={balance:INITIAL_SANA-POKER_BUYIN};
@@ -222,7 +223,10 @@ export class PokerTable{
    const old=this.blackjackSockets.get(user);if(old)try{old.close(4001,"Reconnected");}catch{}
    this.ctx.acceptWebSocket(server);server.serializeAttachment({user,kind:"blackjack"});
    this.blackjackSockets.set(user,server);
-   this.send(server,blackjackView(this.data.blackjack,user,this.walletView(user)));
+   const participant=this.data.blackjack.players.find(p=>p.id===user);
+   if(participant)participant.online=true;
+   await this.save();
+   this.blackjackBroadcast();
    return new Response(null,{status:101,webSocket:client});
   }
   if(url.pathname==="/join"&&request.method==="POST"){
@@ -267,6 +271,12 @@ export class PokerTable{
   try{
    if(ws.deserializeAttachment?.()?.kind==="blackjack"){
     const g=this.data.blackjack;
+    reconcileBlackjack(g,new Set(this.blackjackSockets.keys()),this.data.wallets);
+    if(msg.action==="leave"){
+     disconnectBlackjack(g,user,this.data.wallets);
+     await this.save();this.blackjackBroadcast();
+     return;
+    }
     if(msg.action==="mode")chooseBlackjackMode(g,msg.mode);
     else if(msg.action==="ready")readyBlackjack(g,user,this.data.wallets);
     else if(msg.action==="deal")beginBlackjack(g,this.data.wallets);
@@ -302,9 +312,17 @@ export class PokerTable{
    await this.save();this.broadcast();
   }catch(error){this.send(ws,{type:"pokerError",message:error.message});}
  }
- webSocketClose(ws){
+ async webSocketClose(ws){
   const info=ws.deserializeAttachment?.(),user=info?.user;
-  if(info?.kind==="blackjack"){if(this.blackjackSockets.get(user)===ws)this.blackjackSockets.delete(user);}
+  if(info?.kind==="blackjack"){
+   if(this.blackjackSockets.get(user)===ws){
+    this.blackjackSockets.delete(user);
+    await this.load();
+    disconnectBlackjack(this.data.blackjack,user,this.data.wallets);
+    await this.save();
+    this.blackjackBroadcast();
+   }
+  }
   else if(this.sockets.get(user)===ws)this.sockets.delete(user);
  }
  webSocketError(ws){this.webSocketClose(ws);}
