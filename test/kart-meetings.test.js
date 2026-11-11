@@ -93,18 +93,17 @@ test("racing sectors use purple, green and yellow session comparisons",async()=>
   await request(storage,"/event/register",{eventId:base,user:id,name:"Racer"});
   Date.now=()=>base+2000;
   await request(storage,"/event/state",{eventId:base,user:id});
-  Date.now=()=>base+35000;
-  const a=sampleAt(.34);
-  const one=await request(storage,"/event/sample",{eventId:base,user:id,x:a.x,z:a.z,speed:12});
-  assert.equal(one.status,200,JSON.stringify(one.result));
-  assert.equal(one.result.sectorUpdate?.index,1);
-  assert.equal(one.result.sectorUpdate?.color,"purple");
-  Date.now=()=>base+80000;
-  const b=sampleAt(.69);
-  const two=await request(storage,"/event/sample",{eventId:base,user:id,x:b.x,z:b.z,speed:12});
-  assert.equal(two.status,200,JSON.stringify(two.result));
-  assert.equal(two.result.sectorUpdate?.index,2);
-  assert.equal(two.result.sectorUpdate?.color,"purple");
+  const sectors=[];
+  // Advance along actual road geometry in small legal telemetry increments.
+  for(let i=1;i<=14;i++){
+   Date.now=()=>base+2000+i*7500;
+   const point=sampleAt(i*.05);
+   const step=await request(storage,"/event/sample",{eventId:base,user:id,x:point.x,z:point.z,speed:12});
+   assert.equal(step.status,200,"sample "+i+" "+JSON.stringify(step.result));
+   if(step.result.sectorUpdate)sectors.push(step.result.sectorUpdate);
+  }
+  assert.deepEqual(sectors.map(x=>x.index),[1,2]);
+  assert.deepEqual(sectors.map(x=>x.color),["purple","purple"]);
  }finally{Date.now=original;}
 });
 test("Formula Vee cars, remote rivals, pit facilities and broadcast HUD are wired",()=>{
