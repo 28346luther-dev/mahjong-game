@@ -83,7 +83,7 @@ test("selector, start lights, fullscreen HUD and navigation exist",()=>{
  assert.match(html,/data-kart-mode="timetrial"/);
  assert.match(html,/data-kart-mode="races"/);
  assert.match(racing,/function backToSelector\(\)/);
- assert.match(racing,/const atPitExit=/);
+ assert.match(racing,/const mergeReady=/);
  assert.match(meetings,/light-bulb/);
  assert.match(css,/\.kart-driving:fullscreen \.kart-stage/);
 });
