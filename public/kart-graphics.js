@@ -93,93 +93,98 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   geo.setIndex(indices);geo.computeVertexNormals();
   makeMesh(geo,mat);
  }
- // Photographic reference: vivid green paint outside a flush red/white raised
- // kerb, itself at the corner apex, and gravel beyond. No kerbs on every straight.
+ // One continuous layered circuit surface; no box kerbs, no diagonal
+ // polygon sheets, no discontinuous gravel strips floating into the road.
+ // Each ribbon shares exactly the same sampled Catmull centreline.
  const roadMat=standard(0xffffff,.83);roadMat.map=asphalt;
- roadMat.bumpMap=asphalt;roadMat.bumpScale=.014;
- const greenMat=standard(0xffffff,.9);greenMat.map=paint;
+ roadMat.bumpMap=asphalt;roadMat.bumpScale=.008;
+ const turfMat=standard(0xffffff,.98);turfMat.map=grass;
  const gravelMat=standard(0xffffff,.98);gravelMat.map=gravel;
- gravelMat.bumpMap=gravel;gravelMat.bumpScale=.03;
- const turfMat=standard(0xffffff,1);turfMat.map=grass;
- addBand(-halfWidth+.10,halfWidth-.10,roadMat,.041);
+ gravelMat.bumpMap=gravel;gravelMat.bumpScale=.02;
+ const greenMat=standard(0xffffff,.9);greenMat.map=paint;
+ addBand(-halfWidth+.06,halfWidth-.06,roadMat,.044);
  for(const side of [-1,1]){
-  const outer=side*halfWidth;
-  addBand(outer,outer+side*1.23,greenMat,.06,i=>Math.abs(bend(i))>.14);
-  addBand(outer+side*1.23,outer+side*3.9,gravelMat,.018,i=>Math.abs(bend(i))>.14);
-  addBand(outer+side*3.9,outer+side*runoffWidth,turfMat,.004);
+  // Gravel and grass stay OUTSIDE the kerb/runoff paint at every corner.
+  addBand(side*(halfWidth+3.75),side*(halfWidth+runoffWidth),turfMat,.018);
+  addBand(side*(halfWidth+1.62),side*(halfWidth+3.75),gravelMat,.036);
+  addBand(side*(halfWidth+.08),side*(halfWidth+1.62),greenMat,.058);
  }
- // Broad, correctly alternating real-world corner kerbs. Each painted
- // rectangle follows the spline and has a rounded cross-section (flush at
- // either edge, 4cm high at its crown). The white/red bands alternate ALONG
- // the direction of travel, rather than forming checkerboard triangles.
- const red=standard(0xce2537,.76),white=standard(0xf9f3e9,.76);
- const deepBlue=standard(0x25395b,.84),outerRed=standard(0xc52d43,.84);
- const kerbMeshes=[[],[]],blueMeshes=[],redRunoffMeshes=[];
- function kerbPoint(p,d,offset,height){
-  return [p.x+d.nx*offset,p.y+height+bankRise((p.distance||0)/ROAD.length,offset),
-   p.z+d.nz*offset];
+ // Kerbs follow the exact road-edge geometry with a shallow rounded 2cm
+ // crown, and use alternating paint over ~5m ARCLENGTH intervals.
+ // Their width fades smoothly in and out of bends; no discrete cuboids.
+ const red=standard(0xc92431,.82),white=standard(0xf5f0e5,.82);
+ const kerbMeshes=[[],[]];
+ const bendAt=i=>Math.abs(bend((i%N+N)%N));
+ const smoothstep=(a,b,v)=>{const t=Math.max(0,Math.min(1,(v-a)/(b-a)));return t*t*(3-2*t);};
+ const kerbWeight=i=>{
+  const strength=Math.max(bendAt(i),bendAt(i-6*detail),bendAt(i+6*detail));
+  return smoothstep(.045,.19,strength);
+ };
+ // Side chosen from the signed, smoothly averaged local curvature. The
+ // outside edge is allowed to use a wider, flush 2.4m exit kerb.
+ const kerbSide=i=>Math.sign(
+  bend(i)+bend((i-4*detail+N)%N)+bend((i+4*detail)%N))||1;
+ function vertex(p,d,offset,h,progress){
+  return [p.x+d.nx*offset,p.y+h+bankRise(progress,offset),p.z+d.nz*offset];
  }
- function triangle(arr,a,b,c){arr.push(...a,...b,...c);}
- function quad(arr,a,b,c,d){
-  triangle(arr,a,c,b);triangle(arr,b,c,d);
+ function quad(arr,a,b,c,d){arr.push(...a,...b,...c,...c,...b,...d);}
+ for(let i=0;i<N;i++){
+  const j=(i+1)%N,p=ps[i],q=ps[j],d=tangent(i),e=tangent(j);
+  const w0=kerbWeight(i),w1=kerbWeight(j);
+  if(w0<.005&&w1<.005)continue;
+  const side=kerbSide(i);
+  // In bends: apex-side 1.6m kerb, other side a broad 2.35m exit.
+  for(const [edge,outerWidth] of [[side,1.6],[-side,2.35]]){
+   const outside0=halfWidth+outerWidth*w0;
+   const outside1=halfWidth+outerWidth*w1;
+   const inner=halfWidth-.12;
+   const h0=.065,h1=.068;
+   const arr=kerbMeshes[Math.floor(p.distance/4.6)%2];
+   const a=vertex(p,d,edge*inner,h0,i/N);
+   const b=vertex(p,d,edge*((inner+outside0)/2),h0+.024*w0,i/N);
+   const c=vertex(p,d,edge*outside0,h0,i/N);
+   const d0=vertex(q,e,edge*inner,h1,j/N);
+   const e0=vertex(q,e,edge*((inner+outside1)/2),h1+.024*w1,j/N);
+   const f=vertex(q,e,edge*outside1,h1,j/N);
+   quad(arr,a,b,d0,e0);
+   quad(arr,b,c,e0,f);
+  }
  }
- function finishMesh(points,mat){
-  if(!points.length)return;
+ for(let i=0;i<2;i++){
+  if(!kerbMeshes[i].length)continue;
   const g=new THREE.BufferGeometry();
-  g.setAttribute("position",new THREE.Float32BufferAttribute(points,3));
-  g.computeVertexNormals();
-  makeMesh(g,mat);
+  g.setAttribute("position",new THREE.Float32BufferAttribute(kerbMeshes[i],3));
+  g.computeVertexNormals();makeMesh(g,i?white:red);
  }
- const cornerMask=new Array(N).fill(false);
- const cornerSide=new Array(N).fill(0);
- const exitMask=new Array(N).fill(false);
- for(let i=0;i<N;i++){
-  const cur=bend(i),prev=bend((i-11*detail+N)%N),next=bend((i+11*detail)%N);
-  const strong=Math.max(Math.abs(cur),Math.abs(prev),Math.abs(next));
-  cornerMask[i]=strong>.125;
-  cornerSide[i]=Math.sign(Math.abs(cur)>.045?cur:(Math.abs(prev)>Math.abs(next)?prev:next))||1;
-  // A longer outside exit kerb begins at the apex and continues onto exit.
-  exitMask[i]=Math.abs(prev)>.13&&Math.abs(cur)>.035&&
-    Math.abs(cur)<Math.abs(prev)*1.22;
- }
- function curvedStrip(i,side,start,end,points,height=.12,crown=.155){
-  const j=(i+1)%N,p=ps[i],q=ps[j],t=tangent(i),u=tangent(j);
-  const low0=kerbPoint(p,t,side*start,height);
-  const mid0=kerbPoint(p,t,side*((start+end)/2),crown);
-  const high0=kerbPoint(p,t,side*end,height);
-  const low1=kerbPoint(q,u,side*start,height);
-  const mid1=kerbPoint(q,u,side*((start+end)/2),crown);
-  const high1=kerbPoint(q,u,side*end,height);
-  quad(points,low0,mid0,low1,mid1);
-  quad(points,mid0,high0,mid1,high1);
- }
- for(let i=0;i<N;i++){
-  const side=cornerSide[i],outside=-side;
-  if(cornerMask[i]&&cornerMask[(i+1)%N]){
-   const mesh=kerbMeshes[Math.floor(i/(6*detail))%2];
-   // 1.7m apex kerb, a single alternating paint band every 6 road samples.
-   curvedStrip(i,side,halfWidth-.22,halfWidth+1.48,mesh);
+ // White edge stripes are thin flush paint, NOT raised walls.
+ const line=standard(0xf5f1e8,.8);
+ addBand(-halfWidth+.14,-halfWidth+.21,line,.069);
+ addBand(halfWidth-.21,halfWidth-.14,line,.069);
+ // Dedicated pit tarmac uses the SAME asphalt finish, with seamless
+ // merge curves and uninterrupted lane surface from entry to exit.
+ function pitBand(offset0,offset1,material,height){
+  const points=PIT.samples,positions=[],uv=[];
+  const normals=i=>{
+   const a=points[Math.max(0,i-1)],b=points[Math.min(points.length-1,i+1)];
+   const dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz)||1;
+   return {nx:-dz/len,nz:dx/len};
+  };
+  for(let i=0;i<points.length-1;i++){
+   const p=points[i],q=points[i+1],d=normals(i),e=normals(i+1);
+   const coord=(point,normal,offset)=>[
+    point.x+normal.nx*offset,point.y+height,point.z+normal.nz*offset];
+   const a=coord(p,d,offset0),b=coord(p,d,offset1);
+   const c=coord(q,e,offset0),d0=coord(q,e,offset1);
+   positions.push(...a,...b,...c,...c,...b,...d0);
+   const u=p.distance/8,v=q.distance/8;
+   uv.push(u,0,u,1,v,0,v,0,u,1,v,1);
   }
-  if(exitMask[i]&&exitMask[(i+1)%N]){
-   const mesh=kerbMeshes[Math.floor(i/(8*detail))%2];
-   // Wide 2.65m corner exit kerb like the provided real circuit photo.
-   curvedStrip(i,outside,halfWidth-.18,halfWidth+2.46,mesh,.125,.167);
-   // Dark-blue/red painted safety stripes run outside the exit kerb.
-   const j=(i+1)%N,p=ps[i],q=ps[j],t=tangent(i),u=tangent(j);
-   for(const [begin,end,arr] of [
-    [halfWidth+2.46,halfWidth+3.13,blueMeshes],
-    [halfWidth+3.13,halfWidth+3.55,redRunoffMeshes]]){
-    quad(arr,kerbPoint(p,t,outside*begin,.074),kerbPoint(p,t,outside*end,.074),
-      kerbPoint(q,u,outside*begin,.074),kerbPoint(q,u,outside*end,.074));
-   }
-  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
+  geo.setAttribute("uv",new THREE.Float32BufferAttribute(uv,2));
+  geo.computeVertexNormals();makeMesh(geo,material);
  }
- finishMesh(kerbMeshes[0],red);finishMesh(kerbMeshes[1],white);
- finishMesh(blueMeshes,deepBlue);finishMesh(redRunoffMeshes,outerRed);
- // Painted white edge lines with actual curved mesh, not short floating rods.
- const line=standard(0xf9eee1,.65);
- addBand(-halfWidth+.12,-halfWidth+.19,line,.057);
- addBand(halfWidth-.19,halfWidth-.12,line,.057);
+ pitBand(-PIT_HALF_WIDTH+.04,PIT_HALF_WIDTH-.04,roadMat,.087);
  // Start/finish squares across the road width and two short rows along travel.
  const p=ps[0],t=tangent(0);
  const finishMaterials=[standard(0x1b2630,.68),standard(0xfff5ea,.68)];
@@ -210,7 +215,10 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   const point=ps[i],t=tangent(i),side=Math.sign(bend(i));
   for(let n=0;n<3;n++){
    const off=side*(halfWidth+runoffWidth+1.5);
-   tyrePositions.push({x:point.x+t.nx*off,y:point.y+.42+n*.31,z:point.z+t.nz*off});
+   const x=point.x+t.nx*off,z=point.z+t.nz*off;
+   // Keep all tyre stacks well outside both entry and pit-exit junctions.
+   if(projectToRoute(x,z,PIT).distance<PIT_HALF_WIDTH+17)continue;
+   tyrePositions.push({x,y:point.y+.42+n*.31,z});
   }
  }
  const tyreMesh=new THREE.InstancedMesh(tyreGeo,tyreMat,tyrePositions.length);
