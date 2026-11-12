@@ -193,7 +193,7 @@ function start(){
   timeRemaining();
   refreshState();
   if(Date.now()%18000<2300)refreshSchedule();
- },2200);
+ },650);
 }
 function stop(){
  open=false;clearInterval(poller);poller=null;
