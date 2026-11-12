@@ -229,16 +229,21 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  const trunkMat=standard(0x66503e,1),treeColors=[0x335c42,0x4f7850,0x345b49,0x628050];
  const trunkGeo=new THREE.CylinderGeometry(.20,.31,2.1,7);
  const crownGeo=new THREE.IcosahedronGeometry(1.35,1);
+ const bounds=ps.reduce((b,p)=>({
+  minX:Math.min(b.minX,p.x),maxX:Math.max(b.maxX,p.x),
+  minZ:Math.min(b.minZ,p.z),maxZ:Math.max(b.maxZ,p.z)
+ }),{minX:Infinity,maxX:-Infinity,minZ:Infinity,maxZ:-Infinity});
  const woods=[];
- for(let i=0;i<400;i++){
-  const x=(rand()-.5)*410,z=(rand()-.5)*305;
+ for(let i=0;i<850;i++){
+  const x=bounds.minX-80+rand()*(bounds.maxX-bounds.minX+160);
+  const z=bounds.minZ-80+rand()*(bounds.maxZ-bounds.minZ+160);
   let near=Infinity;
   for(let j=0;j<N;j+=3*detail){const p=ps[j];near=Math.min(near,Math.hypot(x-p.x,z-p.z));}
   // Keep the entire pit road, all garage fronts and their apron clear of trees.
   // Their trunks must never appear inside a service bay or behind the pit wall.
   if(near<halfWidth+runoffWidth+6||
      projectToRoute(x,z,PIT).distance<PIT_HALF_WIDTH+17||
-     (x>-89&&x<45&&z>-28&&z<16))continue;
+     (projectToRoute(x,z,PIT).distance<PIT_HALF_WIDTH+38))continue;
   woods.push({x,z,h:2+rand()*2.3,s:0.7+rand()*.65,col:Math.floor(rand()*treeColors.length)});
  }
  const trunks=new THREE.InstancedMesh(trunkGeo,trunkMat,woods.length);
