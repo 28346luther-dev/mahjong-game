@@ -2,7 +2,7 @@ import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCAL
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
-import {createFormulaVee} from "./kart-formula-vee.js";
+import {createGTCar} from "./kart-gt-car.js";
 import {addCircuitGrandstands} from "./kart-grandstands.js";
 import {addStraightGlassBarriers} from "./kart-straight-barriers.js";
 import {resolveKartCollision,surfaceNormal,nearPitBay,gravityAlongRoad} from "./kart-physics.js";
@@ -31,7 +31,7 @@ function getPose(){return {x:pos.x,z:pos.z,yaw,speed,pit:inPitLane};}
 function createRival(p){
  const palette=[0xb33749,0x2a739d,0x3f8a6b,0xd2ac51,0x805b98,0xdc7b39];
  const index=parseInt(p.id.slice(0,7),16)%palette.length;
- const model=createFormulaVee(THREE,{color:palette[index],number:index+1});
+ const model=createGTCar(THREE,{color:palette[index],number:index+1});
  scene.add(model.group);return model.group;
 }
 function updateRivals(racers,myId){
@@ -403,7 +403,7 @@ function track(){
  // Legacy track-specific tyre stacks removed from the new pit apron.
 }
 function kartModel(){
- const vee=createFormulaVee(THREE,{color:0xa62c46,number:7});
+ const vee=createGTCar(THREE,{color:0xa62c46,number:7});
  kart=vee.group;scene.add(kart);
  cockpitOccluders.push(...vee.hiddenInCockpit);
 }
@@ -577,7 +577,7 @@ function update(dt){
  const collision=driveMode==="meeting"?resolveKartCollision(pos.x,pos.z,proposedX,proposedZ,
    [...remoteKarts.values()].filter(g=>g.visible).map(g=>({x:g.position.x,z:g.position.z}))):null;
  const x=collision?.x??proposedX,z=collision?.z??proposedZ;
- if(collision?.hit){speed*=.22;message("CONTACT · Avoid the other Formula Vee cars.");}
+ if(collision?.hit){speed*=.22;message("CONTACT · Avoid the other GT cars.");}
  const projected=positionOnTrack(x,z);
  const grip=gripForDistance(projected.distance,projected.isPit,projected.progress);
  // PIT route is a real driveable road ONLY with P limiter enabled.
