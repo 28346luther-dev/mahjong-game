@@ -14,40 +14,29 @@ export function addPitComplex(THREE,scene,PIT,bays){
   object.castShadow=true;object.receiveShadow=true;parent.add(object);return object;
  }
  function block(w,h,d,m,x,y,z,parent=scene){return item(new THREE.BoxGeometry(w,h,d),m,x,y,z,parent);}
- // Continuous two-storey facility set BACK from the pit boxes, parallel to pit road.
- // The pit lane is the asphalt in front, with no barriers across its entrance.
- const centreX=-24,frontZ=-6;
- block(97,3.3,8,concrete,centreX,1.85,frontZ+4.3);
- block(100,.45,9.1,white,centreX,3.7,frontZ+4.3);
- block(98,3.65,7.3,window,centreX,5.87,frontZ+4.1);
- block(101,.55,9.4,steel,centreX,7.99,frontZ+4.3);
- block(99,.25,3.5,concrete,centreX,3.86,frontZ-1);
- // Glass balustrade and slim metal railing on the hospitality terrace.
- for(let x=centreX-48;x<=centreX+48;x+=3.5){
-  block(.11,1.35,.1,steel,x,4.63,frontZ-2.6);
-  block(.10,3.4,7.1,steel,x,5.85,frontZ+4.1);
-  block(.1,.18,1.3,steel,x,7.63,frontZ-2.85);
- }
- block(97,.09,.12,steel,centreX,5.32,frontZ-2.85);
- for(let x=centreX-47;x<=centreX+47;x+=6.2){
-  block(6.0,1.28,.035,glass,x,4.68,frontZ-2.8);
- }
- // Slanted continuous curtain glass facade between dark mullions.
- const tilted=new THREE.Group();tilted.position.set(centreX,5.9,frontZ-2.7);
- tilted.rotation.x=-.16;scene.add(tilted);
- block(96,2.75,.1,glass,0,0,0,tilted);
- for(let x=-46;x<=46;x+=4.2)block(.10,2.9,.22,steel,x,0,0,tilted);
- block(96,.1,.22,steel,0,-1.38,0,tilted);block(96,.1,.22,steel,0,1.38,0,tilted);
- // Eight roll-up doors and bay numbers, inspired by the provided pit-building photo.
- for(let i=0;i<8;i++){
-  const x=centreX-42+i*12;
-  block(10.5,2.75,.15,steel,x,1.55,frontZ-.12);
-  for(let l=0;l<10;l++)block(9.7,.027,.045,l%3===0?white:concrete,x,.36+l*.25,frontZ-.23);
-  block(3,.65,.055,red,x,3.1,frontZ-.20);
-  const canopy=block(11.3,.14,1.7,steel,x,3.43,frontZ-1.25);
-  canopy.rotation.x=-.09;
-  // Reflective yellow bay guides and garage stops.
-  for(const side of [-5.4,5.4])block(.13,.026,4,yellow,x+side,.055,frontZ-4.1);
+ // Garages are rebuilt along Road Atlanta's pit frontage instead of being
+ // left at the old Velvet Circuit's fixed X/Z position.
+ const firstBay=bays[0],lastBay=bays[bays.length-1];
+ const index=Math.round(PIT.samples.length*.435);
+ const p=PIT.samples[index],before=PIT.samples[index-2],after=PIT.samples[index+2];
+ const dx=after.x-before.x,dz=after.z-before.z,len=Math.hypot(dx,dz)||1;
+ const nx=-dz/len,nz=dx/len;
+ const garageLength=Math.max(90,Math.hypot(lastBay.x-firstBay.x,lastBay.z-firstBay.z)+55);
+ const garage=new THREE.Group();
+ garage.position.set(p.x+nx*18,p.y,p.z+nz*18);
+ garage.rotation.y=Math.atan2(dx,dz);
+ scene.add(garage);
+ block(10,4,garageLength,concrete,0,2,0,garage);
+ block(11,.5,garageLength+3,white,0,4.3,0,garage);
+ block(10,3.4,garageLength,window,0,6.3,0,garage);
+ block(12,.6,garageLength+4,steel,0,8.3,0,garage);
+ const doors=Math.max(4,Math.floor(garageLength/19));
+ for(let i=0;i<doors;i++){
+  const z=-garageLength/2+(i+.5)*garageLength/doors;
+  block(.13,3.1,Math.min(14,garageLength/doors-1),steel,5.1,1.8,z,garage);
+  for(let l=0;l<9;l++)block(.025,.024,Math.min(13.5,garageLength/doors-1.4),
+   l%3===0?white:concrete,5.2,.48+l*.3,z,garage);
+  block(.15,.65,4,red,5.23,3.6,z,garage);
  }
  // Pit lane is TWO genuinely separate paved channels: an unobstructed
  // FAST LANE on the racetrack side, plus the garage-side SERVICE APRON.
