@@ -149,7 +149,8 @@ function render(){
          }
        }else add(opt==="mahjong"?"Mahjong!":opt.toUpperCase(),opt,opt==="mahjong"?"primary":"secondary");
      }
-     add("Pass","pass","ghost");
+     add("Decline all claims (Pass)","pass","ghost");
+     note("Pong, Chow and Kong are optional. Select Pass to let the next player continue.");
      note("Claims resolve by priority: Mahjong, Kong/Pong, then Chow.");
    }else note(`Waiting for claim responses${state.claimWaiting?.length?`: ${state.claimWaiting.join(", ")}`:"..."}`);
  }else if(state.phase==="finished"){
