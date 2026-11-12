@@ -20,7 +20,7 @@ test("published full-length Road Atlanta track is metrically scaled to 2.54 mile
  assert.ok(Math.abs(rendered.length-ROAD.length)<40);
 });
 test("new pit lane is connected at both ends and service boxes remain available",()=>{
- assert.equal(PIT_POINTS.length,15);
+ assert.equal(PIT_POINTS.length,17);
  assert.ok(PIT.length>800);
  for(const end of [PIT.samples[0],PIT.samples.at(-1)])
   assert.ok(projectToRoute(end.x,end.z,ROAD).distance<ROAD.length*.004,
