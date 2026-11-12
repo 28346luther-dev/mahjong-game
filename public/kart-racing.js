@@ -1,14 +1,16 @@
 import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,bankAngle,cornerKerbGripWidth,refineRoute,projectToRoute,raceStart} from "./kart-track.js";
+import {addRoadAtlantaLandmarks} from "./kart-road-atlanta-landmarks.js";
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
 import {createGTCar} from "./kart-gt-car.js";
 import {addCircuitGrandstands} from "./kart-grandstands.js";
 import {addStraightGlassBarriers} from "./kart-straight-barriers.js";
-import {resolveKartCollision,surfaceNormal,nearPitBay,gravityAlongRoad} from "./kart-physics.js";
+import {resolveKartCollision,surfaceNormal,nearPitBay,gravityAlongRoad,createSuspensionState,stepSuspension} from "./kart-physics.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
+const suspension=createSuspensionState();
 let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPending=false,lastStatusAt=0;
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
@@ -358,6 +360,7 @@ function track(){
  // A single coherent textured circuit surface and curved kerb system
  // replaces the previous overlapping paving, sharp blocks and floating sheets.
  addCircuitGraphics(THREE,scene,visualRoad,visualPit,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
+ addRoadAtlantaLandmarks(THREE,scene,ROAD,ROAD_HALF_WIDTH);
  addKartSafety(THREE,scene,ROAD,ROAD_HALF_WIDTH,RUNOFF_WIDTH);
  // Detailed two-level garage building, safe entry signs and four marked service bays.
  addPitComplex(THREE,scene,PIT,PIT_BAYS);
@@ -532,12 +535,18 @@ function updateRideHeightAndBank(dt){
  const lateral=(pos.x-projected.x)*projected.normalX+(pos.z-projected.z)*projected.normalZ;
  const contactY=projected.y+(projected.isPit?0:bankRise(projected.progress,lateral));
  pos.y+=(contactY-pos.y)*Math.min(1,dt*12);
+ const suspensionContact=stepSuspension(suspension,{speed,lateral,
+  halfWidth:ROAD_HALF_WIDTH,kerbWidth:cornerKerbGripWidth(projected.progress),
+  progress:projected.progress,dt});
  const up=projected.isPit?new THREE.Vector3(0,1,0):
   surfaceNormal(ROAD,projected,bankAngle(projected.progress),THREE);
  const bankQuat=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),up);
  const yawQuat=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw+Math.PI);
  kart.quaternion.slerp(bankQuat.multiply(yawQuat),Math.min(1,dt*11));
- kart.position.set(pos.x,pos.y,pos.z);
+ // Kerb compliance rolls the chassis and compresses the spring rather than
+ // treating painted kerbs as an entirely flat extension of the asphalt.
+ kart.rotateZ(suspensionContact.roll);
+ kart.position.set(pos.x,pos.y+suspensionContact.heave,pos.z);
 }
 function update(dt){
  if(!playing)return;
@@ -571,7 +580,7 @@ function update(dt){
  // In this coordinate system positive yaw steers world-left, so D decreases yaw.
  // Higher speed increases the turning radius; brake before the chicanes.
  const steeringRate=2.25/(1+Math.abs(speed)/27);
- yaw-=steer*dt*steeringRate*Math.min(1,Math.abs(speed)/3)*(speed>=0?1:-1);
+ yaw-=steer*dt*steeringRate*suspension.grip*Math.min(1,Math.abs(speed)/3)*(speed>=0?1:-1);
  const proposedX=pos.x+Math.sin(yaw)*speed*dt;
  const proposedZ=pos.z+Math.cos(yaw)*speed*dt;
  const collision=driveMode==="meeting"?resolveKartCollision(pos.x,pos.z,proposedX,proposedZ,
