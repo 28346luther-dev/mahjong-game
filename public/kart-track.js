@@ -174,10 +174,17 @@ export function projectToRoute(x,z,route=ROAD){
  return best;
 }
 export function sampleAt(progress,route=ROAD){
- const p=((progress%1)+1)%1,ps=route.samples;
- const j=Math.min(ps.length-1,Math.floor(p*ps.length));
- const a=ps[j],b=ps[(j+1)%ps.length];
- const t=p*ps.length-j;
+ // Progress is a fraction of arc LENGTH, not spline sample index. Road
+ // Atlanta has fast straights and tight Esses; sample index isn't distance.
+ const distance=((progress%1)+1)%1*route.length,ps=route.samples;
+ let low=0,high=ps.length-1;
+ while(low<high){
+  const mid=(low+high+1)>>1;
+  if(ps[mid].distance<=distance)low=mid;else high=mid-1;
+ }
+ const a=ps[low],b=ps[(low+1)%ps.length];
+ const segment=Math.hypot(b.x-a.x,b.z-a.z)||1;
+ const t=Math.min(1,Math.max(0,(distance-a.distance)/segment));
  return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,y:a.y+(b.y-a.y)*t};
 }
 export function raceStart(){
