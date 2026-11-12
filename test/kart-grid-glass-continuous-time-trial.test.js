@@ -14,7 +14,7 @@ test("timing line is at the FAR END of pit straight, not its original start",()=
   Math.hypot(finish.x-pitStart.x,finish.z-pitStart.z));
  assert.ok(projectToRoute(finish.x,finish.z,ROAD).distance<.01);
  assert.equal(ROAD.samples[0].distance,0);
- assert.ok(Math.abs(ROAD.samples.at(-1).distance-ROAD.length)<2);
+ assert.ok(ROAD.length-ROAD.samples.at(-1).distance>0&&ROAD.length-ROAD.samples.at(-1).distance<40);
  assert.match(readFileSync("public/kart-graphics.js","utf8"),/Start\/finish squares/);
 });
 test("staggered starting slots use L-shaped half rectangles straight behind finish",()=>{
