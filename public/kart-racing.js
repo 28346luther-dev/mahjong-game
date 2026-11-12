@@ -395,7 +395,7 @@ function track(){
  const cv=document.createElement("canvas");cv.width=1024;cv.height=140;
  const ctx=cv.getContext("2d");
  ctx.fillStyle="#583149";ctx.fillRect(0,0,1024,140);
- ctx.fillStyle="#f8dfa9";ctx.font="bold 66px Georgia";ctx.textAlign="center";ctx.fillText("ROAD ATLANTA · CLUB CIRCUIT",512,96);
+ ctx.fillStyle="#f8dfa9";ctx.font="bold 66px Georgia";ctx.textAlign="center";ctx.fillText("ROAD ATLANTA · 2.54 MI",512,96);
  const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;
  const front=object(new THREE.PlaneGeometry(ROAD_HALF_WIDTH*2+1.6,1.05),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}),
   p.x,p.y+4.1,p.z+.17);
@@ -454,10 +454,10 @@ function positionOnTrack(x,z){
  // The limiter commits the car to a long, smooth PIT IN route. It does not
  // release it until the *paved* PIT OUT merge meets the racing asphalt.
  // At either junction the two surfaces overlap and driving is continuous.
- const mergeReady=inPitLane&&pit.progress>.955&&
+ const mergeReady=inPitLane&&pit.progress>.96&&
   road.distance<ROAD_HALF_WIDTH+1.5;
  const pitAvailable=pit.distance<PIT_HALF_WIDTH+1.25;
- const enterReady=pitAvailable&&pit.progress>.012&&pit.progress<.945;
+ const enterReady=pitAvailable&&pit.progress>.01&&pit.progress<.94;
  if(pitLimiter&&!mergeReady&&pitAvailable&&(inPitLane||enterReady))
   return {...pit,isPit:true};
  return {...road,isPit:false};
@@ -556,21 +556,21 @@ function update(dt){
  const accelerate=down("w")||down("arrowup");
  const brake=down("s")||down("arrowdown")||down(" ");
  const steer=Number(down("d")||down("arrowright"))-Number(down("a")||down("arrowleft"));
- speed+=Number(accelerate)*16*dt;
+ speed+=Number(accelerate)*24*dt;
  speed-=Math.sign(speed)*(0.9+Math.abs(speed)*.08)*dt;
- if(brake)speed-=Math.sign(speed||1)*42*dt;
- speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:29,speed));
+ if(brake)speed-=Math.sign(speed||1)*67*dt;
+ speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:82,speed));
  if(pitLimiter&&speed>PIT_LIMIT_MS)speed=PIT_LIMIT_MS;
  if(!accelerate&&!brake&&Math.abs(speed)<.15)speed=0;
  const grade=positionOnTrack(pos.x,pos.z);
  if(Math.abs(speed)>.05&&!grade.isPit){
   // Small but physical downhill/uphill acceleration from the actual road grade.
   speed+=gravityAlongRoad(ROAD,grade,yaw)*dt;
-  speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:29,speed));
+  speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:82,speed));
  }
  // In this coordinate system positive yaw steers world-left, so D decreases yaw.
  // Higher speed increases the turning radius; brake before the chicanes.
- const steeringRate=2.25/(1+Math.abs(speed)/15);
+ const steeringRate=2.25/(1+Math.abs(speed)/27);
  yaw-=steer*dt*steeringRate*Math.min(1,Math.abs(speed)/3)*(speed>=0?1:-1);
  const proposedX=pos.x+Math.sin(yaw)*speed*dt;
  const proposedZ=pos.z+Math.cos(yaw)*speed*dt;
