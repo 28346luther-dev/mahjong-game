@@ -58,7 +58,10 @@ function updateRivals(racers,myId){
   }
   // Never snap remote karts to sporadic HTTP snapshots. Interpolate
   // positions and shortest-angle headings every animation frame.
+  const road=projectToRoute(driver.x,driver.z,ROAD);
+  const pit=projectToRoute(driver.x,driver.z,PIT);
   rivalTargets.set(driver.id,{x:driver.x,z:driver.z,yaw:driver.yaw||0,
+   y:pit.distance<road.distance?pit.y:road.y,
    speed:driver.speed||0,lastAt:now});
  }
  for(const [id,group] of remoteKarts){
@@ -75,10 +78,7 @@ function animateRivals(dt){
   const alpha=1-Math.exp(-Math.min(.05,dt)*9);
   group.position.x+=(target.x-group.position.x)*alpha;
   group.position.z+=(target.z-group.position.z)*alpha;
-  const route=projectToRoute(group.position.x,group.position.z,
-   projectToRoute(group.position.x,group.position.z,PIT).distance<
-   projectToRoute(group.position.x,group.position.z,ROAD).distance?PIT:ROAD);
-  group.position.y+=(route.y-group.position.y)*Math.min(1,dt*7);
+  group.position.y+=(target.y-group.position.y)*Math.min(1,dt*7);
   const targetYaw=target.yaw+Math.PI;
   const delta=Math.atan2(Math.sin(targetYaw-group.rotation.y),Math.cos(targetYaw-group.rotation.y));
   group.rotation.y+=delta*alpha;
