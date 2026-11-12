@@ -30,7 +30,9 @@ export const ROAD_POINTS=[
 // branches BEFORE the timing line and uses a long parallel approach.
 // The PIT OUT branch merges after the first uphill right into the T2 rise.
 export const PIT_POINTS=[
- [173,-26,2],[159,-31,3],[144,-36,4],[120,-42,5],
+ // Begin exactly on the late front straight for a genuine asphalt join.
+ [191,-22,1],[181,-25,1.5],[173,-26,2],
+ [159,-31,3],[144,-36,4],[120,-42,5],
  [93,-47,5.5],[65,-49,6],[35,-49,6],[5,-49,6],
  [-26,-49,6.2],[-60,-48,6.5],[-93,-43,9],
  [-119,-30,12],[-139,-12,17],[-147,5,21],
