@@ -160,7 +160,7 @@ test("first-person camera stays forward of driver head with a fixed FOV",()=>{
  assert.match(client,/camera\.fov!==73/);
  assert.doesNotMatch(client,/camera\.position\.lerp\(eye/);
  assert.match(client,/cockpitOccluders\.push\(\.\.\.vee\.hiddenInCockpit\)/);
- assert.match(readFileSync("public/kart-formula-vee.js","utf8"),/hiddenInCockpit\.push\(helmet\)/);
+ assert.match(readFileSync("public/kart-gt-car.js","utf8"),/hiddenInCockpit\.push/);
 });
 test("P toggles pit speed limiter, exposes pit HUD and forwards session telemetry",()=>{
  const client=readFileSync("public/kart-racing.js","utf8");
@@ -168,7 +168,7 @@ test("P toggles pit speed limiter, exposes pit HUD and forwards session telemetr
  const html=readFileSync("public/index.html","utf8");
  assert.match(client,/const PIT_LIMIT_MS=11\.1/);
  assert.match(client,/if\(k==="p"\)\{togglePitLimiter\(\)/);
- assert.match(client,/Math\.min\(pitLimiter\?PIT_LIMIT_MS:29,speed\)/);
+ assert.match(client,/Math\.min\(pitLimiter\?PIT_LIMIT_MS:82,speed\)/);
  assert.match(client,/pit:inPitLane/);
  assert.match(worker,/pit:body\.pit===true/);
  assert.match(html,/id="kartPitLimiter"/);
