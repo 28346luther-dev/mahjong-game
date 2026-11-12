@@ -53,7 +53,7 @@ test("retired scene pieces cannot obstruct long pit entry or pit-exit blend",()=
  assert.match(safety,/distance<PIT_HALF_WIDTH\+20/);
  assert.match(glass,/distance<8\.5/);
  assert.match(gfx,/distance<PIT_HALF_WIDTH\+26/);
- assert.match(client,/const mergeReady=inPitLane&&pit\.progress>\.955/);
+ assert.match(client,/const mergeReady=inPitLane&&pit\.progress>\.96/);
  assert.match(client,/road\.distance<ROAD_HALF_WIDTH\+1\.5/);
 });
 test("all rebuilt modules parse",()=>{
