@@ -42,12 +42,12 @@ test("full-lap leaderboard accepts valid laps without sector notifications",asyn
  const raceId=started.result.raceId;
  for(let i=1;i<=50;i++){
   const point=sampleAt(i===50?.005:i/50);
-  const session=data.get("kart-session-v3:"+id);
-  session.lastAt=Date.now()-1400;
-  session.start=Date.now()-33000;
+  const session=data.get("road-atlanta-kart-session-v1:"+id);
+  session.lastAt=Date.now()-2600;
+  session.start=Date.now()-90000;
   // Missed sector split signals must never invalidate a real full lap.
   session.sectorTimes=[];
-  data.set("kart-session-v3:"+id,session);
+  data.set("road-atlanta-kart-session-v1:"+id,session);
   const step=await submit(race,"/sample",{user:id,raceId,x:point.x,z:point.z});
   assert.equal(step.status,200,JSON.stringify(step.result));
  }
