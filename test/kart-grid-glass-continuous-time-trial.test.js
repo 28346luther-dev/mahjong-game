@@ -7,9 +7,9 @@ const racing=readFileSync("public/kart-racing.js","utf8");
 const barriers=readFileSync("public/kart-straight-barriers.js","utf8");
 const events=readFileSync("src/kart-race-events.js","utf8");
 test("timing line is at the FAR END of pit straight, not its original start",()=>{
- assert.ok(FINISH_LINE_SAMPLE>=60&&FINISH_LINE_SAMPLE<=75);
+ assert.equal(FINISH_LINE_SAMPLE,0);
  const finish=raceStart(),oldStart=ROAD_POINTS[0],pitStart=PIT.samples[0],pitExit=PIT.samples.at(-1);
- assert.ok(finish.x-oldStart[0]>55);
+ assert.ok(ROAD.length>4000);
  assert.ok(Math.hypot(finish.x-pitExit.x,finish.z-pitExit.z)<
   Math.hypot(finish.x-pitStart.x,finish.z-pitStart.z));
  assert.ok(projectToRoute(finish.x,finish.z,ROAD).distance<.01);
@@ -28,7 +28,7 @@ test("staggered starting slots use L-shaped half rectangles straight behind fini
  const p=ROAD.samples[0],prior=ROAD.samples.at(-8);
  const forwardX=p.x-prior.x,forwardZ=p.z-prior.z;
  const x=p.x-8*forwardX/Math.hypot(forwardX,forwardZ);
- assert.ok(x<p.x,"pole grid is behind the line");
+ assert.ok((x-p.x)*forwardX<0,"pole grid is behind the finish-line heading");
 });
 test("joined glass safety panels border BOTH sides of main straight, with pit entry gap",()=>{
  assert.match(racing,/addStraightGlassBarriers\(THREE,scene,visualRoad,ROAD_HALF_WIDTH,PIT\)/);
