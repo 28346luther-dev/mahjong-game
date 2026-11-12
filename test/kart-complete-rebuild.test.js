@@ -5,7 +5,7 @@ import {execFileSync} from "node:child_process";
 import {ROAD,PIT,PIT_POINTS,PIT_BAYS,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,
  projectToRoute,sampleAt,refineRoute} from "../public/kart-track.js";
 test("pit entry peels gradually off the straight instead of turning sharply",()=>{
- assert.equal(PIT_POINTS.length,15);
+ assert.equal(PIT_POINTS.length,17);
  assert.ok(PIT.samples.length>=200);
  const entry=PIT.samples[0],end=PIT.samples.at(-1);
  assert.ok(projectToRoute(entry.x,entry.z,ROAD).distance<1.2);
