@@ -4,7 +4,7 @@ import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,race
 // Continuous on-road progress verification. No checkpoint gates or checkpoints UI.
 // Times use server wall-clock, and accepted samples must stay near the circuit
 // and travel plausible distances. This is an arcade leaderboard, not anti-cheat proof.
-export const MIN_LAP_MS=22000;
+export const MIN_LAP_MS=1; // Accept any positive, server-verified full lap.
 export const MAX_LAP_MS=10*60*1000;
 export const MAX_SPEED_MPS=37;
 export const SECTOR_MARKS=[1/3,2/3];
