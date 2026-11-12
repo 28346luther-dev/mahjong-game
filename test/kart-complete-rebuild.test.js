@@ -5,7 +5,7 @@ import {execFileSync} from "node:child_process";
 import {ROAD,PIT,PIT_POINTS,PIT_BAYS,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,
  projectToRoute,sampleAt,refineRoute} from "../public/kart-track.js";
 test("pit entry peels gradually off the straight instead of turning sharply",()=>{
- assert.equal(PIT_POINTS.length,15);
+ assert.equal(PIT_POINTS.length,17);
  assert.ok(PIT.samples.length>=200);
  const entry=PIT.samples[0],end=PIT.samples.at(-1);
  assert.ok(projectToRoute(entry.x,entry.z,ROAD).distance<1.2);
@@ -53,7 +53,7 @@ test("retired scene pieces cannot obstruct long pit entry or pit-exit blend",()=
  assert.match(safety,/distance<PIT_HALF_WIDTH\+20/);
  assert.match(glass,/distance<8\.5/);
  assert.match(gfx,/distance<PIT_HALF_WIDTH\+26/);
- assert.match(client,/const mergeReady=inPitLane&&pit\.progress>\.955/);
+ assert.match(client,/const mergeReady=inPitLane&&pit\.progress>\.96/);
  assert.match(client,/road\.distance<ROAD_HALF_WIDTH\+1\.5/);
 });
 test("all rebuilt modules parse",()=>{

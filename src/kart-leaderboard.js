@@ -1,24 +1,24 @@
 import {handleRaceEvent} from "./kart-race-events.js";
-import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,raceStart} from "../public/kart-track.js";
+import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,TRACK_NAME,projectToRoute,raceStart} from "../public/kart-track.js";
 
 // Continuous on-road progress verification. No checkpoint gates or checkpoints UI.
 // Times use server wall-clock, and accepted samples must stay near the circuit
 // and travel plausible distances. This is an arcade leaderboard, not anti-cheat proof.
-export const MIN_LAP_MS=22000;
+export const MIN_LAP_MS=1; // Accept any positive, server-verified full lap.
 export const MAX_LAP_MS=10*60*1000;
-export const MAX_SPEED_MPS=37;
+export const MAX_SPEED_MPS=105;
 export const SECTOR_MARKS=[1/3,2/3];
 export function sanitizeDriverName(name){
  return String(name||"Racer").replace(/[^\p{L}\p{N} _.-]/gu,"").trim().slice(0,22)||"Racer";
 }
 export function leaderboardEntries(records,limit=10){
  return Object.entries(records).map(([id,r])=>({id,name:r.name,bestMs:r.bestMs,at:r.at,version:r.version||1}))
-  .filter(r=>Number.isInteger(r.bestMs)&&r.bestMs>=MIN_LAP_MS&&r.bestMs<=MAX_LAP_MS&&r.version===3)
+  .filter(r=>Number.isInteger(r.bestMs)&&r.bestMs>=MIN_LAP_MS&&r.bestMs<=MAX_LAP_MS&&r.version===4)
   .sort((a,b)=>a.bestMs-b.bestMs||a.at-b.at).slice(0,limit)
   .map((r,i)=>({rank:i+1,name:r.name,bestMs:r.bestMs,at:r.at}));
 }
 export function validateSample(session,x,z,now){
- if(!Number.isFinite(x)||!Number.isFinite(z)||Math.abs(x)>220||Math.abs(z)>160)
+ if(!Number.isFinite(x)||!Number.isFinite(z)||Math.abs(x)>2500||Math.abs(z)>2500)
   return {error:"Invalid kart position"};
  const road=projectToRoute(x,z);
  if(road.distance>ROAD_HALF_WIDTH+RUNOFF_WIDTH)return {error:"Stay on the race track for a valid lap"};
@@ -39,13 +39,13 @@ export function validateSample(session,x,z,now){
 }
 export class KartLeaderboard {
  constructor(ctx){this.ctx=ctx;this.storage=ctx.storage;}
- async read(){return await this.storage.get("best-times-v3")||{};}
+ async read(){return await this.storage.get("road-atlanta-best-times-v1")||{};}
  async fetch(request){
   const url=new URL(request.url);
   if(url.pathname==="/events"||url.pathname.startsWith("/event/"))return handleRaceEvent(request,this.storage);
   if(request.method==="GET"&&url.pathname==="/leaderboard"){
    const records=await this.read();
-   return Response.json({track:"Velvet Circuit Extended",laps:"unlimited",entries:leaderboardEntries(records)},
+   return Response.json({track:TRACK_NAME,laps:"unlimited",entries:leaderboardEntries(records)},
     {headers:{"cache-control":"no-store"}});
   }
   if(request.method!=="POST")return Response.json({error:"Method not allowed"},{status:405});
@@ -58,11 +58,11 @@ export class KartLeaderboard {
    const s={id:crypto.randomUUID(),name:sanitizeDriverName(body.name),
     start:now,lastAt:now,lastAtProgress:0,x:start.x,z:start.z,
     progress:0,travel:0,valid:true,lap:1,crossed:false,sectorTimes:[],sectorLastAt:now};
-   await this.storage.put("kart-session-v3:"+id,s);
+   await this.storage.put("road-atlanta-kart-session-v1:"+id,s);
    return Response.json({ok:true,raceId:s.id,startedAt:s.start,
     trackLength:Math.round(ROAD.length),bestMs:(await this.read())[id]?.bestMs??null});
   }
-  const key="kart-session-v3:"+id,session=await this.storage.get(key);
+  const key="road-atlanta-kart-session-v1:"+id,session=await this.storage.get(key);
   if(!session||session.id!==body.raceId)
    return Response.json({error:"No active lap. Start a new race."},{status:409});
   if(now-session.start>MAX_LAP_MS){
@@ -85,7 +85,7 @@ export class KartLeaderboard {
    const dt=now-session.lastAt;
    const displacement=Math.hypot(x-session.x,z-session.z);
    if(!Number.isFinite(x)||!Number.isFinite(z)||projected.distance>PIT_HALF_WIDTH+.8||
-      dt<0||displacement>13*dt/1000+4){
+      dt<0||displacement>15*dt/1000+6){
     session.valid=false;await this.storage.put(key,session);
     return Response.json({error:"Pit lane requires the limiter and a valid entry."},{status:422});
    }
@@ -155,12 +155,12 @@ export class KartLeaderboard {
   const sectorTimes=[...(session.sectorTimes||[])];
   if(sectorTimes.length===2)sectorTimes.push(Math.max(1,elapsed-sectorTimes[0]-sectorTimes[1]));
   const result=await this.storage.transaction(async txn=>{
-   const records=await txn.get("best-times-v3")||{};
+   const records=await txn.get("road-atlanta-best-times-v1")||{};
    const previous=records[id]?.bestMs??Infinity;
    const personalBest=elapsed<previous;
    if(personalBest){
-    records[id]={name:session.name,bestMs:elapsed,at:now,version:3};
-    await txn.put("best-times-v3",records);
+    records[id]={name:session.name,bestMs:elapsed,at:now,version:4};
+    await txn.put("road-atlanta-best-times-v1",records);
    }
    // Finish does NOT end the driving session. Start the next timed lap at this
    // finish crossing and retain the same race ID, so players keep racing.

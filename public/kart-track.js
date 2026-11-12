@@ -2,9 +2,14 @@
  * The route is a closed continuous spline, not a generic ellipse.
  * No checkpoint gates, index-based user interactions or floating track props.
  */
-export const ROAD_HALF_WIDTH=6.0;
-export const RUNOFF_WIDTH=7.5;
-export const TRACK_SCALE=1.65;
+// Michelin Raceway Road Atlanta-inspired layout reconstructed from supplied
+// corner map and published 2.54-mile circuit length. This is NOT surveyed GPS
+// geometry or a licensed, exact 1:1 digital twin. Distances are metrically
+// scaled and the circuit includes T1–T12, the Esses, 10A/10B, and a long back straight.
+export const TRACK_NAME="Road Atlanta Inspired";
+export const ROAD_HALF_WIDTH=6.3;
+export const RUNOFF_WIDTH=8;
+export const TRACK_SCALE=2.8216461;
 export const PIT_FAST_LANE_WIDTH=4.4;
 export const PIT_SERVICE_LANE_WIDTH=5.6;
 export const PIT_LANE_MARGIN=1.3;
@@ -12,27 +17,30 @@ export const PIT_HALF_WIDTH=6.35;
 export const PIT_SERVICE_OFFSET=3.3;
 export const PIT_BAY_TOLERANCE=3.65;
 export const ROAD_POINTS=[
- [-47,-22,0.8],[-30,-22,0.8],[-10,-22,0.9],[5,-22,0.9],
- [16,-24,1.05],[27,-32,1.25],[37,-22,1.65],[53,-18,2.15],
- [65,-7,2.85],[68,9,3.2],[60,24,3.5],[46,27,3.2],
- [33,18,2.65],[21,13,2.1],[10,25,1.45],[-2,37,1.05],
- [-20,36,.65],[-31,27,.6],[-39,19,.95],[-53,30,1.25],
- [-65,28,1.45],[-72,12,1.55],[-67,-7,1.2],[-57,-18,.85]
-].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y*1.35]);
-// Remodelled pit road: the entry peels gradually from the last part of
-// the long main straight; the two-lane garage section runs parallel to it,
-// and PIT OUT curves gently onto the next straight AFTER the opening turn.
-// Shared asphalt junctions do not terminate in grass or a tyre wall.
+ [-10,-25,6],[-85,-25,6],[-135,-18,13],[-147,5,21],
+ [-145,35,26],[-151,57,29],[-158,72,31],[-144,88,24],
+ [-158,112,16],[-149,150,18],[-162,179,12],[-151,210,9],
+ [-175,255,19],[-216,325,30],[-231,353,35],[-220,380,38],
+ [-193,400,34],[-166,382,30],[-135,340,26],[-75,280,19],
+ [10,205,12],[105,122,6],[149,65,5],[171,23,6],
+ [189,24,8],[204,35,11],[214,5,6],[191,-22,1],
+ [148,-34,3],[90,-26,5],[20,-25,6]
+].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y]);
+// Driving direction is toward decreasing X on the front straight. PIT IN
+// branches BEFORE the timing line and uses a long parallel approach.
+// The PIT OUT branch merges after the first uphill right into the T2 rise.
 export const PIT_POINTS=[
- [-46,-22,.8],[-42,-21.9,.8],[-35,-21.4,.81],[-28,-20.0,.82],
- [-21,-17.7,.82],[-14,-14.8,.83],[-7,-12.0,.84],
- [1,-10.5,.86],[10,-10.4,.9],[18,-10.9,.95],
- [26,-12.5,1.05],[34,-15.0,1.25],[42,-17.2,1.55],
- [49,-18.1,1.9],[53,-18,2.15]
-].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y*1.35]);
+ // Begin exactly on the late front straight for a genuine asphalt join.
+ [191,-22,1],[181,-25,1.5],[173,-26,2],
+ [159,-31,3],[144,-36,4],[120,-42,5],
+ [93,-47,5.5],[65,-49,6],[35,-49,6],[5,-49,6],
+ [-26,-49,6.2],[-60,-48,6.5],[-93,-43,9],
+ [-119,-30,12],[-139,-12,17],[-147,5,21],
+ [-145,35,26]
+].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y]);
 // The extended eastern right-hand sweeper has approximately 17 degrees of
 // progressive banking. Banking is tapered smoothly on entry and exit.
-export const BANK_START=.20,BANK_END=.40,BANK_MAX_DEGREES=17;
+export const BANK_START=.49,BANK_END=.62,BANK_MAX_DEGREES=17;
 export function bankAngle(progress){
  const p=((progress%1)+1)%1;
  if(p<=BANK_START||p>=BANK_END)return 0;
@@ -48,7 +56,7 @@ export function bankRise(progress,lateralOffset){
 // The drive-through portion of the pit route remains usable in free practice.
 // Bays are set back into the service apron, toward the garages (+normal)
 // while the fast lane stays open on the race-track side (-normal).
-export const PIT_BAYS=[.31,.38,.45,.52].map((fraction,i)=>{
+export const PIT_BAYS=[.33,.40,.47,.54].map((fraction,i)=>{
  const route=makeRoute(PIT_POINTS,96,false);
  const n=Math.min(route.samples.length-2,Math.round(fraction*96));
  const p=route.samples[n],q=route.samples[n+1],prev=route.samples[Math.max(0,n-1)];
@@ -57,7 +65,7 @@ export const PIT_BAYS=[.31,.38,.45,.52].map((fraction,i)=>{
   z:p.z+dx/len*PIT_SERVICE_OFFSET,y:p.y,
   label:"BAY "+(i+1),radius:PIT_BAY_TOLERANCE};
 });
-export const TRACK_SAMPLES=480;
+export const TRACK_SAMPLES=800;
 function point(p){return {x:p[0],z:p[1],y:p[2]};}
 function catmull(a,b,c,d,t){
  const t2=t*t,t3=t2*t;
@@ -90,7 +98,7 @@ export function makeRoute(points=ROAD_POINTS,count=TRACK_SAMPLES,closed=true){
 // The timing line belongs at the FAR END of the pit straight, before turn 1.
 // Rotate the closed spline's origin without changing the geometry or lap length.
 // Every progress-based server/client lap check therefore uses the new line.
-export const FINISH_LINE_SAMPLE=66;
+export const FINISH_LINE_SAMPLE=0;
 function rotateClosedRoute(route,index){
  const samples=route.samples.slice(index).concat(route.samples.slice(0,index));
  let distance=0;
@@ -129,7 +137,7 @@ export function refineRoute(route,subdivisions=VISUAL_SUBDIVISIONS){
  return {samples:result,length,closed,visual:true,detail:subdivisions};
 }
 
-export const PIT=makeRoute(PIT_POINTS,240,false);
+export const PIT=makeRoute(PIT_POINTS,320,false);
 export function cornerKerbGripWidth(progress){
  // Same local curvature criteria used by the visual apex and exit kerbs.
  const samples=ROAD.samples,n=samples.length;
@@ -166,10 +174,17 @@ export function projectToRoute(x,z,route=ROAD){
  return best;
 }
 export function sampleAt(progress,route=ROAD){
- const p=((progress%1)+1)%1,ps=route.samples;
- const j=Math.min(ps.length-1,Math.floor(p*ps.length));
- const a=ps[j],b=ps[(j+1)%ps.length];
- const t=p*ps.length-j;
+ // Progress is a fraction of arc LENGTH, not spline sample index. Road
+ // Atlanta has fast straights and tight Esses; sample index isn't distance.
+ const distance=((progress%1)+1)%1*route.length,ps=route.samples;
+ let low=0,high=ps.length-1;
+ while(low<high){
+  const mid=(low+high+1)>>1;
+  if(ps[mid].distance<=distance)low=mid;else high=mid-1;
+ }
+ const a=ps[low],b=ps[(low+1)%ps.length];
+ const segment=Math.hypot(b.x-a.x,b.z-a.z)||1;
+ const t=Math.min(1,Math.max(0,(distance-a.distance)/segment));
  return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,y:a.y+(b.y-a.y)*t};
 }
 export function raceStart(){

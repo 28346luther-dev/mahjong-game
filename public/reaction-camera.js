@@ -41,7 +41,7 @@
   lastEvent=event.id;
   // Never prompt for old claims after rejoining or refreshing.
   if(event.playerId!==myId||Date.now()-Number(event.at)>18000||busy)return;
-  if(!["pong","chow","mahjong"].includes(event.claim))return;
+  if(!["pong","chow","kong","mahjong"].includes(event.claim))return;
   pendingEvent={id:event.id,claim:event.claim,at:event.at};
   $("reactionConsentTitle").textContent="Nice "+event.claim.toUpperCase()+"!";
   $("reactionConsentDetail").textContent="Record a 3-second video reaction and send it to the other players at your table? Your camera will turn off immediately afterward.";

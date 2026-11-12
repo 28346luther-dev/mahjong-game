@@ -111,15 +111,15 @@ test("racing sectors use purple, green and yellow session comparisons",async()=>
  }finally{Date.now=original;}
 });
 test("Formula Vee cars, remote rivals, pit facilities and broadcast HUD are wired",()=>{
- const car=readFileSync("public/kart-formula-vee.js","utf8");
+ const car=readFileSync("public/kart-gt-car.js","utf8");
  const client=readFileSync("public/kart-racing.js","utf8");
  const meetings=readFileSync("public/kart-meetings.js","utf8");
  const graphics=readFileSync("public/kart-meetings.css","utf8");
  const pit=readFileSync("public/kart-pit-complex.js","utf8");
  const html=readFileSync("public/index.html","utf8");
- assert.match(car,/export function createFormulaVee/);
- assert.match(car,/hiddenInCockpit/);assert.match(car,/wishbones/);
- assert.match(client,/createFormulaVee/);assert.match(client,/createRival/);
+ assert.match(car,/export function createGTCar/);
+ assert.match(car,/hiddenInCockpit/);assert.match(car,/wheel/);
+ assert.match(client,/createGTCar/);assert.match(client,/createRival/);
  assert.match(client,/addPitComplex/);
  assert.match(pit,/garage|roll-up|roll.up/i);
  assert.match(meetings,/sectorUpdate/);

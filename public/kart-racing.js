@@ -2,7 +2,7 @@ import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCAL
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
-import {createFormulaVee} from "./kart-formula-vee.js";
+import {createGTCar} from "./kart-gt-car.js";
 import {addCircuitGrandstands} from "./kart-grandstands.js";
 import {addStraightGlassBarriers} from "./kart-straight-barriers.js";
 import {resolveKartCollision,surfaceNormal,nearPitBay,gravityAlongRoad} from "./kart-physics.js";
@@ -13,6 +13,7 @@ let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPendi
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
 let driveMode="practice",meetingPhase=null,remoteKarts=new Map();
+const rivalTargets=new Map();
 let selectedMode="practice",timeTrial=false,selectorVisible=true;
 let localPitUntil=0,localPitBay=null,localPitDone=false;
 function getLocalPitRemaining(){return Math.max(0,localPitUntil-Date.now());}
@@ -30,7 +31,7 @@ function getPose(){return {x:pos.x,z:pos.z,yaw,speed,pit:inPitLane};}
 function createRival(p){
  const palette=[0xb33749,0x2a739d,0x3f8a6b,0xd2ac51,0x805b98,0xdc7b39];
  const index=parseInt(p.id.slice(0,7),16)%palette.length;
- const model=createFormulaVee(THREE,{color:palette[index],number:index+1});
+ const model=createGTCar(THREE,{color:palette[index],number:index+1});
  scene.add(model.group);return model.group;
 }
 function updateRivals(racers,myId){
@@ -39,26 +40,48 @@ function updateRivals(racers,myId){
   list.replaceChildren();
   for(const [index,p] of (racers||[]).entries()){
    const li=document.createElement("li");
-   li.textContent="P"+(p.position||index+1)+"  "+p.name+(p.id===myId?" · YOU":"")+"  L"+(p.lap||0)+"/10";
+   li.textContent="P"+(p.position||index+1)+" "+p.name+(p.id===myId?" · YOU":"")+" L"+(p.lap||0)+"/10";
    if(p.id===myId)li.className="my-position";
    list.append(li);
   }
  }
  if(!scene)return;
- const present=new Set();
+ const now=performance.now();
  for(const driver of racers||[]){
   if(driver.id===myId||driver.finishedAt||!Number.isFinite(driver.x)||!Number.isFinite(driver.z))continue;
-  present.add(driver.id);
-  let g=remoteKarts.get(driver.id);
-  if(!g){g=createRival(driver);remoteKarts.set(driver.id,g);}
+  let group=remoteKarts.get(driver.id);
+  if(!group){
+   group=createRival(driver);
+   remoteKarts.set(driver.id,group);
+   group.position.set(driver.x,projectToRoute(driver.x,driver.z,ROAD).y,driver.z);
+   group.rotation.y=(driver.yaw||0)+Math.PI;
+  }
+  // Never snap remote karts to sporadic HTTP snapshots. Interpolate
+  // positions and shortest-angle headings every animation frame.
   const road=projectToRoute(driver.x,driver.z,ROAD);
   const pit=projectToRoute(driver.x,driver.z,PIT);
-  const route=pit.distance<road.distance?pit:road;
-  g.position.set(driver.x,route.y,driver.z);
-  g.rotation.y=(driver.yaw||0)+Math.PI;
+  rivalTargets.set(driver.id,{x:driver.x,z:driver.z,yaw:driver.yaw||0,
+   y:pit.distance<road.distance?pit.y:road.y,
+   speed:driver.speed||0,lastAt:now});
  }
- for(const [id,g] of remoteKarts)if(!present.has(id)){
-  scene.remove(g);remoteKarts.delete(id);
+ for(const [id,group] of remoteKarts){
+  const target=rivalTargets.get(id);
+  if(!target||now-target.lastAt>7500){
+   scene.remove(group);remoteKarts.delete(id);rivalTargets.delete(id);
+  }
+ }
+}
+function animateRivals(dt){
+ const now=performance.now();
+ for(const [id,group] of remoteKarts){
+  const target=rivalTargets.get(id);if(!target)continue;
+  const alpha=1-Math.exp(-Math.min(.05,dt)*9);
+  group.position.x+=(target.x-group.position.x)*alpha;
+  group.position.z+=(target.z-group.position.z)*alpha;
+  group.position.y+=(target.y-group.position.y)*Math.min(1,dt*7);
+  const targetYaw=target.yaw+Math.PI;
+  const delta=Math.atan2(Math.sin(targetYaw-group.rotation.y),Math.cos(targetYaw-group.rotation.y));
+  group.rotation.y+=delta*alpha;
  }
 }
 async function beginMeetingStage(phase,mine){
@@ -91,7 +114,7 @@ async function beginMeetingStage(phase,mine){
 function clearMeetingStage(){
  if(driveMode==="meeting"){playing=false;driveMode="practice";meetingPhase=null;speed=0;}
  for(const group of remoteKarts.values())scene?.remove(group);
- remoteKarts.clear();
+ remoteKarts.clear();rivalTargets.clear();
 }
 function finishMeetingStage(mine){
  if(driveMode!=="meeting"||!mine?.finishedAt)return;
@@ -320,7 +343,13 @@ function stripeAcross(route,i,color,count=10,depth=.5){
  }
 }
 function track(){
- const green=object(new THREE.PlaneGeometry(430,330),material(0x477854,.97),0,-.1,0);
+ const bounds=ROAD.samples.reduce((b,p)=>({
+  minX:Math.min(b.minX,p.x),maxX:Math.max(b.maxX,p.x),
+  minZ:Math.min(b.minZ,p.z),maxZ:Math.max(b.maxZ,p.z)}),
+  {minX:Infinity,maxX:-Infinity,minZ:Infinity,maxZ:-Infinity});
+ const green=object(new THREE.PlaneGeometry(bounds.maxX-bounds.minX+330,
+  bounds.maxZ-bounds.minZ+330),material(0x477854,.97),
+  (bounds.minX+bounds.maxX)/2,-.1,(bounds.minZ+bounds.maxZ)/2);
  green.rotation.x=-Math.PI/2;
  embankment(visualRoad,-1);embankment(visualRoad,1);
  ribbon(visualRoad,-ROAD_HALF_WIDTH-RUNOFF_WIDTH,ROAD_HALF_WIDTH+RUNOFF_WIDTH,0x698c68,-.058);
@@ -333,7 +362,8 @@ function track(){
  // Detailed two-level garage building, safe entry signs and four marked service bays.
  addPitComplex(THREE,scene,PIT,PIT_BAYS);
  addCircuitGrandstands(THREE,scene);
- addStraightGlassBarriers(THREE,scene,visualRoad,ROAD_HALF_WIDTH,PIT);
+ // Road Atlanta-style barriers are handled by the circuit safety layout.
+ // The legacy pit-straight glass wall no longer matches this new route.
  // Sixteen staggered, clean half-box grid positions. The start/finish
  // line is now at the END of the pit straight, so all boxes sit BACK from
  // the finish line along the straight, not scattered into turn one.
@@ -365,19 +395,15 @@ function track(){
  const cv=document.createElement("canvas");cv.width=1024;cv.height=140;
  const ctx=cv.getContext("2d");
  ctx.fillStyle="#583149";ctx.fillRect(0,0,1024,140);
- ctx.fillStyle="#f8dfa9";ctx.font="bold 66px Georgia";ctx.textAlign="center";ctx.fillText("VELVET CIRCUIT",512,96);
+ ctx.fillStyle="#f8dfa9";ctx.font="bold 66px Georgia";ctx.textAlign="center";ctx.fillText("ROAD ATLANTA · 2.54 MI",512,96);
  const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;
  const front=object(new THREE.PlaneGeometry(ROAD_HALF_WIDTH*2+1.6,1.05),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}),
   p.x,p.y+4.1,p.z+.17);
  front.rotation.y=Math.atan2(d.tx,d.tz);
- // Pit-lane tire stacks, curbs and trackside grandstand.
- for(let i=0;i<5;i++){
-  const x=(55+i*4)*TRACK_SCALE,z=-40*TRACK_SCALE;
-  for(let y=0;y<3;y++)post(.75,.46,y%2?0x2f3139:0x202128,x,y*.45+.2,z);
- }
+ // Legacy track-specific tyre stacks removed from the new pit apron.
 }
 function kartModel(){
- const vee=createFormulaVee(THREE,{color:0xa62c46,number:7});
+ const vee=createGTCar(THREE,{color:0xa62c46,number:7});
  kart=vee.group;scene.add(kart);
  cockpitOccluders.push(...vee.hiddenInCockpit);
 }
@@ -390,9 +416,9 @@ function construct(){
  sun.shadow.mapSize.set(2048,2048);
  sun.shadow.normalBias=.023;
  sun.shadow.radius=2;
- sun.shadow.camera.left=-160;sun.shadow.camera.right=160;
- sun.shadow.camera.top=125;sun.shadow.camera.bottom=-125;
- sun.shadow.camera.far=260;sun.shadow.bias=-.0002;
+ sun.shadow.camera.left=-850;sun.shadow.camera.right=850;
+ sun.shadow.camera.top=1350;sun.shadow.camera.bottom=-1350;
+ sun.shadow.camera.far=1800;sun.shadow.bias=-.0002;
  scene.add(sun);
  // A tall sky dome uses a physically inspired horizon-to-zenith gradient.
  const skyMaterial=new THREE.ShaderMaterial({
@@ -402,7 +428,7 @@ function construct(){
   vertexShader:"varying vec3 vWorld; void main(){ vec4 w=modelMatrix*vec4(position,1.);vWorld=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}",
   fragmentShader:"varying vec3 vWorld;uniform vec3 topColor;uniform vec3 horizonColor;uniform vec3 bottomColor;void main(){float t=normalize(vWorld).y;vec3 col=t>0.?mix(horizonColor,topColor,pow(clamp(t,0.,1.),.48)):mix(horizonColor,bottomColor,clamp(-t*1.6,0.,1.));gl_FragColor=vec4(col,1.);}"
  });
- scene.add(new THREE.Mesh(new THREE.SphereGeometry(310,32,16),skyMaterial));
+ scene.add(new THREE.Mesh(new THREE.SphereGeometry(3200,48,24),skyMaterial));
  track();kartModel();setCameraMode(cameraMode);
 }
 async function init(){
@@ -414,7 +440,7 @@ async function init(){
  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
  renderer.physicallyCorrectLights=true;
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
- camera=new THREE.PerspectiveCamera(64,1,.1,410);clock=new THREE.Clock();
+ camera=new THREE.PerspectiveCamera(64,1,.1,3500);clock=new THREE.Clock();
  construct();reset();requestAnimationFrame(frame);
 }
 function reset(){
@@ -428,10 +454,10 @@ function positionOnTrack(x,z){
  // The limiter commits the car to a long, smooth PIT IN route. It does not
  // release it until the *paved* PIT OUT merge meets the racing asphalt.
  // At either junction the two surfaces overlap and driving is continuous.
- const mergeReady=inPitLane&&pit.progress>.955&&
+ const mergeReady=inPitLane&&pit.progress>.96&&
   road.distance<ROAD_HALF_WIDTH+1.5;
  const pitAvailable=pit.distance<PIT_HALF_WIDTH+1.25;
- const enterReady=pitAvailable&&pit.progress>.012&&pit.progress<.945;
+ const enterReady=pitAvailable&&pit.progress>.01&&pit.progress<.94;
  if(pitLimiter&&!mergeReady&&pitAvailable&&(inPitLane||enterReady))
   return {...pit,isPit:true};
  return {...road,isPit:false};
@@ -524,34 +550,34 @@ function update(dt){
  }
  if(driveMode==="meeting"&&!window.KartMeetings?.canDrive?.()){
   speed=0;updateRideHeightAndBank(dt);
-  if(performance.now()-sendAt>950){sendAt=performance.now();transmit();}
+  if(performance.now()-sendAt>480){sendAt=performance.now();transmit();}
   return;
  }
  const accelerate=down("w")||down("arrowup");
  const brake=down("s")||down("arrowdown")||down(" ");
  const steer=Number(down("d")||down("arrowright"))-Number(down("a")||down("arrowleft"));
- speed+=Number(accelerate)*16*dt;
+ speed+=Number(accelerate)*24*dt;
  speed-=Math.sign(speed)*(0.9+Math.abs(speed)*.08)*dt;
- if(brake)speed-=Math.sign(speed||1)*42*dt;
- speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:29,speed));
+ if(brake)speed-=Math.sign(speed||1)*67*dt;
+ speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:82,speed));
  if(pitLimiter&&speed>PIT_LIMIT_MS)speed=PIT_LIMIT_MS;
  if(!accelerate&&!brake&&Math.abs(speed)<.15)speed=0;
  const grade=positionOnTrack(pos.x,pos.z);
  if(Math.abs(speed)>.05&&!grade.isPit){
   // Small but physical downhill/uphill acceleration from the actual road grade.
   speed+=gravityAlongRoad(ROAD,grade,yaw)*dt;
-  speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:29,speed));
+  speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:82,speed));
  }
  // In this coordinate system positive yaw steers world-left, so D decreases yaw.
  // Higher speed increases the turning radius; brake before the chicanes.
- const steeringRate=2.25/(1+Math.abs(speed)/15);
+ const steeringRate=2.25/(1+Math.abs(speed)/27);
  yaw-=steer*dt*steeringRate*Math.min(1,Math.abs(speed)/3)*(speed>=0?1:-1);
  const proposedX=pos.x+Math.sin(yaw)*speed*dt;
  const proposedZ=pos.z+Math.cos(yaw)*speed*dt;
  const collision=driveMode==="meeting"?resolveKartCollision(pos.x,pos.z,proposedX,proposedZ,
    [...remoteKarts.values()].filter(g=>g.visible).map(g=>({x:g.position.x,z:g.position.z}))):null;
  const x=collision?.x??proposedX,z=collision?.z??proposedZ;
- if(collision?.hit){speed*=.22;message("CONTACT · Avoid the other Formula Vee cars.");}
+ if(collision?.hit){speed*=.22;message("CONTACT · Avoid the other GT cars.");}
  const projected=positionOnTrack(x,z);
  const grip=gripForDistance(projected.distance,projected.isPit,projected.progress);
  // PIT route is a real driveable road ONLY with P limiter enabled.
@@ -572,7 +598,7 @@ function update(dt){
  }
  updateRideHeightAndBank(dt);
  localPitService();
- if(performance.now()-sendAt>600&&!telemetryPending){sendAt=performance.now();transmit();}
+ if(performance.now()-sendAt>320&&!telemetryPending){sendAt=performance.now();transmit();}
  // Sector times are display-only and never reset this lap clock.
  if(driveMode!=="meeting")$("kartTime").textContent=format(performance.now()-started);
  else if(meetingPhase==="qualifying"||meetingPhase==="race")$("kartTime").textContent=format(performance.now()-started);
@@ -602,6 +628,7 @@ function frame(){
   camera.lookAt(pos.x,pos.y+1.1,pos.z);
   if(camera.fov!==64){camera.fov=64;camera.updateProjectionMatrix();}
  }
+ animateRivals(dt);
  renderer.render(scene,camera);
  window.KartMeetings?.tick?.();
  if(performance.now()-lastLeaderboardRefresh>15000){lastLeaderboardRefresh=performance.now();leaderboard();}

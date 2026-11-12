@@ -595,7 +595,7 @@ export class MahjongRoom {
       p.melds.push({type:response.action,tiles:[discard,...matches]});
     }
     source.discards.pop();s.lastDiscard=null;s.claimWindow=null;s.turn=idx;s.phase="playing";
-    if(response.action==="pong"||response.action==="chow")s.lastReaction={id:uid(),playerId:winnerId,playerName:p.name,claim:response.action,at:Date.now()};
+    if(["pong","chow","kong"].includes(response.action))s.lastReaction={id:uid(),playerId:winnerId,playerName:p.name,claim:response.action,at:Date.now()};
     if(response.action==="kong"){this.drawFor(p);if(s.phase!=="finished")s.message=`${p.name} called Kong and drew a replacement tile.`;}
     else s.message=`${p.name} won the claim with ${response.action.toUpperCase()}. They must discard.`;
   }
