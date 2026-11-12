@@ -13,7 +13,7 @@ export const START_LIGHT_INTERVAL_MS=1000;
 export const PIT_SERVICE_MS=10_000;
 export const EVENT_LIFETIME_MS=45*60_000;
 const MIN_LAP_MS=1;
-const MAX_STEP_MPS=42;
+const MAX_STEP_MPS=105;
 const eventKey=id=>"meeting:"+id;
 export const activeEventId=now=>Math.floor(now/EVENT_INTERVAL_MS)*EVENT_INTERVAL_MS;
 export function eventPhase(id,now){
@@ -255,11 +255,11 @@ export async function handleRaceEvent(request,storage){
    // Rankings are based only on complete, server-verified laps. Sectors do
    // not write to the global board or reset the lap clock.
    if(elapsed>0&&elapsed<=600000){
-    const records=await storage.get("best-times-v3")||{};
+    const records=await storage.get("road-atlanta-best-times-v1")||{};
     const best=records[user]?.bestMs??Infinity;
     if(elapsed<best){
-     records[user]={name:player.name,bestMs:elapsed,at:now,version:3};
-     await storage.put("best-times-v3",records);
+     records[user]={name:player.name,bestMs:elapsed,at:now,version:4};
+     await storage.put("road-atlanta-best-times-v1",records);
     }
    }
    if(phase==="qualifying"){
