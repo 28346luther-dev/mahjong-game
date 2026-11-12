@@ -54,3 +54,15 @@ test('steering responds within 100ms, centres on release and mirrors left/right'
  assert.ok(Math.abs(right.d.steer)<1e-5,'no persistent left steering');
  assert.ok(Math.abs(right.d.yawRate)<.001,'no persistent yaw');
 });
+test('saturated steering rotates the nose without inventing sideways drift',()=>{
+ for(const speed of [10,30,50,82])for(const steer of [-1,1]){
+  const d=new GTDynamics();d.reset(0);let turn=0,side=0;
+  for(let i=0;i<240;i++){
+   const step=d.step(1/120,{x:0,z:0,y:0,yaw:turn,speed,steer,brake:false,isPit:true});
+   turn+=step.yawDelta;side+=step.sideDistance;
+  }
+  assert.ok(turn*steer<-.1,'car must turn even when tyre grip saturates');
+  assert.ok(Math.abs(side)<.001,'cannot skate sideways instead of turning');
+  assert.ok(Math.abs(d.heave)<=.025&&Math.abs(d.roll)<=.045);
+ }
+});

@@ -14,7 +14,7 @@ export function addPitComplex(THREE,scene,PIT,bays){
   const object=new THREE.Mesh(g,m);object.position.set(x,y,z);
   object.castShadow=true;object.receiveShadow=true;parent.add(object);return object;
  }
- function block(w,h,d,m,x,y,z,parent=scene){return item(new THREE.BoxGeometry(w,h,d),m,x,y,z,parent);}
+ function block(w,h,d,m,x,y,z,parent=scene){const mesh=item(new THREE.BoxGeometry(w,h,d),m,x,y,z,parent);if(h<=.05)mesh.userData.pitPaint=true;return mesh;}
  // Separate low garage sections follow the lane instead of spanning T12
  // with one enormous straight box. An outboard roof, clerestory and ribbed
  // roller doors provide depth without obstructing the final-corner sightline.
@@ -75,7 +75,7 @@ export function addPitComplex(THREE,scene,PIT,bays){
   const geo=new THREE.BufferGeometry();
   geo.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
   geo.computeVertexNormals();
-  const marking=new THREE.Mesh(geo,paintMaterial);scene.add(marking);
+  const marking=new THREE.Mesh(geo,paintMaterial);marking.userData.pitPaint=true;scene.add(marking);
  }
  // A long yellow line separates moving cars (negative normal) from parked cars.
  strip(.47,.13,yellow);
@@ -125,7 +125,7 @@ export function addPitComplex(THREE,scene,PIT,bays){
   const tex=new THREE.CanvasTexture(marking);tex.colorSpace=THREE.SRGBColorSpace;
   const target=new THREE.Mesh(new THREE.PlaneGeometry(5.25,7.25),
    new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,side:THREE.DoubleSide}));
-  target.rotation.x=-Math.PI/2;target.position.y=.135;space.add(target);
+  target.rotation.x=-Math.PI/2;target.position.y=.135;target.userData.pitPaint=true;space.add(target);
   // Four low wheel stop markings, outside the centre of the box.
   for(const lateral of [-1.55,1.55])
    for(const fore of [-1.4,1.35])block(.72,.044,.26,yellow,lateral,.145,fore,space);

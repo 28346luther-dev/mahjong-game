@@ -143,6 +143,9 @@ export function refineRoute(route,subdivisions=VISUAL_SUBDIVISIONS){
 }
 
 export const PIT=makeRoute(PIT_POINTS,320,false);
+// Shared merge elevation: lane, shoulders and physics meet the same main road.
+for(const p of PIT.samples)p.y=projectToRoute(p.x,p.z,ROAD).y;
+for(const bay of PIT_BAYS)bay.y=projectToRoute(bay.x,bay.z,PIT).y;
 export function cornerKerbGripWidth(progress){
  // Same local curvature criteria used by the visual apex and exit kerbs.
  const samples=ROAD.samples,n=samples.length;

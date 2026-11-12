@@ -1,6 +1,7 @@
+import {clearPitGrass} from './kart-road-contact.js';
 import {mergeGeometries} from './vendor/utils/BufferGeometryUtils.js';
 /* Estimated Piedmont terrain and circuit landmarks. Not LiDAR/survey data. */
-import {ROAD,PIT,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,sampleAt,mappedTerrainHeight,geoToWorld} from './kart-track.js';
+import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,projectToRoute,sampleAt,mappedTerrainHeight,geoToWorld} from './kart-track.js';
 export function terrainHeight(x,z){return mappedTerrainHeight(x,z)-.45;}
 export function addRoadAtlantaLandscape(THREE,scene){
  const bounds=ROAD.samples.reduce((b,p)=>({minX:Math.min(b.minX,p.x),maxX:Math.max(b.maxX,p.x),minZ:Math.min(b.minZ,p.z),maxZ:Math.max(b.maxZ,p.z)}),{minX:Infinity,maxX:-Infinity,minZ:Infinity,maxZ:-Infinity});
@@ -17,6 +18,7 @@ export function addRoadAtlantaLandscape(THREE,scene){
   pos.setY(i,y);const variation=(Math.sin(x*.17)*Math.sin(z*.11)+1)*.025;
   color.setHSL(.235+variation,.24,.25+variation);colors.push(color.r,color.g,color.b);
  }
+ clearPitGrass(geometry);
  geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();
  const turf=document.createElement('canvas');turf.width=turf.height=256;const tc=turf.getContext('2d');
  const pixels=tc.createImageData(256,256);let noiseSeed=21;
@@ -31,7 +33,19 @@ export function addRoadAtlantaLandscape(THREE,scene){
  const group=new THREE.Group();group.position.set(p.x,p.y,p.z);group.rotation.y=Math.atan2(q.x-p.x,q.z-p.z);scene.add(group);
  const mat=new THREE.MeshStandardMaterial({color:0x99978e,roughness:.9});
  const add=(w,h,d,x,y,z,m=mat)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;group.add(o);return o;};
- add(38,.8,7,0,7.4,0);for(const side of [-1,1]){add(1.2,7.4,6,side*15,3.7,0);add(38,1.1,.2,0,8.3,side*3.35);}
+ // The pit branch also passes this bridge: keep support footprints outside
+ // BOTH paved corridors, rather than planting a column in the fast lane.
+ const offsets=[-1,1].map(side=>{
+  for(let offset=15;offset<=65;offset+=2){
+   const x=p.x+Math.cos(group.rotation.y)*side*offset,z=p.z-Math.sin(group.rotation.y)*side*offset;
+   if(projectToRoute(x,z).distance>ROAD_HALF_WIDTH+4&&projectToRoute(x,z,PIT).distance>PIT_HALF_WIDTH+4)return side*offset;
+  }
+  throw new Error('No clear bridge support position');
+ });
+ const span=Math.max(...offsets.map(Math.abs))*2+5;
+ add(span,.8,7,0,7.4,0);
+ for(const x of offsets)add(1.2,7.4,6,x,3.7,0);
+ for(const side of [-1,1])add(span,1.1,.2,0,8.3,side*3.35);
  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=128;const ctx=canvas.getContext('2d');ctx.fillStyle='#153760';ctx.fillRect(0,0,1024,128);ctx.fillStyle='#f4d351';ctx.fillRect(0,112,1024,16);ctx.fillStyle='#fff';ctx.font='bold 66px sans-serif';ctx.textAlign='center';ctx.fillText('ROAD ATLANTA',512,86);
  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
  const banner=new THREE.Mesh(new THREE.PlaneGeometry(27,2.6),new THREE.MeshStandardMaterial({map:tex,side:THREE.DoubleSide}));banner.position.set(0,7.7,-3.6);banner.rotation.y=Math.PI;group.add(banner);

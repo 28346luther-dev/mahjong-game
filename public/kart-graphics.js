@@ -1,3 +1,4 @@
+import {clearPitGrass} from './kart-road-contact.js';
 /* VELVET CIRCUIT — high-detail, procedural Three.js art pass.
    Curved paint & apex kerbs are geometry following the road surface, not
    stacked cubes. Low-cost instancing retains frame rate on laptop GPUs. */
@@ -91,7 +92,8 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   geo.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
   geo.setAttribute("uv",new THREE.Float32BufferAttribute(uv,2));
   geo.setIndex(indices);geo.computeVertexNormals();
-  makeMesh(geo,mat);
+  if(mat!==roadMat){clearPitGrass(geo);geo.computeVertexNormals();}
+  const band=makeMesh(geo,mat);if(mat===roadMat){band.name="roadAsphalt";band.userData.paved=true;}
  }
  // One continuous layered circuit surface; no box kerbs, no diagonal
  // polygon sheets, no discontinuous gravel strips floating into the road.
@@ -155,7 +157,7 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   if(!kerbMeshes[i].length)continue;
   const g=new THREE.BufferGeometry();
   g.setAttribute("position",new THREE.Float32BufferAttribute(kerbMeshes[i],3));
-  g.computeVertexNormals();makeMesh(g,i?white:red);
+  clearPitGrass(g);g.computeVertexNormals();makeMesh(g,i?white:red);
  }
  // White edge stripes are thin flush paint, NOT raised walls.
  const line=standard(0xf5f1e8,.8);
@@ -183,7 +185,7 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   const geo=new THREE.BufferGeometry();
   geo.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
   geo.setAttribute("uv",new THREE.Float32BufferAttribute(uv,2));
-  geo.computeVertexNormals();makeMesh(geo,material);
+  geo.computeVertexNormals();const surface=makeMesh(geo,material);surface.name="pitAsphalt";surface.userData.paved=true;
  }
  pitBand(-PIT_HALF_WIDTH+.04,PIT_HALF_WIDTH-.04,roadMat,.087);
  // Start/finish squares across the road width and two short rows along travel.

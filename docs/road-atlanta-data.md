@@ -53,3 +53,26 @@ footprint regressions. With a local Wrangler server and Playwright installed,
 checks the loaded, Draco-decoded car, front/rear wheel steering and axle axes,
 heading alignment and 160 tyre contacts around the circuit. It also writes chase,
 bonnet, bridge, final-corner and pit-frontage screenshots to `/tmp`.
+
+## Pit entry and handling follow-up
+
+The complete pit corridor now clears terrain, main-road grass shoulders and kerb
+triangles, including triangles whose vertices lie outside the lane. Its heights
+match the adjacent main-road profile at the merges. Pit entry selects the paved
+branch and engages the speed limiter automatically; manual P remains available.
+Bridge supports also clear both paved routes.
+
+Steering saturation now limits yaw without generating a separate sideways speed.
+The chassis fits a plane through four measured tyre contacts; tyre radius comes
+from the decoded mesh. Individual wheels follow that plane and the local surface,
+with 2.5 cm maximum sprung heave and bounded roll/pitch. Pit asphalt's higher
+surface is also used where it overlaps the racing road. Bonnet heading follow is
+bounded to expose the nose pivot while keeping the camera attached to the car.
+
+The browser check now raycasts 636 positions across the full pit corridor,
+drives through its first quarter using the actual controls, checks 100 ms steering
+response, and measures tyre vertices against road planes around the circuit.
+This supplements the Node regression suite; it is not vehicle telemetry validation.
+Project Chrono was assessed through its official repository README: its documented
+native C++/Python/C# interfaces do not provide a drop-in JavaScript replacement.
+This pass retains the existing browser runtime and Cannon suspension integration.

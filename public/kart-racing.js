@@ -1,3 +1,4 @@
+import {clearPitGrass} from './kart-road-contact.js';
 import {RGBELoader} from './vendor/loaders/RGBELoader.js';
 import {GTDynamics,wheelSurface} from './kart-vehicle-dynamics.js';
 import {addRoadAtlantaLandscape,terrainHeight} from './kart-landscape.js';
@@ -29,6 +30,7 @@ const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
 let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPending=false,lastStatusAt=0;
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
+let bonnetYaw=0;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
 let driveMode="practice",meetingPhase=null,remoteKarts=new Map();
 const rivalTargets=new Map();
@@ -203,7 +205,7 @@ function togglePitLimiter(){
 }
 function setCameraMode(mode){
  if(!["chase","cockpit"].includes(mode))return;
- cameraMode=mode;
+ cameraMode=mode;bonnetYaw=yaw;
  for(const mesh of cockpitOccluders)mesh.visible=mode!=="cockpit";
  const label=document.getElementById("kartCameraLabel");
  if(label)label.textContent=mode==="cockpit"?"BONNET / FIRST PERSON":"CHASE / THIRD PERSON";
@@ -321,8 +323,12 @@ function ribbon(route,from,to,color,raise=.02){
  const geo=new THREE.BufferGeometry();
  geo.setAttribute("position",new THREE.Float32BufferAttribute(verts,3));
  geo.setAttribute("uv",new THREE.Float32BufferAttribute(uv,2));
- geo.setIndex(indices);geo.computeVertexNormals();
- return object(geo,material(color,.94),0,0,0);
+ geo.setIndex(indices);
+ if(color===0x698c68)clearPitGrass(geo);
+ geo.computeVertexNormals();
+ const mesh=object(geo,material(color,.94),0,0,0);
+ if(color===0x373b43||color===0x353c44)mesh.userData.paved=true;
+ return mesh;
 }
 function embankment(route,side,width=8){
  // Triangulated soil shoulders meet the underlying grass, so elevated corners
@@ -349,7 +355,7 @@ function embankment(route,side,width=8){
  }
  const geometry=new THREE.BufferGeometry();
  geometry.setAttribute("position",new THREE.Float32BufferAttribute(vertices,3));
- geometry.setIndex(indices);geometry.computeVertexNormals();
+ geometry.setIndex(indices);clearPitGrass(geometry);geometry.computeVertexNormals();
  object(geometry,material(0x5b7a57,.99),0,0,0);
 }
 function stripeAcross(route,i,color,count=10,depth=.5){
@@ -477,21 +483,21 @@ async function init(){
 }
 function reset(){
  resetLocalPit();
- const start=raceStart();pos={x:start.x,y:start.y,z:start.z};yaw=start.yaw;
+ const start=raceStart();pos={x:start.x,y:start.y,z:start.z};yaw=start.yaw;bonnetYaw=yaw;
  dynamics.reset(start.y);speed=0;progress=0;reportedFinish=false;pitLimiter=false;inPitLane=false;updatePitHUD();
  if(kart){kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;}
  if(camera){camera.position.set(pos.x-Math.sin(yaw)*7.2,pos.y+2.9,pos.z-Math.cos(yaw)*7.2);camera.lookAt(pos.x+Math.sin(yaw)*8,pos.y+.85,pos.z+Math.cos(yaw)*8);}
 }
 function positionOnTrack(x,z){
  const road=projectToRoute(x,z,ROAD),pit=projectToRoute(x,z,PIT);
- // The limiter commits the car to a long, smooth PIT IN route. It does not
- // release it until the *paved* PIT OUT merge meets the racing asphalt.
+ // Entering the paved branch selects the pit lane and engages its limiter.
+ // Keep the lane selected until the PIT OUT merge meets the racing asphalt.
  // At either junction the two surfaces overlap and driving is continuous.
  const mergeReady=inPitLane&&pit.progress>.96&&
   road.distance<ROAD_HALF_WIDTH+1.5;
  const pitAvailable=pit.distance<PIT_HALF_WIDTH+1.25;
  const enterReady=pitAvailable&&pit.progress>.01&&pit.progress<.94;
- if(pitLimiter&&!mergeReady&&pitAvailable&&(inPitLane||enterReady))
+ if((pitLimiter||inPitLane||road.distance>ROAD_HALF_WIDTH&&pit.distance<road.distance)&&!mergeReady&&pitAvailable&&(inPitLane||enterReady))
   return {...pit,isPit:true};
  return {...road,isPit:false};
 }
@@ -564,26 +570,42 @@ function updateRideHeightAndBank(dt){
  const projected=positionOnTrack(pos.x,pos.z);
  const lateral=(pos.x-projected.x)*projected.normalX+(pos.z-projected.z)*projected.normalZ;
  const contactY=projected.y+(projected.isPit?0:bankRise(projected.progress,lateral));
- pos.y+=(contactY-pos.y)*Math.min(1,dt*12);
- const up=projected.isPit?new THREE.Vector3(0,1,0):
-  surfaceNormal(ROAD,projected,bankAngle(projected.progress),THREE);
- const bankQuat=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),up);
+ pos.y=contactY;
  const yawQuat=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw+Math.PI);
- const suspension=new THREE.Quaternion().setFromEuler(new THREE.Euler(dynamics.pitch,0,dynamics.roll));
- kart.quaternion.copy(bankQuat.multiply(yawQuat).multiply(suspension));
- kart.position.set(pos.x,pos.y+.044+dynamics.heave,pos.z);
- kart.updateMatrixWorld(true);
- // Wheels follow individual road contacts; chassis roll must not lift a tyre.
- const inverse=kart.quaternion.clone().invert();
- for(const wheel of carVisual?.wheels||[]){
-  if(wheel.restY===undefined)continue;
-  const contact=wheel.group.position.clone();contact.y=wheel.restY;
-  contact.applyQuaternion(kart.quaternion).add(kart.position);
-  const height=projected.isPit?projected.y:wheelSurface(contact.x,contact.z).height;
-  contact.y=height+.044+.358;
-  contact.sub(kart.position).applyQuaternion(inverse);
-  wheel.group.position.y=contact.y;
+ const roadAt=(x,z)=>wheelSurface(x,z).height+.044;
+ const contacts=(carVisual?.wheels||[]).filter(w=>w.restY!==undefined).map(w=>{
+  const local=new THREE.Vector3(w.group.position.x,w.restY,w.group.position.z);
+  const world=local.clone().applyQuaternion(yawQuat).add(new THREE.Vector3(pos.x,0,pos.z));
+  return {wheel:w,local,height:roadAt(world.x,world.z)};
+ });
+ if(contacts.length===4){
+  const mean=(list,get)=>list.reduce((sum,p)=>sum+get(p),0)/list.length;
+  const front=contacts.filter(c=>c.wheel.front),rear=contacts.filter(c=>!c.wheel.front);
+  const left=contacts.filter(c=>c.local.x<0),right=contacts.filter(c=>c.local.x>0);
+  const slopeZ=(mean(rear,c=>c.height)-mean(front,c=>c.height))/(mean(rear,c=>c.local.z)-mean(front,c=>c.local.z));
+  const slopeX=(mean(right,c=>c.height)-mean(left,c=>c.height))/(mean(right,c=>c.local.x)-mean(left,c=>c.local.x));
+  const localUp=new THREE.Vector3(-slopeX,1,-slopeZ).normalize();
+  const roadQuat=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),localUp);
+  const suspension=new THREE.Quaternion().setFromEuler(new THREE.Euler(dynamics.pitch,0,dynamics.roll));
+  kart.quaternion.copy(yawQuat).multiply(roadQuat).multiply(suspension);
+  // Fit the chassis to all four contacts, rather than suspending it above
+  // one centreline height. Only a small sprung-body movement remains.
+  const rootY=mean(contacts,c=>c.height+c.wheel.radius/localUp.y-c.local.clone().applyQuaternion(kart.quaternion).y);
+  kart.position.set(pos.x,rootY+dynamics.heave,pos.z);
+  const upY=new THREE.Vector3(0,1,0).applyQuaternion(kart.quaternion).y;
+  for(const {wheel} of contacts){
+   wheel.group.position.y=wheel.restY;
+   for(let i=0;i<2;i++){
+    const world=wheel.group.position.clone().applyQuaternion(kart.quaternion).add(kart.position);
+    wheel.group.position.y+=(roadAt(world.x,world.z)+wheel.radius/localUp.y-world.y)/upY;
+   }
+  }
+ }else{
+  const up=surfaceNormal(projected.isPit?PIT:ROAD,projected,projected.isPit?0:bankAngle(projected.progress),THREE);
+  kart.quaternion.copy(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),up)).multiply(yawQuat);
+  kart.position.set(pos.x,contactY+(projected.isPit?.087:.044),pos.z);
  }
+ kart.updateMatrixWorld(true);
 
 }
 function update(dt){
@@ -628,7 +650,7 @@ function update(dt){
  if(collision?.hit){speed*=.22;message("CONTACT · Avoid the other GT cars.");}
  const projected=positionOnTrack(x,z);
  const grip=gripForDistance(projected.distance,projected.isPit,projected.progress);
- // PIT route is a real driveable road ONLY with P limiter enabled.
+ // The pit branch is paved; entering it automatically engages the limiter.
  // Do not penalise tarmac, kerbs or green painted runoff.
  if(grip.drag>0)speed*=Math.exp(-grip.drag*dt);
  if(grip.surface!=="barrier"){
@@ -638,13 +660,13 @@ function update(dt){
   if(inPitLane!==projected.isPit){
    if(!projected.isPit){localPitUntil=0;localPitDone=false;}
    inPitLane=projected.isPit;
+   if(inPitLane){pitLimiter=true;speed=Math.min(speed,PIT_LIMIT_MS);}
    updatePitHUD();
    message(inPitLane?"Entering pit lane at 40 km/h. Your lap timer is paused.":"Pit exit — back on the circuit.");
   }
  }else{
   speed*=.23; // Outside barrier prevents off-track shortcut.
  }
- updateRideHeightAndBank(dt);
  localPitService();
  if(performance.now()-sendAt>320&&!telemetryPending){sendAt=performance.now();transmit();}
  // Sector times are display-only and never reset this lap clock.
@@ -658,6 +680,7 @@ function frame(){
  const dt=Math.min(.1,clock.getDelta());
  // Retain elapsed time on slower frames without a giant physics step.
  for(let remaining=dt;remaining>1e-8;){const step=Math.min(1/60,remaining);update(step);remaining-=step;}
+ updateRideHeightAndBank(dt);
  const w=$("kartCanvas").clientWidth||100,h=$("kartCanvas").clientHeight||100,dpr=renderer.getPixelRatio();
  if(renderer.domElement.width!==Math.round(w*dpr)||renderer.domElement.height!==Math.round(h*dpr)){
   renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
@@ -666,7 +689,12 @@ function frame(){
   // Bonnet camera sits ahead of the cabin: only the car nose frames the road.
   const eye=new THREE.Vector3(0,1.08,-1.05).applyQuaternion(kart.quaternion).add(kart.position);
   const ahead=new THREE.Vector3(0,1.14,-31).applyQuaternion(kart.quaternion).add(kart.position);
-  camera.position.copy(eye);camera.up.set(0,1,0).applyQuaternion(kart.quaternion);camera.lookAt(ahead);
+  // A short, bounded heading follow lets the nose visibly pivot in a turn
+  // while keeping the viewpoint attached to the bonnet and the horizon stable.
+  const turn=Math.atan2(Math.sin(yaw-bonnetYaw),Math.cos(yaw-bonnetYaw));
+  bonnetYaw=yaw-Math.max(-.10,Math.min(.10,turn*Math.exp(-dt*10)));
+  ahead.x=eye.x+Math.sin(bonnetYaw)*30;ahead.z=eye.z+Math.cos(bonnetYaw)*30;
+  camera.position.copy(eye);camera.up.set(0,1,0);camera.lookAt(ahead);
   // Fixed bonnet FOV avoids speed-dependent zoom.
   if(camera.fov!==73){camera.fov=73;camera.updateProjectionMatrix();}
  }else{

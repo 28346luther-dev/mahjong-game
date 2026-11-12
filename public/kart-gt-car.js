@@ -22,7 +22,18 @@ function detailedCar(THREE,color){
   // Steer about vehicle Y, spin about axle X, then apply the authored basis.
   const pivot=new THREE.Group();pivot.position.copy(wheel.position);
   wheel.parent.add(pivot);wheel.position.set(0,0,0);pivot.add(wheel);
-  wheels.push({group:pivot,mesh:wheel,basis:wheel.quaternion.clone(),front:name.includes('_f'),spin:0,restY:pivot.position.y});
+  // Measure the loaded tyre in its authored orientation; do not assume a
+  // radius from the suspension's unrelated chassis dimensions.
+  group.updateMatrixWorld(true);
+  let tyre=null;wheel.traverse(o=>{if(!tyre&&/^tire(?:_|$)/.test(o.name))tyre=o;});
+  tyre ||= wheel;
+  const inverse=group.matrixWorld.clone().invert(),bounds=new THREE.Box3(),point=new THREE.Vector3();
+  tyre.traverse(mesh=>{if(!mesh.isMesh)return;const positions=mesh.geometry.attributes.position;
+   const transform=inverse.clone().multiply(mesh.matrixWorld);
+   for(let i=0;i<positions.count;i++)bounds.expandByPoint(point.fromBufferAttribute(positions,i).applyMatrix4(transform));
+  });
+  const radius=(bounds.max.y-bounds.min.y)/2;
+  wheels.push({group:pivot,mesh:wheel,basis:wheel.quaternion.clone(),front:name.includes('_f'),spin:0,restY:pivot.position.y,radius,tyre});
  }
 
  const add=(w,h,d,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),carbon);m.position.set(x,y,z);m.castShadow=true;exterior.add(m);return m;};
