@@ -14,14 +14,14 @@ test("published full-length Road Atlanta track is metrically scaled to 2.54 mile
   "Track is "+ROAD.length.toFixed(2)+"m; expected ~"+metres.toFixed(2)+"m");
  assert.ok(ROAD.length>4000);
  assert.equal(ROAD.samples.length,800);
- assert.equal(ROAD_POINTS.length,31);
+ assert.equal(ROAD_POINTS.length,230);
  assert.ok(Math.max(...ROAD.samples.map(p=>p.y))-Math.min(...ROAD.samples.map(p=>p.y))>=28);
  const rendered=refineRoute(ROAD,4);
  assert.ok(Math.abs(rendered.length-ROAD.length)<40);
 });
 test("new pit lane is connected at both ends and service boxes remain available",()=>{
  assert.equal(PIT_POINTS.length,17);
- assert.ok(PIT.length>800);
+ assert.ok(PIT.length>650&&PIT.length<850);
  for(const end of [PIT.samples[0],PIT.samples.at(-1)])
   assert.ok(projectToRoute(end.x,end.z,ROAD).distance<ROAD.length*.004,
    "pit endpoint "+JSON.stringify(end)+" is not joined to driving track");
@@ -29,8 +29,8 @@ test("new pit lane is connected at both ends and service boxes remain available"
 });
 test("sub-21s verified laps aren't excluded by arbitrary leaderboard minimum",()=>{
  assert.equal(MIN_LAP_MS,1);
- const results=leaderboardEntries({"first":{name:"Fast driver",bestMs:19999,at:1,version:4},
-  "other":{name:"Another",bestMs:22000,at:2,version:4}});
+ const results=leaderboardEntries({"first":{name:"Fast driver",bestMs:19999,at:1,version:5},
+  "other":{name:"Another",bestMs:22000,at:2,version:5}});
  assert.equal(results[0].bestMs,19999);
  assert.equal(results.length,2);
  assert.ok(MAX_SPEED_MPS>82);
@@ -46,8 +46,8 @@ test("online GT car rendering and high-speed movement use full-size track settin
  assert.match(meetings,/},650\)/);
  assert.match(leader,/2500/);
  assert.match(events,/MAX_STEP_MPS=105/);
- assert.match(leader,/road-atlanta-best-times-v1/);
- assert.match(events,/road-atlanta-best-times-v1/);
+ assert.match(leader,/road-atlanta-mapped-gt3-v2/);
+ assert.match(events,/road-atlanta-mapped-gt3-v2/);
 });
 test("Mahjong claims always permit passing and confirmed Kong offers reaction recording",()=>{
  const app=source("public/app.js"),worker=source("src/worker.js");

@@ -144,3 +144,33 @@ body.kart-open{overflow:hidden}
 .kart-driving:fullscreen .kart-overlay>div:nth-child(n+3){display:none!important}
 .kart-driving:fullscreen .kart-live-positions{right:16px;top:16px}
 .kart-driving:fullscreen .kart-track-sectors{bottom:14px}
+
+/* Reference-style unobstructed driving view. */
+.kart-modal.kart-driving{padding:0;background:#0c151d;overflow:hidden}
+.kart-driving .kart-sheet{width:100vw;height:100dvh;max-height:100dvh;padding:0;border:0;border-radius:0;background:#0c151d;overflow:hidden}
+.kart-driving .kart-layout,.kart-driving .kart-drive{height:100dvh}
+.kart-driving .kart-stage{height:100dvh;min-height:100dvh;border:0;border-radius:0;box-shadow:none}
+.kart-driving .kart-selector-bar{position:absolute;bottom:28px;left:20px;z-index:30;margin:0;padding:0;border:0;background:none}
+.kart-driving .kart-selector-bar button{background:#101c27a8;border:1px solid #ffffff50;border-radius:3px;color:white;font-size:10px;padding:7px 10px}
+.kart-driving #kartDrivingMode{display:none}
+.kart-driving .kart-overlay{inset:0;display:block}
+.kart-driving .kart-overlay>div{position:absolute;border:0!important;border-radius:0!important;background:linear-gradient(90deg,#102131bb,#10213100)!important;padding:8px 12px;backdrop-filter:none}
+.kart-driving .kart-overlay small{color:#d9e2e8;font:10px sans-serif;letter-spacing:.12em}
+.kart-driving .kart-overlay strong{color:white;font:600 23px sans-serif;text-shadow:0 1px 3px #000}
+.kart-driving .kart-overlay>div:nth-child(1){left:20px;top:22px}
+.kart-driving .kart-overlay>div:nth-child(2){left:50%;top:22px;transform:translateX(-50%);text-align:center}
+.kart-driving .kart-overlay>div:nth-child(3){left:20px;bottom:72px}
+.kart-driving .kart-overlay>div:nth-child(4){display:flex!important;left:50%;bottom:30px;transform:translateX(-50%);min-width:130px;text-align:center;background:#0c18256e!important;border-top:2px solid #fff!important}
+.kart-driving #kartSpeed{font-size:34px}
+.kart-driving .kart-overlay>div:nth-child(5){left:95px;top:22px}
+.kart-driving .kart-overlay>div:nth-child(6){right:20px;bottom:35px}
+.kart-driving .kart-overlay>div:nth-child(7){right:20px;bottom:90px}
+.kart-driving .kart-overlay>div:nth-child(8){display:none}
+.kart-driving .kart-live-positions{top:105px;left:20px;right:auto;width:175px;background:#11202c88;border:0;border-radius:0;font-size:11px}
+.kart-driving .kart-live-positions li{background:#10202d88;color:white;border:0;border-radius:0;padding:6px}
+.kart-driving .kart-track-sectors{left:20px;right:auto;bottom:127px;width:175px;display:block}
+.kart-driving .kart-track-sectors>div{padding:5px 8px!important;border:0!important;border-radius:0!important;margin-top:2px;background:#11202c99!important;display:flex;justify-content:space-between}
+.kart-driving .kart-track-sectors strong{font-size:12px!important}
+.kart-driving #kartStatus{position:absolute;bottom:4px;left:28%;right:22%;z-index:15;background:#10202c70;border:0;border-radius:0;padding:3px 6px;font:10px sans-serif;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kart-driving .kart-touch{display:none}
+@media(pointer:coarse){.kart-driving .kart-touch{display:flex;position:absolute;bottom:5px;left:20%;right:20%;z-index:35}.kart-driving .kart-overlay>div:nth-child(4){bottom:75px}.kart-driving #kartStatus{display:none}}

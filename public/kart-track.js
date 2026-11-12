@@ -1,13 +1,11 @@
+import {ATLANTA_DATA} from './data/road-atlanta-data.js';
 /* Velvet Circuit road-course geometry shared by browser and leaderboard.
  * The route is a closed continuous spline, not a generic ellipse.
  * No checkpoint gates, index-based user interactions or floating track props.
  */
-// Michelin Raceway Road Atlanta-inspired layout reconstructed from supplied
-// corner map and published 2.54-mile circuit length. This is NOT surveyed GPS
-// geometry or a licensed, exact 1:1 digital twin. Distances are metrically
-// scaled and the circuit includes T1–T12, the Esses, 10A/10B, and a long back straight.
-export const TRACK_NAME="Road Atlanta Inspired";
-export const ROAD_HALF_WIDTH=6.3;
+// Mapped OSM centreline and coarse Mapzen terrain; not a surveyed digital twin.
+export const TRACK_NAME="Road Atlanta · mapped reconstruction";
+export const ROAD_HALF_WIDTH=6;
 export const RUNOFF_WIDTH=8;
 export const TRACK_SCALE=2.8216461;
 export const PIT_FAST_LANE_WIDTH=4.4;
@@ -16,31 +14,32 @@ export const PIT_LANE_MARGIN=1.3;
 export const PIT_HALF_WIDTH=6.35;
 export const PIT_SERVICE_OFFSET=3.3;
 export const PIT_BAY_TOLERANCE=3.65;
-export const ROAD_POINTS=[
- [-10,-25,6],[-85,-25,6],[-135,-18,13],[-147,5,21],
- [-145,35,26],[-151,57,29],[-158,72,31],[-144,88,24],
- [-158,112,16],[-149,150,18],[-162,179,12],[-151,210,9],
- [-175,255,19],[-216,325,30],[-231,353,35],[-220,380,38],
- [-193,400,34],[-166,382,30],[-135,340,26],[-75,280,19],
- [10,205,12],[105,122,6],[149,65,5],[171,23,6],
- [189,24,8],[204,35,11],[214,5,6],[191,-22,1],
- [148,-34,3],[90,-26,5],[20,-25,6]
-].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y]);
-// Driving direction is toward decreasing X on the front straight. PIT IN
-// branches BEFORE the timing line and uses a long parallel approach.
-// The PIT OUT branch merges after the first uphill right into the T2 rise.
-export const PIT_POINTS=[
- // Begin exactly on the late front straight for a genuine asphalt join.
- [191,-22,1],[181,-25,1.5],[173,-26,2],
- [159,-31,3],[144,-36,4],[120,-42,5],
- [93,-47,5.5],[65,-49,6],[35,-49,6],[5,-49,6],
- [-26,-49,6.2],[-60,-48,6.5],[-93,-43,9],
- [-119,-30,12],[-139,-12,17],[-147,5,21],
- [-145,35,26]
-].map(([x,z,y])=>[x*TRACK_SCALE,z*TRACK_SCALE,y]);
-// The extended eastern right-hand sweeper has approximately 17 degrees of
-// progressive banking. Banking is tapered smoothly on entry and exit.
-export const BANK_START=.49,BANK_END=.62,BANK_MAX_DEGREES=17;
+// Longitude/latitude converted to local metric coordinates; no length rescaling.
+export const GEO_ORIGIN=[-83.81421866666666,34.150378833333335];
+export function geoToWorld(lon,lat){return {x:(lon-GEO_ORIGIN[0])*Math.PI/180*6371008.8*Math.cos(GEO_ORIGIN[1]*Math.PI/180),z:-(lat-GEO_ORIGIN[1])*Math.PI/180*6371008.8};}
+export function mappedTerrainHeight(x,z){
+ const lon=GEO_ORIGIN[0]+x/(Math.PI/180*6371008.8*Math.cos(GEO_ORIGIN[1]*Math.PI/180));
+ const lat=GEO_ORIGIN[1]-z/(Math.PI/180*6371008.8),t=ATLANTA_DATA.terrain;
+ const u=Math.max(0,Math.min(t.columns-1,(lon-t.bounds[0])/(t.bounds[2]-t.bounds[0])*(t.columns-1)));
+ const v=Math.max(0,Math.min(t.rows-1,(t.bounds[3]-lat)/(t.bounds[3]-t.bounds[1])*(t.rows-1)));
+ const i=Math.min(t.columns-2,Math.floor(u)),j=Math.min(t.rows-2,Math.floor(v)),a=u-i,b=v-j;
+ const at=(col,row)=>t.heights[row*t.columns+col]-260;
+ return (at(i,j)*(1-a)+at(i+1,j)*a)*(1-b)+(at(i,j+1)*(1-a)+at(i+1,j+1)*a)*b;
+}
+const mapped=ATLANTA_DATA.coordinates.slice(0,-1).map(([lon,lat])=>{const p=geoToWorld(lon,lat);return [p.x,p.z,mappedTerrainHeight(p.x,p.z)];});
+const originIndex=mapped.reduce((best,p,i)=>Math.hypot(p[0],p[1])<Math.hypot(...mapped[best].slice(0,2))?i:best,0);
+export const ROAD_POINTS=mapped.slice(originIndex).concat(mapped.slice(0,originIndex));
+// Pit alignment is a procedural approximation pending a licensed pit-lane trace.
+const pitReference=makeRoute(ROAD_POINTS,800,true);
+export const PIT_POINTS=Array.from({length:17},(_,i)=>{
+ const t=i/16,progress=.89+t*.19,p=sampleAt(progress,pitReference),q=sampleAt(progress+.0005,pitReference);
+ const dx=q.x-p.x,dz=q.z-p.z,len=Math.hypot(dx,dz)||1;
+ const offset=24*Math.sin(Math.PI*t)**.65;
+ return [p.x-dz/len*offset,p.z+dx/len*offset,p.y];
+});
+// No surveyed crossfall is available. Keep neutral camber rather than
+// inventing the earlier oval-style 17-degree bank.
+export const BANK_START=.49,BANK_END=.62,BANK_MAX_DEGREES=0;
 export function bankAngle(progress){
  const p=((progress%1)+1)%1;
  if(p<=BANK_START||p>=BANK_END)return 0;
@@ -77,22 +76,28 @@ function sampleCurve(points,u,closed){
  const start=Math.min(Math.floor(v),closed?count-1:count-2),t=v-start;
  const at=i=>points[closed?(i+count*3)%count:Math.max(0,Math.min(count-1,i))];
  const a=at(start-1),b=at(start),c=at(start+1),d=at(start+2);
- return {
-  x:catmull(a[0],b[0],c[0],d[0],t),
-  z:catmull(a[1],b[1],c[1],d[1],t),
-  y:catmull(a[2],b[2],c[2],d[2],t)
- };
+ // Centripetal Catmull-Rom avoids loops/overshoot at uneven OSM point spacing.
+ const gap=(p,q)=>Math.max(.0001,Math.sqrt(Math.hypot(q[0]-p[0],q[1]-p[1])));
+ const t0=0,t1=gap(a,b),t2=t1+gap(b,c),t3=t2+gap(c,d),u1=t1+t*(t2-t1);
+ const mix=(p,q,lo,hi)=>p.map((v,i)=>(hi-u1)/(hi-lo)*v+(u1-lo)/(hi-lo)*q[i]);
+ const A=mix(a,b,t0,t1),B=mix(b,c,t1,t2),C=mix(c,d,t2,t3);
+ const D=mix(A,B,t0,t2),E=mix(B,C,t1,t3),v1=mix(D,E,t1,t2);
+ return {x:v1[0],z:v1[1],y:v1[2]};
 }
 export function makeRoute(points=ROAD_POINTS,count=TRACK_SAMPLES,closed=true){
- const samples=Array.from({length:count+(closed?0:1)},(_,i)=>
-  sampleCurve(points,(i/count)*(closed?points.length:points.length-1),closed));
- let distance=0;
- for(let i=0;i<samples.length;i++){
-  const next=samples[(i+1)%samples.length];
-  const prev=samples[i];
-  prev.distance=distance;
-  if(i<samples.length-1||closed)distance+=Math.hypot(next.x-prev.x,next.z-prev.z);
+ const denseCount=Math.max(count*5,points.length*24);
+ const dense=Array.from({length:denseCount+1},(_,i)=>sampleCurve(points,i/denseCount*(closed?points.length:points.length-1),closed));
+ let total=0;dense[0].distance=0;
+ for(let i=1;i<dense.length;i++){total+=Math.hypot(dense[i].x-dense[i-1].x,dense[i].z-dense[i-1].z);dense[i].distance=total;}
+ const samples=[];let cursor=0;
+ for(let i=0;i<count+(closed?0:1);i++){
+  const target=i/count*total;
+  while(cursor<dense.length-2&&dense[cursor+1].distance<target)cursor++;
+  const a=dense[cursor],b=dense[cursor+1],t=(target-a.distance)/(b.distance-a.distance||1);
+  samples.push({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t,y:a.y+(b.y-a.y)*t});
  }
+ let distance=0;
+ for(let i=0;i<samples.length;i++){samples[i].distance=distance;const next=samples[(i+1)%samples.length];if(i<samples.length-1||closed)distance+=Math.hypot(next.x-samples[i].x,next.z-samples[i].z);}
  return {samples,length:distance,closed};
 }
 // The timing line belongs at the FAR END of the pit straight, before turn 1.
@@ -141,7 +146,7 @@ export const PIT=makeRoute(PIT_POINTS,320,false);
 export function cornerKerbGripWidth(progress){
  // Same local curvature criteria used by the visual apex and exit kerbs.
  const samples=ROAD.samples,n=samples.length;
- const i=Math.max(0,Math.min(n-1,Math.floor(Math.max(0,Math.min(.999999,progress))*n)));
+ const i=Math.max(0,Math.min(n-1,samples.findIndex(p=>p.distance>=Math.max(0,Math.min(.999999,progress))*ROAD.length)));
  const tangent=j=>{
   const a=samples[(j-1+n)%n],b=samples[(j+1)%n],dx=b.x-a.x,dz=b.z-a.z;
   const d=Math.hypot(dx,dz)||1;return {x:dx/d,z:dz/d};

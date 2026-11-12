@@ -6,7 +6,7 @@ import {nearestInteraction,blockedBy} from "./club-layout.js";
 const $=id=>document.getElementById(id);
 const root=$("clubhouse"),canvas=$("clubhouseCanvas"),pressed=new Set();
 let THREE=null;
-try{THREE=await import("https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js");}
+try{THREE=await import("./vendor/three.module.js");}
 catch(err){console.error(err);$("clubToast").classList.remove("hidden");$("clubToast").querySelector("span").textContent="The 3D engine could not load. Check your connection and refresh.";}
 const state={active:false,yaw:0,pitch:0,near:null,locked:false,seated:null,seatReturn:null,avatarYaw:Math.PI};
 const stations=STATIONS;

@@ -255,11 +255,11 @@ export async function handleRaceEvent(request,storage){
    // Rankings are based only on complete, server-verified laps. Sectors do
    // not write to the global board or reset the lap clock.
    if(elapsed>0&&elapsed<=600000){
-    const records=await storage.get("road-atlanta-best-times-v1")||{};
+    const records=await storage.get("road-atlanta-mapped-gt3-v2")||{};
     const best=records[user]?.bestMs??Infinity;
     if(elapsed<best){
-     records[user]={name:player.name,bestMs:elapsed,at:now,version:4};
-     await storage.put("road-atlanta-best-times-v1",records);
+     records[user]={name:player.name,bestMs:elapsed,at:now,version:5};
+     await storage.put("road-atlanta-mapped-gt3-v2",records);
     }
    }
    if(phase==="qualifying"){

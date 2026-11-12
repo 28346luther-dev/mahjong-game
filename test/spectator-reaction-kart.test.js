@@ -89,7 +89,7 @@ test("extended kart circuit is longer, faster, direction corrected, with runoff"
  assert.ok(ROAD_HALF_WIDTH>3);
  assert.ok(RUNOFF_WIDTH>=6);
  assert.ok(MAX_SPEED_MPS>=35);
- assert.match(js,/yaw-=steer\*dt/);
+ assert.match(js,/yaw\+=response.yawDelta/);
  assert.match(js,/Math\.min\(pitLimiter\?PIT_LIMIT_MS:82,speed\)/);
  assert.match(js,/if\(brake\)speed/);
  assert.match(js,/ribbon\(visualRoad,-ROAD_HALF_WIDTH-RUNOFF_WIDTH/);

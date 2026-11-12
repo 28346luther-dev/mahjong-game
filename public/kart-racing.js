@@ -1,8 +1,24 @@
+import {RGBELoader} from './vendor/loaders/RGBELoader.js';
+import {GTDynamics} from './kart-vehicle-dynamics.js';
+import {addRoadAtlantaLandscape,terrainHeight} from './kart-landscape.js';
+const dynamics=new GTDynamics();
+let carVisual=null,miniMap=null;
+function drawTrackMap(){
+ if(!miniMap){
+  const canvas=document.createElement('canvas');canvas.width=280;canvas.height=360;canvas.style.cssText='position:absolute;right:22px;top:20px;width:140px;height:180px;pointer-events:none';canvas.setAttribute('aria-label','Road Atlanta circuit map');document.getElementById('kartCanvas').parentElement.append(canvas);
+  const ps=ROAD.samples,b=ps.reduce((b,p)=>({x:Math.min(b.x,p.x),z:Math.min(b.z,p.z),X:Math.max(b.X,p.x),Z:Math.max(b.Z,p.z)}),{x:Infinity,z:Infinity,X:-Infinity,Z:-Infinity});
+  miniMap={canvas,b,scale:Math.min(230/(b.X-b.x),300/(b.Z-b.z))};
+ }
+ const {canvas,b,scale}=miniMap,ctx=canvas.getContext('2d'),px=x=>25+(x-b.x)*scale,pz=z=>25+(z-b.z)*scale;
+ ctx.clearRect(0,0,280,360);ctx.beginPath();ROAD.samples.forEach((p,i)=>i?ctx.lineTo(px(p.x),pz(p.z)):ctx.moveTo(px(p.x),pz(p.z)));ctx.closePath();ctx.strokeStyle='#162533b0';ctx.lineWidth=8;ctx.stroke();ctx.strokeStyle='#f4f5f0';ctx.lineWidth=3;ctx.stroke();
+ ctx.save();ctx.translate(px(pos.x),pz(pos.z));ctx.rotate(-yaw);ctx.beginPath();ctx.moveTo(0,8);ctx.lineTo(-5,-5);ctx.lineTo(5,-5);ctx.closePath();ctx.fillStyle='#ff6436';ctx.fill();ctx.restore();
+}
+
 import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCALE,bankRise,bankAngle,cornerKerbGripWidth,refineRoute,projectToRoute,raceStart} from "./kart-track.js";
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
-import {createGTCar} from "./kart-gt-car.js";
+import {createGTCar,prepareGTCar} from "./kart-gt-car.js";
 import {addCircuitGrandstands} from "./kart-grandstands.js";
 import {addStraightGlassBarriers} from "./kart-straight-barriers.js";
 import {resolveKartCollision,surfaceNormal,nearPitBay,gravityAlongRoad} from "./kart-physics.js";
@@ -316,7 +332,8 @@ function embankment(route,side,width=8){
   // the paved verge and intersected the asphalt as an ugly grass lip.
   const edge=(ROAD_HALF_WIDTH+RUNOFF_WIDTH+.35)*side;
   vertices.push(p.x+d.nx*edge,p.y+bankRise(i/samples.length,edge)-.12,p.z+d.nz*edge);
-  vertices.push(p.x+d.nx*(edge+side*width),-.12,p.z+d.nz*(edge+side*width));
+  const ox=p.x+d.nx*(edge+side*width),oz=p.z+d.nz*(edge+side*width);
+  vertices.push(ox,terrainHeight(ox,oz)-.15,oz);
  }
  for(let i=0;i<(route.closed?samples.length:samples.length-1);i++){
   const a=i*2,b=((i+1)%samples.length)*2;
@@ -351,7 +368,9 @@ function track(){
   bounds.maxZ-bounds.minZ+330),material(0x477854,.97),
   (bounds.minX+bounds.maxX)/2,-.1,(bounds.minZ+bounds.maxZ)/2);
  green.rotation.x=-Math.PI/2;
- embankment(visualRoad,-1);embankment(visualRoad,1);
+ scene.remove(green);
+ addRoadAtlantaLandscape(THREE,scene);
+ embankment(visualRoad,-1,40);embankment(visualRoad,1,40);
  ribbon(visualRoad,-ROAD_HALF_WIDTH-RUNOFF_WIDTH,ROAD_HALF_WIDTH+RUNOFF_WIDTH,0x698c68,-.058);
   ribbon(visualRoad,-ROAD_HALF_WIDTH,ROAD_HALF_WIDTH,0x373b43,.015);
  ribbon(visualPit,-PIT_HALF_WIDTH,PIT_HALF_WIDTH,0x353c44,.067);
@@ -387,39 +406,27 @@ function track(){
   const outer=side*1.03;
   drawGridLine(.105,2.95,gx-gtz*outer,gz+gtx*outer);
  }
- // Physical starting gantry on the outside of the racing line.
- const p=ROAD.samples[0],d=tangent(ROAD,0);
- for(const side of [-1,1])post(.16,4.1,0xd4ad79,p.x+d.nx*side*(ROAD_HALF_WIDTH+1.1),p.y+2,p.z+d.nz*side*(ROAD_HALF_WIDTH+1.1));
- const banner=box(ROAD_HALF_WIDTH*2+2,.9,.28,0x583149,p.x,p.y+4.1,p.z);
- banner.rotation.y=Math.atan2(d.tx,d.tz);
- const cv=document.createElement("canvas");cv.width=1024;cv.height=140;
- const ctx=cv.getContext("2d");
- ctx.fillStyle="#583149";ctx.fillRect(0,0,1024,140);
- ctx.fillStyle="#f8dfa9";ctx.font="bold 66px Georgia";ctx.textAlign="center";ctx.fillText("ROAD ATLANTA · 2.54 MI",512,96);
- const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;
- const front=object(new THREE.PlaneGeometry(ROAD_HALF_WIDTH*2+1.6,1.05),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}),
-  p.x,p.y+4.1,p.z+.17);
- front.rotation.y=Math.atan2(d.tx,d.tz);
+ // Timing paint is retained; the invented front-straight gantry is removed.
  // Legacy track-specific tyre stacks removed from the new pit apron.
 }
 function kartModel(){
- const vee=createGTCar(THREE,{color:0xa62c46,number:7});
- kart=vee.group;scene.add(kart);
+ const vee=createGTCar(THREE,{color:0xff4c0a,number:7});
+ carVisual=vee;kart=vee.group;scene.add(kart);
  cockpitOccluders.push(...vee.hiddenInCockpit);
 }
 function construct(){
- scene=new THREE.Scene();scene.background=new THREE.Color(0xa2c6d0);scene.fog=new THREE.FogExp2(0xa2c6d0,.0025);
- scene.add(new THREE.HemisphereLight(0xf2f6ff,0x5f765b,1.8));
- scene.add(new THREE.AmbientLight(0xffe9d5,.38));
- const sun=new THREE.DirectionalLight(0xffe2a3,2.6);
+ scene=new THREE.Scene();scene.background=new THREE.Color(0xa2c6d0);scene.fog=new THREE.FogExp2(0xa2c6d0,.00048);
+ scene.add(new THREE.HemisphereLight(0xdfeeff,0x474438,.95));
+ scene.add(new THREE.AmbientLight(0xffe9d5,.12));
+ const sun=new THREE.DirectionalLight(0xfff0d6,2.1);
  sun.position.set(-35,76,28);sun.castShadow=true;
  sun.shadow.mapSize.set(2048,2048);
  sun.shadow.normalBias=.023;
  sun.shadow.radius=2;
- sun.shadow.camera.left=-850;sun.shadow.camera.right=850;
- sun.shadow.camera.top=1350;sun.shadow.camera.bottom=-1350;
+ sun.shadow.camera.left=-75;sun.shadow.camera.right=75;
+ sun.shadow.camera.top=75;sun.shadow.camera.bottom=-75;
  sun.shadow.camera.far=1800;sun.shadow.bias=-.0002;
- scene.add(sun);
+ sun.name="circuitSun";scene.add(sun);scene.add(sun.target);
  // A tall sky dome uses a physically inspired horizon-to-zenith gradient.
  const skyMaterial=new THREE.ShaderMaterial({
   side:THREE.BackSide,depthWrite:false,
@@ -429,11 +436,13 @@ function construct(){
   fragmentShader:"varying vec3 vWorld;uniform vec3 topColor;uniform vec3 horizonColor;uniform vec3 bottomColor;void main(){float t=normalize(vWorld).y;vec3 col=t>0.?mix(horizonColor,topColor,pow(clamp(t,0.,1.),.48)):mix(horizonColor,bottomColor,clamp(-t*1.6,0.,1.));gl_FragColor=vec4(col,1.);}"
  });
  scene.add(new THREE.Mesh(new THREE.SphereGeometry(3200,48,24),skyMaterial));
+ const environment=new THREE.Scene();environment.add(new THREE.Mesh(new THREE.SphereGeometry(50,32,16),skyMaterial.clone()));
+ const pmrem=new THREE.PMREMGenerator(renderer);const envTarget=pmrem.fromScene(environment,.04,1,100);scene.environment=envTarget.texture;pmrem.dispose();
  track();kartModel();setCameraMode(cameraMode);
 }
 async function init(){
  if(renderer)return;
- THREE=await import("https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js");
+ THREE=await import("./vendor/three.module.js");
  renderer=new THREE.WebGLRenderer({canvas:$("kartCanvas"),antialias:true,powerPreference:"high-performance"});
  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
  renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -441,13 +450,19 @@ async function init(){
  renderer.physicallyCorrectLights=true;
  renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
  camera=new THREE.PerspectiveCamera(64,1,.1,3500);clock=new THREE.Clock();
- construct();reset();requestAnimationFrame(frame);
+ await prepareGTCar();
+ construct();
+ const hdr=await new RGBELoader().loadAsync('/assets/daylight.hdr');
+ hdr.mapping=THREE.EquirectangularReflectionMapping;
+ scene.environment=hdr;
+ reset();requestAnimationFrame(frame);
 }
 function reset(){
  resetLocalPit();
  const start=raceStart();pos={x:start.x,y:start.y,z:start.z};yaw=start.yaw;
- speed=0;progress=0;reportedFinish=false;pitLimiter=false;inPitLane=false;updatePitHUD();
+ dynamics.reset(start.y);speed=0;progress=0;reportedFinish=false;pitLimiter=false;inPitLane=false;updatePitHUD();
  if(kart){kart.position.set(pos.x,pos.y,pos.z);kart.rotation.y=yaw+Math.PI;}
+ if(camera){camera.position.set(pos.x-Math.sin(yaw)*7.2,pos.y+2.9,pos.z-Math.cos(yaw)*7.2);camera.lookAt(pos.x+Math.sin(yaw)*8,pos.y+.85,pos.z+Math.cos(yaw)*8);}
 }
 function positionOnTrack(x,z){
  const road=projectToRoute(x,z,ROAD),pit=projectToRoute(x,z,PIT);
@@ -536,8 +551,9 @@ function updateRideHeightAndBank(dt){
   surfaceNormal(ROAD,projected,bankAngle(projected.progress),THREE);
  const bankQuat=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),up);
  const yawQuat=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw+Math.PI);
- kart.quaternion.slerp(bankQuat.multiply(yawQuat),Math.min(1,dt*11));
- kart.position.set(pos.x,pos.y,pos.z);
+ const suspension=new THREE.Quaternion().setFromEuler(new THREE.Euler(dynamics.pitch,0,dynamics.roll));
+ kart.quaternion.slerp(bankQuat.multiply(yawQuat).multiply(suspension),Math.min(1,dt*11));
+ kart.position.set(pos.x,pos.y+dynamics.heave,pos.z);
 }
 function update(dt){
  if(!playing)return;
@@ -556,9 +572,9 @@ function update(dt){
  const accelerate=down("w")||down("arrowup");
  const brake=down("s")||down("arrowdown")||down(" ");
  const steer=Number(down("d")||down("arrowright"))-Number(down("a")||down("arrowleft"));
- speed+=Number(accelerate)*24*dt;
- speed-=Math.sign(speed)*(0.9+Math.abs(speed)*.08)*dt;
- if(brake)speed-=Math.sign(speed||1)*67*dt;
+ speed+=Number(accelerate)*Math.min(8.8,330000/(1320*Math.max(12,Math.abs(speed))))*dt;
+ speed-=Math.sign(speed)*(.16+.00065*speed*speed)*dt;
+ if(brake)speed-=Math.sign(speed||1)*Math.min(Math.abs(speed)/Math.max(dt,.001),13)*dt;
  speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:82,speed));
  if(pitLimiter&&speed>PIT_LIMIT_MS)speed=PIT_LIMIT_MS;
  if(!accelerate&&!brake&&Math.abs(speed)<.15)speed=0;
@@ -570,10 +586,11 @@ function update(dt){
  }
  // In this coordinate system positive yaw steers world-left, so D decreases yaw.
  // Higher speed increases the turning radius; brake before the chicanes.
- const steeringRate=2.25/(1+Math.abs(speed)/27);
- yaw-=steer*dt*steeringRate*Math.min(1,Math.abs(speed)/3)*(speed>=0?1:-1);
- const proposedX=pos.x+Math.sin(yaw)*speed*dt;
- const proposedZ=pos.z+Math.cos(yaw)*speed*dt;
+ const response=dynamics.step(dt,{x:pos.x,z:pos.z,y:grade.y,yaw,speed,steer,brake,isPit:grade.isPit});
+ yaw+=response.yawDelta;
+ const proposedX=pos.x+Math.sin(yaw)*speed*dt+Math.cos(yaw)*response.sideDistance;
+ const proposedZ=pos.z+Math.cos(yaw)*speed*dt-Math.sin(yaw)*response.sideDistance;
+ carVisual?.animate(speed,-dynamics.steer,dt);
  const collision=driveMode==="meeting"?resolveKartCollision(pos.x,pos.z,proposedX,proposedZ,
    [...remoteKarts.values()].filter(g=>g.visible).map(g=>({x:g.position.x,z:g.position.z}))):null;
  const x=collision?.x??proposedX,z=collision?.z??proposedZ;
@@ -618,17 +635,19 @@ function frame(){
   // behind the kart: chase-style interpolation exposed the driver's head
   // whenever acceleration caused the vehicle to pull ahead of the camera.
   const forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw);
-  camera.position.set(pos.x+forwardX*.40,pos.y+1.27,pos.z+forwardZ*.40);
+  camera.position.set(pos.x+forwardX*.40,pos.y+1.27+dynamics.heave*.55,pos.z+forwardZ*.40);
   camera.lookAt(pos.x+forwardX*28,pos.y+1.42,pos.z+forwardZ*28);
   // Fixed FOV: the tapered Formula Vee nose and front wheels remain visible.
   if(camera.fov!==73){camera.fov=73;camera.updateProjectionMatrix();}
  }else{
-  const target=new THREE.Vector3(pos.x-Math.sin(yaw)*11,pos.y+7.3,pos.z-Math.cos(yaw)*11);
+  const target=new THREE.Vector3(pos.x-Math.sin(yaw)*7.2,pos.y+2.9,pos.z-Math.cos(yaw)*7.2);
   camera.position.lerp(target,Math.min(1,dt*4.5));
-  camera.lookAt(pos.x,pos.y+1.1,pos.z);
-  if(camera.fov!==64){camera.fov=64;camera.updateProjectionMatrix();}
+  camera.lookAt(pos.x+Math.sin(yaw)*8,pos.y+.85,pos.z+Math.cos(yaw)*8);
+  if(camera.fov!==58){camera.fov=58;camera.updateProjectionMatrix();}
  }
- animateRivals(dt);
+ animateRivals(dt);drawTrackMap();
+ const sun=scene.getObjectByName('circuitSun');
+ if(sun){sun.position.set(pos.x-65,pos.y+120,pos.z+45);sun.target.position.set(pos.x,pos.y,pos.z);sun.target.updateMatrixWorld();}
  renderer.render(scene,camera);
  window.KartMeetings?.tick?.();
  if(performance.now()-lastLeaderboardRefresh>15000){lastLeaderboardRefresh=performance.now();leaderboard();}
@@ -637,7 +656,7 @@ function frame(){
 async function begin(){
  if(driveMode==="meeting")clearMeetingStage();
  driveMode="practice";
- if(busy)return;busy=true;$("kartStart").disabled=true;
+ if(busy)return;busy=true;$("kartStart").disabled=true;message("Loading circuit and car…");
  try{
   await init();
   const result=await api("start",{});
@@ -687,6 +706,7 @@ function open(){
  $("kartGame").classList.add("kart-selector");
  $("kartGame").classList.remove("kart-driving","kart-races-hub");
  selectorVisible=true;message("Choose your racing mode to begin.");
+ if(!document.getElementById('circuitAttribution')){const a=document.createElement('a');a.id='circuitAttribution';a.href='/data/road-atlanta-source.json';a.target='_blank';a.rel='noopener';a.textContent='Map © OSM · Terrain: USGS/NOAA · Car: vicent091036 / three.js · modified GT-style';a.style.cssText='position:absolute;bottom:5px;left:8px;z-index:20;color:#ddd;font:10px sans-serif;background:#142129b0;padding:3px 5px';$('kartGame').append(a);}
  leaderboard();lastLeaderboardRefresh=performance.now();
  window.KartMeetings?.open?.();
 }

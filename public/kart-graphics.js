@@ -20,11 +20,11 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   return texture;
  }
  const asphalt=texturedCanvas(1024,(ctx,s)=>{
-  ctx.fillStyle="#383e43";ctx.fillRect(0,0,s,s);
+  ctx.fillStyle="#3b3a38";ctx.fillRect(0,0,s,s);
   // Fine aggregate, tire polishing and worn race-line rubber without tiling hard seams.
   for(let i=0;i<100000;i++){
-   const v=Math.round(47+rand()*51);
-   ctx.fillStyle="rgba("+v+","+v+","+v+","+(0.06+rand()*.16)+")";
+   const v=Math.round(35+rand()*78);
+   ctx.fillStyle="rgba("+v+","+v+","+v+","+(0.12+rand()*.28)+")";
    const x=rand()*s,y=rand()*s;ctx.fillRect(x,y,.5+rand()*2,.5+rand()*2);
   }
   for(let i=0;i<130;i++){
@@ -81,8 +81,8 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
     [q,db,from],[p,da,to],[q,db,to]
    ];
    for(const [pt,d,offset] of quad){
-    positions.push(pt.x+d.nx*offset,pt.y+height+bankRise(i/N,offset),pt.z+d.nz*offset);
-    uv.push((i/N)*22,offset===from?0:1);
+    positions.push(pt.x+d.nx*offset,pt.y+height+bankRise(pt.distance/ROAD.length,offset),pt.z+d.nz*offset);
+    uv.push(pt.distance/8,offset/8);
     indices.push(index++);
    }
   }
@@ -97,7 +97,7 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  // polygon sheets, no discontinuous gravel strips floating into the road.
  // Each ribbon shares exactly the same sampled Catmull centreline.
  const roadMat=standard(0xffffff,.83);roadMat.map=asphalt;
- roadMat.bumpMap=asphalt;roadMat.bumpScale=.008;
+ roadMat.bumpMap=asphalt;roadMat.bumpScale=.008;roadMat.envMapIntensity=.15;
  const turfMat=standard(0xffffff,.98);turfMat.map=grass;
  const gravelMat=standard(0xffffff,.98);gravelMat.map=gravel;
  gravelMat.bumpMap=gravel;gravelMat.bumpScale=.02;
@@ -107,12 +107,13 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
   // Gravel and grass stay OUTSIDE the kerb/runoff paint at every corner.
   addBand(side*(halfWidth+3.75),side*(halfWidth+runoffWidth),turfMat,.018);
   addBand(side*(halfWidth+1.62),side*(halfWidth+3.75),gravelMat,.036);
-  addBand(side*(halfWidth+.08),side*(halfWidth+1.62),greenMat,.058);
+  addBand(side*(halfWidth+.08),side*(halfWidth+1.62),turfMat,.05);
+  addBand(side*(halfWidth+.08),side*(halfWidth+1.62),greenMat,.058,i=>Math.abs(bend(i))>.05);
  }
  // Kerbs follow the exact road-edge geometry with a shallow rounded 2cm
  // crown, and use alternating paint over ~5m ARCLENGTH intervals.
  // Their width fades smoothly in and out of bends; no discrete cuboids.
- const red=standard(0xc92431,.82),white=standard(0xf5f0e5,.82);
+ const red=standard(0x167ab5,.86),white=standard(0xf4cb31,.86); // Road Atlanta blue / yellow kerbs
  const kerbMeshes=[[],[]];
  const bendAt=i=>Math.abs(bend((i%N+N)%N));
  const smoothstep=(a,b,v)=>{const t=Math.max(0,Math.min(1,(v-a)/(b-a)));return t*t*(3-2*t);};
@@ -141,10 +142,10 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
    const h0=.065,h1=.068;
    const arr=kerbMeshes[Math.floor(p.distance/4.6)%2];
    const a=vertex(p,d,edge*inner,h0,i/N);
-   const b=vertex(p,d,edge*((inner+outside0)/2),h0+.024*w0,i/N);
+   const b=vertex(p,d,edge*((inner+outside0)/2),h0+.05*w0,i/N);
    const c=vertex(p,d,edge*outside0,h0,i/N);
    const d0=vertex(q,e,edge*inner,h1,j/N);
-   const e0=vertex(q,e,edge*((inner+outside1)/2),h1+.024*w1,j/N);
+   const e0=vertex(q,e,edge*((inner+outside1)/2),h1+.05*w1,j/N);
    const f=vertex(q,e,edge*outside1,h1,j/N);
    quad(arr,a,b,d0,e0);
    quad(arr,b,c,e0,f);
@@ -225,39 +226,6 @@ export function addCircuitGraphics(THREE,scene,ROAD,PIT,halfWidth,runoffWidth){
  const temp=new THREE.Object3D();
  tyrePositions.forEach((p,i)=>{temp.position.set(p.x,p.y,p.z);temp.rotation.x=Math.PI/2;temp.updateMatrix();tyreMesh.setMatrixAt(i,temp.matrix);});
  tyreMesh.instanceMatrix.needsUpdate=true;scene.add(tyreMesh);
- // Detailed lush trees placed off runoff, with irregular trunks and soft crowns.
- const trunkMat=standard(0x66503e,1),treeColors=[0x335c42,0x4f7850,0x345b49,0x628050];
- const trunkGeo=new THREE.CylinderGeometry(.20,.31,2.1,7);
- const crownGeo=new THREE.IcosahedronGeometry(1.35,1);
- const bounds=ps.reduce((b,p)=>({
-  minX:Math.min(b.minX,p.x),maxX:Math.max(b.maxX,p.x),
-  minZ:Math.min(b.minZ,p.z),maxZ:Math.max(b.maxZ,p.z)
- }),{minX:Infinity,maxX:-Infinity,minZ:Infinity,maxZ:-Infinity});
- const woods=[];
- for(let i=0;i<850;i++){
-  const x=bounds.minX-80+rand()*(bounds.maxX-bounds.minX+160);
-  const z=bounds.minZ-80+rand()*(bounds.maxZ-bounds.minZ+160);
-  let near=Infinity;
-  for(let j=0;j<N;j+=3*detail){const p=ps[j];near=Math.min(near,Math.hypot(x-p.x,z-p.z));}
-  // Keep the entire pit road, all garage fronts and their apron clear of trees.
-  // Their trunks must never appear inside a service bay or behind the pit wall.
-  if(near<halfWidth+runoffWidth+6||
-     projectToRoute(x,z,PIT).distance<PIT_HALF_WIDTH+17||
-     (projectToRoute(x,z,PIT).distance<PIT_HALF_WIDTH+38))continue;
-  woods.push({x,z,h:2+rand()*2.3,s:0.7+rand()*.65,col:Math.floor(rand()*treeColors.length)});
- }
- const trunks=new THREE.InstancedMesh(trunkGeo,trunkMat,woods.length);
- const foliage=treeColors.map(c=>new THREE.InstancedMesh(crownGeo,standard(c,.97),woods.length));
- let counts=new Array(treeColors.length).fill(0);
- woods.forEach((v,i)=>{
-  temp.position.set(v.x,v.h*.46,v.z);temp.scale.set(v.s*.85,v.h*.52,v.s*.85);
-  temp.rotation.set(0,rand()*PI2,0);temp.updateMatrix();trunks.setMatrixAt(i,temp.matrix);
-  temp.position.set(v.x,v.h+1.3*v.s,v.z);
-  temp.scale.set(v.s*1.2,v.s*1.1,v.s*1.2);temp.updateMatrix();
-  foliage[v.col].setMatrixAt(counts[v.col]++,temp.matrix);
- });
- trunks.instanceMatrix.needsUpdate=true;scene.add(trunks);
- foliage.forEach((m,i)=>{m.count=counts[i];m.instanceMatrix.needsUpdate=true;scene.add(m);});
  // Pit building signage, guard rails, advertising hoardings and floodlights.
  const burgundy=standard(0x73354f,.5,.15),gold=standard(0xe5bf82,.42,.36);
  const metal=standard(0x92969d,.36,.75);

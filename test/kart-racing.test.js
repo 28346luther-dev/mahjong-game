@@ -40,7 +40,7 @@ test("server rejects anonymous drivers, shortcuts and teleports without physical
  assert.equal((await post(race,"/finish",{user:id,raceId:start.result.raceId,x:100,z:100})).status,422);
  const far=sampleAt(.48);
  assert.equal((await post(race,"/sample",{user:id,raceId:start.result.raceId,x:far.x,z:far.z})).status,422);
- assert.equal(data.get("road-atlanta-kart-session-v1:"+id).valid,false);
+ assert.equal(data.get("road-atlanta-mapped-session-v2:"+id).valid,false);
 });
 test("continuous telemetry can complete an honest full-lap sequence and persist best time",async()=>{
  const {race,data}=fixture(),id=user("b");
@@ -50,9 +50,9 @@ test("continuous telemetry can complete an honest full-lap sequence and persist 
  for(let i=1;i<=50;i++){
   const pct=i===50?.005:i/50;
   const point=sampleAt(pct);
-  const session=data.get("road-atlanta-kart-session-v1:"+id);
+  const session=data.get("road-atlanta-mapped-session-v2:"+id);
   session.lastAt=Date.now()-2500;session.start=Date.now()-90000;
-  data.set("road-atlanta-kart-session-v1:"+id,session);
+  data.set("road-atlanta-mapped-session-v2:"+id,session);
   const res=await post(race,"/sample",{user:id,raceId,x:point.x,z:point.z});
   assert.equal(res.status,200,"progress "+pct+" "+JSON.stringify(res.result));
  }
@@ -61,8 +61,8 @@ test("continuous telemetry can complete an honest full-lap sequence and persist 
  assert.equal(completed.status,200,JSON.stringify(completed.result));
  assert.equal(completed.result.personalBest,true);
  assert.equal(completed.result.entries[0].name,"Road Racer");
- assert.equal(data.has("road-atlanta-kart-session-v1:"+id),true,"finished lap must preserve driving session");
- const continued=data.get("road-atlanta-kart-session-v1:"+id);
+ assert.equal(data.has("road-atlanta-mapped-session-v2:"+id),true,"finished lap must preserve driving session");
+ const continued=data.get("road-atlanta-mapped-session-v2:"+id);
  assert.equal(continued.lap,2);
  assert.equal(continued.travel,0);
  assert.equal(continued.crossed,false);
@@ -72,7 +72,7 @@ test("continuous telemetry can complete an honest full-lap sequence and persist 
 test("new circuit leaderboard does not compare old oval records to new road course",()=>{
  const entries=leaderboardEntries({
   old:{name:"Old Track",bestMs:14000,at:1},
-  new:{name:"Extended Track",bestMs:60000,at:2,version:4}
+  new:{name:"Extended Track",bestMs:60000,at:2,version:5}
  });
  assert.deepEqual(entries.map(x=>x.name),["Extended Track"]);
 });
@@ -156,7 +156,7 @@ test("racing kerbs do not slow down, while gravel and grass do",()=>{
 });
 test("first-person camera stays forward of driver head with a fixed FOV",()=>{
  const client=readFileSync("public/kart-racing.js","utf8");
- assert.match(client,/camera\.position\.set\(pos\.x\+forwardX\*\.40,pos\.y\+1\.27,pos\.z\+forwardZ\*\.40\)/);
+ assert.match(client,/camera\.position\.set\(pos\.x\+forwardX\*\.40,pos\.y\+1\.27\+dynamics\.heave\*\.55,pos\.z\+forwardZ\*\.40\)/);
  assert.match(client,/camera\.fov!==73/);
  assert.doesNotMatch(client,/camera\.position\.lerp\(eye/);
  assert.match(client,/cockpitOccluders\.push\(\.\.\.vee\.hiddenInCockpit\)/);
@@ -183,43 +183,43 @@ test("pit entry is recognized as legitimate, discards shortcut lap and resets ti
  const pitStart=PIT.samples[0];
  // The finish line is now at the END of the pit straight, so simulate
  // a legal slow approach to PIT IN rather than teleport from the new line.
- const approaching=data.get("road-atlanta-kart-session-v1:"+id);
+ const approaching=data.get("road-atlanta-mapped-session-v2:"+id);
  approaching.x=pitStart.x;approaching.z=pitStart.z;
  approaching.lastAt=Date.now()-1000;
- data.set("road-atlanta-kart-session-v1:"+id,approaching);
+ data.set("road-atlanta-mapped-session-v2:"+id,approaching);
  const entry=await post(race,"/sample",{user:id,raceId,pit:true,x:pitStart.x,z:pitStart.z});
  assert.equal(entry.status,200,JSON.stringify(entry.result));
  assert.equal(entry.result.pitEntry,true);
- assert.equal(data.get("road-atlanta-kart-session-v1:"+id).pitMode,true);
+ assert.equal(data.get("road-atlanta-mapped-session-v2:"+id).pitMode,true);
  // Advance the pit car to the paved PIT OUT merge before rejoining;
  // driving directly to the finish line would be an invalid teleport.
  const pitEnd=PIT.samples.at(-1);
- const inPit=data.get("road-atlanta-kart-session-v1:"+id);
+ const inPit=data.get("road-atlanta-mapped-session-v2:"+id);
  inPit.x=pitEnd.x;inPit.z=pitEnd.z;
  inPit.lastAt=Date.now()-1000;
- data.set("road-atlanta-kart-session-v1:"+id,inPit);
+ data.set("road-atlanta-mapped-session-v2:"+id,inPit);
  const merge=projectToRoute(pitEnd.x,pitEnd.z);
  const exit=await post(race,"/sample",{user:id,raceId,pit:false,x:merge.x,z:merge.z});
  assert.equal(exit.status,200,JSON.stringify(exit.result));
  assert.equal(exit.result.pitExit,true);
- const after=data.get("road-atlanta-kart-session-v1:"+id);
+ const after=data.get("road-atlanta-mapped-session-v2:"+id);
  assert.equal(after.pitMode,false);
  assert.equal(after.travel,0);
  assert.equal(after.crossed,false);
 });
-test("right-hand sweeper is physically banked in road, kerbs and kart ride height",async()=>{
+test("mapped circuit does not invent banking without surveyed crossfall",async()=>{
  const {bankAngle,bankRise,BANK_MAX_DEGREES}=await import("../public/kart-track.js");
- assert.ok(BANK_MAX_DEGREES>=8);
+ assert.equal(BANK_MAX_DEGREES,0); // No surveyed bank; remove invented oval banking.
  assert.equal(bankAngle(.1),0);
- assert.ok(bankAngle(.55)>.14);
- assert.ok(bankRise(.55,-4)>0);
- assert.ok(bankRise(.55,4)<0);
+ assert.equal(bankAngle(.55),0);
+ assert.equal(Math.abs(bankRise(.55,-4)),0);
+ assert.equal(Math.abs(bankRise(.55,4)),0);
  assert.ok(Math.abs(bankRise(.7,4))<1e-12);
  const client=readFileSync("public/kart-racing.js","utf8");
  const graphics=readFileSync("public/kart-graphics.js","utf8");
  assert.match(client,/bankRise\(i\/ps\.length,offset\)/);
  assert.match(client,/bankRise\(projected\.progress,lateral\)/);
- assert.match(graphics,/bankRise\(i\/N,offset\)/);
+ assert.match(graphics,/bankRise\(pt.distance\/ROAD.length,offset\)/);
 });
 test("live sector UI displays three official timed split values",()=>{
  const client=readFileSync("public/kart-racing.js","utf8");

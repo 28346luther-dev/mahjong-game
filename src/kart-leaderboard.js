@@ -13,7 +13,7 @@ export function sanitizeDriverName(name){
 }
 export function leaderboardEntries(records,limit=10){
  return Object.entries(records).map(([id,r])=>({id,name:r.name,bestMs:r.bestMs,at:r.at,version:r.version||1}))
-  .filter(r=>Number.isInteger(r.bestMs)&&r.bestMs>=MIN_LAP_MS&&r.bestMs<=MAX_LAP_MS&&r.version===4)
+  .filter(r=>Number.isInteger(r.bestMs)&&r.bestMs>=MIN_LAP_MS&&r.bestMs<=MAX_LAP_MS&&r.version===5)
   .sort((a,b)=>a.bestMs-b.bestMs||a.at-b.at).slice(0,limit)
   .map((r,i)=>({rank:i+1,name:r.name,bestMs:r.bestMs,at:r.at}));
 }
@@ -39,7 +39,7 @@ export function validateSample(session,x,z,now){
 }
 export class KartLeaderboard {
  constructor(ctx){this.ctx=ctx;this.storage=ctx.storage;}
- async read(){return await this.storage.get("road-atlanta-best-times-v1")||{};}
+ async read(){return await this.storage.get("road-atlanta-mapped-gt3-v2")||{};}
  async fetch(request){
   const url=new URL(request.url);
   if(url.pathname==="/events"||url.pathname.startsWith("/event/"))return handleRaceEvent(request,this.storage);
@@ -58,11 +58,11 @@ export class KartLeaderboard {
    const s={id:crypto.randomUUID(),name:sanitizeDriverName(body.name),
     start:now,lastAt:now,lastAtProgress:0,x:start.x,z:start.z,
     progress:0,travel:0,valid:true,lap:1,crossed:false,sectorTimes:[],sectorLastAt:now};
-   await this.storage.put("road-atlanta-kart-session-v1:"+id,s);
+   await this.storage.put("road-atlanta-mapped-session-v2:"+id,s);
    return Response.json({ok:true,raceId:s.id,startedAt:s.start,
     trackLength:Math.round(ROAD.length),bestMs:(await this.read())[id]?.bestMs??null});
   }
-  const key="road-atlanta-kart-session-v1:"+id,session=await this.storage.get(key);
+  const key="road-atlanta-mapped-session-v2:"+id,session=await this.storage.get(key);
   if(!session||session.id!==body.raceId)
    return Response.json({error:"No active lap. Start a new race."},{status:409});
   if(now-session.start>MAX_LAP_MS){
@@ -155,12 +155,12 @@ export class KartLeaderboard {
   const sectorTimes=[...(session.sectorTimes||[])];
   if(sectorTimes.length===2)sectorTimes.push(Math.max(1,elapsed-sectorTimes[0]-sectorTimes[1]));
   const result=await this.storage.transaction(async txn=>{
-   const records=await txn.get("road-atlanta-best-times-v1")||{};
+   const records=await txn.get("road-atlanta-mapped-gt3-v2")||{};
    const previous=records[id]?.bestMs??Infinity;
    const personalBest=elapsed<previous;
    if(personalBest){
-    records[id]={name:session.name,bestMs:elapsed,at:now,version:4};
-    await txn.put("road-atlanta-best-times-v1",records);
+    records[id]={name:session.name,bestMs:elapsed,at:now,version:5};
+    await txn.put("road-atlanta-mapped-gt3-v2",records);
    }
    // Finish does NOT end the driving session. Start the next timed lap at this
    // finish crossing and retain the same race ID, so players keep racing.

@@ -128,7 +128,7 @@ test("Formula Vee cars, remote rivals, pit facilities and broadcast HUD are wire
  assert.match(graphics,/sector-chip\.yellow/);
  for(const id of ["kartEventList","kartMeetingRegister","kartPitService","kartServiceCountdown","kartMeetingRoster"])
   assert.ok(html.includes('id="'+id+'"'));
- assert.ok(BANK_MAX_DEGREES>=15);
+ assert.equal(BANK_MAX_DEGREES,0); // No surveyed bank; remove invented oval banking.
  assert.equal(PIT_BAYS.length,4);
 });
 test("all new racing source parses",()=>{

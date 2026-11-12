@@ -28,8 +28,8 @@ test("banked chassis surface normal and gravity reflect actual track profile",()
  assert.ok(downward<0);
  const upward=gravityAlongRoad(fake,{index:0},-Math.PI/2);
  assert.ok(upward>0);
- assert.ok(BANK_MAX_DEGREES>=17);
- assert.ok(bankAngle(.55)>.2);
+ assert.equal(BANK_MAX_DEGREES,0); // No surveyed bank; remove invented oval banking.
+ assert.equal(bankAngle(.55),0);
  const FakeTHREE={Vector3:class{constructor(x,y,z){this.x=x;this.y=y;this.z=z;}normalize(){const n=Math.hypot(this.x,this.y,this.z);this.x/=n;this.y/=n;this.z/=n;return this;}}};
  const normal=surfaceNormal(ROAD,projection,bankAngle(.55),FakeTHREE);
  assert.ok(Math.abs(normal.x)+Math.abs(normal.z)>.01);
