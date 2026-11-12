@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {GTDynamics,wheelSurface} from '../public/kart-vehicle-dynamics.js';
+import {GT,GTDynamics,wheelSurface} from '../public/kart-vehicle-dynamics.js';
 import {ROAD,raceStart,ROAD_HALF_WIDTH,projectToRoute,sampleAt,mappedTerrainHeight} from '../public/kart-track.js';
 test('mapped centreline is closed, finite, full length and terrain follows geographic grid',()=>{
  assert.ok(ROAD.length>4050&&ROAD.length<4130);
@@ -30,4 +30,27 @@ test('one-sided kerb contacts produce bounded chassis motion and fixed-step cons
  assert.equal(a.kerb,true);assert.ok(Math.abs(a.roll)>.001);
  assert.ok(Math.abs(a.roll)<.16&&Math.abs(a.heave)<.18);
  assert.ok(Math.abs(a.roll-b.roll)<1e-6);assert.ok(Math.abs(a.heave-b.heave)<1e-6);
+});
+test('suspension stays road-relative on long climbs and descents',()=>{
+ const d=new GTDynamics();d.reset(40);
+ for(let i=0;i<1200;i++){
+  const y=40+30*Math.sin(i/120);
+  d.step(1/120,{x:0,z:0,y,yaw:0,speed:30,steer:0,brake:false,isPit:true});
+  assert.ok(Math.abs(d.body.position.y-(y+GT.cgHeight))<.01,'chassis follows road elevation');
+  assert.ok(Math.abs(d.heave)<.01,'no floating at suspension clamp');
+ }
+});
+test('steering responds within 100ms, centres on release and mirrors left/right',()=>{
+ const run=steer=>{
+  const d=new GTDynamics();d.reset(0);let yaw=0;
+  for(let i=0;i<12;i++)yaw+=d.step(1/120,{x:0,z:0,y:0,yaw:0,speed:20,steer,brake:false,isPit:true}).yawDelta;
+  return {d,yaw};
+ };
+ const right=run(1),left=run(-1);
+ assert.ok(right.d.steer>.25,'front wheels respond promptly');
+ assert.ok(right.yaw<-.02,'heading responds promptly');
+ assert.ok(Math.abs(right.yaw+left.yaw)<1e-10);
+ for(let i=0;i<60;i++)right.d.step(1/120,{x:0,z:0,y:0,yaw:0,speed:20,steer:0,brake:false,isPit:true});
+ assert.ok(Math.abs(right.d.steer)<1e-5,'no persistent left steering');
+ assert.ok(Math.abs(right.d.yawRate)<.001,'no persistent yaw');
 });

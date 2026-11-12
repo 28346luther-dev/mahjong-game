@@ -164,15 +164,17 @@ export function cornerKerbGripWidth(progress){
 export function projectToRoute(x,z,route=ROAD){
  let best={distance:Infinity,index:0,t:0,progress:0,y:0,x:0,z:0,normalX:0,normalZ:0};
  const ps=route.samples,n=ps.length,segments=route.closed?n:n-1;
+ let bestSquared=Infinity;
  for(let i=0;i<segments;i++){
   const p=ps[i],q=ps[(i+1)%n],dx=q.x-p.x,dz=q.z-p.z;
   const den=dx*dx+dz*dz||1;
   const t=Math.max(0,Math.min(1,((x-p.x)*dx+(z-p.z)*dz)/den));
-  const px=p.x+t*dx,pz=p.z+t*dz,distance=Math.hypot(x-px,z-pz);
-  if(distance<best.distance){
+  const px=p.x+t*dx,pz=p.z+t*dz,distanceSquared=(x-px)**2+(z-pz)**2;
+  if(distanceSquared<bestSquared){
+   bestSquared=distanceSquared;
    const length=Math.sqrt(den);
    const progress=(p.distance+t*length)/route.length;
-   best={distance,index:i,t,progress:Math.min(1,progress),
+   best={distance:Math.sqrt(distanceSquared),index:i,t,progress:Math.min(1,progress),
     x:px,z:pz,y:p.y+(q.y-p.y)*t,normalX:-dz/length,normalZ:dx/length};
   }
  }

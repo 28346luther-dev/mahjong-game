@@ -20,19 +20,25 @@ export class GTDynamics{
   this.body.linearFactor.set(0,1,0);this.body.angularFactor.set(1,0,1);
   this.world.addBody(this.body);this.reset(0);
  }
- reset(height){this.body.position.set(0,height+GT.cgHeight,0);this.body.velocity.setZero();this.body.angularVelocity.setZero();this.body.quaternion.set(0,0,0,1);this.lateral=0;this.yawRate=0;this.steer=0;this.accumulator=0;this.roll=0;this.pitch=0;this.heave=0;this.kerb=false;}
+ reset(height){this.body.position.set(0,height+GT.cgHeight,0);this.body.velocity.setZero();this.body.angularVelocity.setZero();this.body.quaternion.set(0,0,0,1);this.lateral=0;this.yawRate=0;this.steer=0;this.accumulator=0;this.roll=0;this.pitch=0;this.heave=0;this.kerb=false;this.roadHeight=height;}
  step(dt,{x,z,y,yaw,speed,steer,brake,isPit}){
+  // Work in a road-relative vertical frame: a descent must not leave the
+  // chassis hanging at the previous world height (or force springs to catch up).
+  this.body.position.y+=y-this.roadHeight;this.roadHeight=y;
+  const contacts=[];
+  for(const side of [-1,1])for(const axle of [-1,1]){
+   const localX=side*GT.track/2,localZ=axle*GT.wheelbase/2;
+   const wx=x-Math.cos(yaw)*localX-Math.sin(yaw)*localZ;
+   const wz=z+Math.sin(yaw)*localX-Math.cos(yaw)*localZ;
+   contacts.push({localX,localZ,surface:isPit?{height:y,baseHeight:y,kerb:false,mu:GT.mu}:wheelSurface(wx,wz)});
+  }
   const h=1/120;this.accumulator+=Math.min(dt,.05);
   let yawDelta=0,sideDistance=0;
   while(this.accumulator>=h){
    this.accumulator-=h;
-   this.steer+=(steer*.48/(1+Math.abs(speed)/38)-this.steer)*(1-Math.exp(-h*9));
+   this.steer+=(steer*.48/(1+Math.abs(speed)/38)-this.steer)*(1-Math.exp(-h*24));
    let grip=GT.mu;this.kerb=false;
-   for(const side of [-1,1])for(const axle of [-1,1]){
-    const localX=side*GT.track/2,localZ=axle*GT.wheelbase/2;
-    const wx=x+Math.cos(yaw)*localX+Math.sin(yaw)*localZ;
-    const wz=z-Math.sin(yaw)*localX+Math.cos(yaw)*localZ;
-    const surface=isPit?{height:y,kerb:false,mu:GT.mu}:wheelSurface(wx,wz);
+   for(const {localX,localZ,surface} of contacts){
     this.kerb ||= surface.kerb;grip=Math.min(grip,surface.mu);
     const r=this.body.quaternion.vmult(new Vec3(localX,0,localZ));
     const verticalVelocity=this.body.velocity.y+this.body.angularVelocity.z*r.x-this.body.angularVelocity.x*r.z;
@@ -44,7 +50,7 @@ export class GTDynamics{
    const v=Math.abs(speed),limit=grip*9.81*(brake?.72:1);
    const target=-Math.tan(this.steer)*speed/GT.wheelbase;
    const saturated=Math.max(-limit/Math.max(v,2),Math.min(limit/Math.max(v,2),target));
-   this.yawRate+=(saturated-this.yawRate)*(1-Math.exp(-h*7));
+   this.yawRate+=(saturated-this.yawRate)*(1-Math.exp(-h*18));
    // Side-slip builds under saturated steering and relaxes through tyre forces.
    const slipTarget=(target-saturated)*Math.min(v,40)*.10;
    this.lateral+=(slipTarget-this.lateral)*(1-Math.exp(-h*4*grip));

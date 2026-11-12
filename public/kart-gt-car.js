@@ -8,22 +8,35 @@ export async function prepareGTCar(){
  try{const gltf=await loader.loadAsync('/assets/gt-coupe.glb');detailedTemplate=gltf.scene;}finally{draco.dispose();}
 }
 function detailedCar(THREE,color){
- const group=detailedTemplate.clone(true),hiddenInCockpit=[],wheels=[];
+ const group=new THREE.Group(),exterior=detailedTemplate.clone(true),hiddenInCockpit=[],wheels=[];
+ group.add(exterior);
+ const carbon=new THREE.MeshStandardMaterial({color:0x11151a,metalness:.35,roughness:.58});
+ // The asset is already Y-up / -Z-forward. Preserve its authored transforms.
  group.traverse(o=>{if(!o.isMesh)return;o.castShadow=true;o.receiveShadow=true;
   if(o.name==='body')o.material=new THREE.MeshPhysicalMaterial({color,metalness:.65,roughness:.26,clearcoat:1,clearcoatRoughness:.12,envMapIntensity:.7});
   else if(o.name==='glass')o.material=new THREE.MeshPhysicalMaterial({color:0x293c43,metalness:.1,roughness:.08,transparent:true,opacity:.57,envMapIntensity:1});
-  if(['body','glass'].includes(o.name))hiddenInCockpit.push(o);
+  if(/glass|interior|leather|carpet|wipers/i.test(o.name))hiddenInCockpit.push(o);
  });
- for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){const wheel=group.getObjectByName(name);if(wheel)wheels.push({group:wheel,front:name.includes('_f')});}
- const roof=new THREE.Mesh(new THREE.SphereGeometry(1,40,20,0,Math.PI*2,0,Math.PI/2),new THREE.MeshPhysicalMaterial({color,metalness:.65,roughness:.28,clearcoat:1,envMapIntensity:.7}));
- roof.scale.set(.68,.14,.68);roof.position.set(0,1.14,.02);roof.castShadow=true;group.add(roof);hiddenInCockpit.push(roof);
- const carbon=new THREE.MeshStandardMaterial({color:0x11151a,metalness:.35,roughness:.58});
- const add=(w,h,d,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),carbon);m.position.set(x,y,z);m.castShadow=true;group.add(m);return m;};
+ for(const name of ['wheel_fl','wheel_fr','wheel_rl','wheel_rr']){
+  const wheel=exterior.getObjectByName(name);if(!wheel)continue;
+  // Steer about vehicle Y, spin about axle X, then apply the authored basis.
+  const pivot=new THREE.Group();pivot.position.copy(wheel.position);
+  wheel.parent.add(pivot);wheel.position.set(0,0,0);pivot.add(wheel);
+  wheels.push({group:pivot,mesh:wheel,basis:wheel.quaternion.clone(),front:name.includes('_f'),spin:0,restY:pivot.position.y});
+ }
+
+ const add=(w,h,d,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),carbon);m.position.set(x,y,z);m.castShadow=true;exterior.add(m);return m;};
  const wing=add(1.99,.065,.42,0,1.24,1.89);wing.rotation.x=-.06;
  for(const side of [-1,1]){add(.045,.27,.46,side*.99,1.29,1.89);add(.065,.55,.11,side*.67,.98,1.86);add(.08,.1,2.7,side*.96,.22,.1);}
  add(1.96,.045,.36,0,.18,-2.05);
  for(let i=-3;i<=3;i++)add(.025,.14,.52,i*.24,.22,2.04);
- return {group,hiddenInCockpit,wheels,animate(speed,steer,dt){for(const w of wheels){w.group.rotation.x+=speed*dt/.34;if(w.front)w.group.rotation.y=steer;}}};
+ const spinAxis=new THREE.Vector3(1,0,0),spinRotation=new THREE.Quaternion();
+ return {group,hiddenInCockpit,wheels,animate(speed,steer,dt){
+  for(const w of wheels){w.spin=(w.spin-speed*dt/.34)%(Math.PI*2);
+   w.group.rotation.y=w.front?steer:0;
+   w.mesh.quaternion.copy(spinRotation.setFromAxisAngle(spinAxis,w.spin)).multiply(w.basis);
+  }
+ }};
 }
 /* Original GT3-style endurance coupe. Metres; -Z forward. No licensed marque. */
 export function createGTCar(THREE,{color=0xff4c0a,number=7}={}){
@@ -73,7 +86,7 @@ export function createGTCar(THREE,{color=0xff4c0a,number=7}={}){
    const rim=mesh(new THREE.CylinderGeometry(.265,.265,.30,40),carbon,0,0,0,wheelGroup);rim.rotation.z=Math.PI/2;
    for(let j=0;j<10;j++){const angle=j*Math.PI/5;const spoke=box(.025,.035,.48,alloy,s*.16,0,0,wheelGroup);spoke.rotation.x=angle;}
    const hub=mesh(new THREE.CylinderGeometry(.065,.065,.34,16),alloy,0,0,0,wheelGroup);hub.rotation.z=Math.PI/2;
-   box(.09,.21,.11,paint,s*.1,.07,-.17,wheelGroup);wheels.push({group:wheelGroup,front:axle<0,side:s});
+   box(.09,.21,.11,paint,s*.1,.07,-.17,wheelGroup);const pivot=new THREE.Group();pivot.position.copy(wheelGroup.position);group.add(pivot);wheelGroup.position.set(0,0,0);pivot.add(wheelGroup);wheels.push({group:pivot,mesh:wheelGroup,front:axle<0,side:s});
   }
   const intake=box(.15,.23,.47,carbon,s*.94,.57,.82);intake.rotation.y=s*.12;
  }
@@ -89,5 +102,5 @@ export function createGTCar(THREE,{color=0xff4c0a,number=7}={}){
  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
  for(const side of [-1,1]){const plate=mesh(new THREE.PlaneGeometry(.8,.4),new THREE.MeshStandardMaterial({map:tex,roughness:.5}),side*.949,.65,0);plate.rotation.y=side*Math.PI/2;}
  box(.12,.014,1.15,carbon,-.19,.902,-1.34);box(.12,.014,1.15,carbon,.19,.902,-1.34);
- return {group,hiddenInCockpit,hood:body,wheels,animate(speed,steer,dt){for(const w of wheels){w.group.rotation.x+=speed*dt/.36;if(w.front)w.group.rotation.y=steer;}}};
+ return {group,hiddenInCockpit,hood:body,wheels,animate(speed,steer,dt){for(const w of wheels){w.mesh.rotation.x-=speed*dt/.36;if(w.front)w.group.rotation.y=steer;}}};
 }

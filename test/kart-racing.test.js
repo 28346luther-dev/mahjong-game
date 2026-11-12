@@ -154,9 +154,9 @@ test("racing kerbs do not slow down, while gravel and grass do",()=>{
  assert.match(client,/if\(grip\.drag>0\)speed\*=Math\.exp\(-grip\.drag\*dt\)/);
  assert.doesNotMatch(client,/onRunoff=projected\.distance>ROAD_HALF_WIDTH-\.2/);
 });
-test("first-person camera stays forward of driver head with a fixed FOV",()=>{
+test("first-person camera follows the bonnet in vehicle space with a fixed FOV",()=>{
  const client=readFileSync("public/kart-racing.js","utf8");
- assert.match(client,/camera\.position\.set\(pos\.x\+forwardX\*\.40,pos\.y\+1\.27\+dynamics\.heave\*\.55,pos\.z\+forwardZ\*\.40\)/);
+ assert.match(client,/new THREE\.Vector3\(0,1\.08,-1\.05\)\.applyQuaternion\(kart\.quaternion\)\.add\(kart\.position\)/);
  assert.match(client,/camera\.fov!==73/);
  assert.doesNotMatch(client,/camera\.position\.lerp\(eye/);
  assert.match(client,/cockpitOccluders\.push\(\.\.\.vee\.hiddenInCockpit\)/);

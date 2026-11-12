@@ -1,6 +1,7 @@
-/* Trackside pit architecture inspired by modern circuits: not an exact copy of
- * any real venue. Long glazed hospitality level, garage roll-up doors, bays,
- * raised pit-wall fencing, lane markings and safe outboard signs. */
+/* Road Atlanta pit frontage reconstruction. Dimensions remain approximate;
+ * modular footprints follow the mapped lane and protect the complete circuit. */
+import {mergeGeometries} from './vendor/utils/BufferGeometryUtils.js';
+import {planPitBuildings} from "./kart-pit-layout.js";
 import {PIT_HALF_WIDTH,PIT_FAST_LANE_WIDTH,PIT_SERVICE_LANE_WIDTH,PIT_SERVICE_OFFSET} from "./kart-track.js";
 export function addPitComplex(THREE,scene,PIT,bays){
  const mat=(color,roughness=.65,metalness=0,transparent=false,opacity=1)=>
@@ -14,29 +15,42 @@ export function addPitComplex(THREE,scene,PIT,bays){
   object.castShadow=true;object.receiveShadow=true;parent.add(object);return object;
  }
  function block(w,h,d,m,x,y,z,parent=scene){return item(new THREE.BoxGeometry(w,h,d),m,x,y,z,parent);}
- // Garages are rebuilt along Road Atlanta's pit frontage instead of being
- // left at the old Velvet Circuit's fixed X/Z position.
- const firstBay=bays[0],lastBay=bays[bays.length-1];
- const index=Math.round(PIT.samples.length*.435);
- const p=PIT.samples[index],before=PIT.samples[index-2],after=PIT.samples[index+2];
- const dx=after.x-before.x,dz=after.z-before.z,len=Math.hypot(dx,dz)||1;
- const nx=-dz/len,nz=dx/len;
- const garageLength=Math.max(90,Math.hypot(lastBay.x-firstBay.x,lastBay.z-firstBay.z)+55);
- const garage=new THREE.Group();
- garage.position.set(p.x+nx*18,p.y,p.z+nz*18);
- garage.rotation.y=Math.atan2(dx,dz);
- scene.add(garage);
- block(10,4,garageLength,concrete,0,2,0,garage);
- block(11,.5,garageLength+3,white,0,4.3,0,garage);
- block(10,3.4,garageLength,window,0,6.3,0,garage);
- block(12,.6,garageLength+4,steel,0,8.3,0,garage);
- const doors=Math.max(4,Math.floor(garageLength/19));
- for(let i=0;i<doors;i++){
-  const z=-garageLength/2+(i+.5)*garageLength/doors;
-  block(.13,3.1,Math.min(14,garageLength/doors-1),steel,5.1,1.8,z,garage);
-  for(let l=0;l<9;l++)block(.025,.024,Math.min(13.5,garageLength/doors-1.4),
-   l%3===0?white:concrete,5.2,.48+l*.3,z,garage);
-  block(.15,.65,4,red,5.23,3.6,z,garage);
+ // Separate low garage sections follow the lane instead of spanning T12
+ // with one enormous straight box. An outboard roof, clerestory and ribbed
+ // roller doors provide depth without obstructing the final-corner sightline.
+ const buildings=planPitBuildings(),buildingGroups=[];
+ for(const layout of buildings){
+  const garage=new THREE.Group();garage.name='pitGarage'+layout.index;
+  garage.position.set(layout.x,layout.y,layout.z);garage.rotation.y=layout.yaw;
+  garage.userData.footprint=layout;scene.add(garage);buildingGroups.push(garage);
+  const length=layout.length;
+  block(10,3.7,length,concrete,0,1.85,0,garage);
+  block(10.8,.22,length+.3,white,0,3.8,0,garage);
+  block(9.8,.65,length-.4,window,0,4.18,0,garage);
+  const roof=block(11,.18,length+.6,steel,0,4.65,0,garage);roof.rotation.z=-.055;
+  // Track-facing facade lies on local +X (toward the service apron).
+  block(.12,2.8,length-1.4,steel,5.07,1.55,0,garage);
+  for(let rib=0;rib<10;rib++)block(.025,.022,length-1.6,white,5.15,.35+rib*.26,0,garage);
+  block(.13,.28,length-.9,red,5.18,3.34,0,garage);
+  for(const z of [-length/2+.25,length/2-.25])block(.35,4.4,.35,white,5,2.2,z,garage);
+  const awning=block(2.1,.12,length-.5,white,5.9,3.45,0,garage);awning.rotation.z=.055;
+ }
+ // Bake static frontage into one mesh per material, retaining detail without
+ // hundreds of extra draw calls along the straight.
+ const batches=new Map();
+ for(const garage of buildingGroups){
+  garage.updateMatrixWorld(true);
+  for(const mesh of [...garage.children]){
+   const geometry=mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+   if(!batches.has(mesh.material))batches.set(mesh.material,[]);
+   batches.get(mesh.material).push(geometry);
+   mesh.geometry.dispose();garage.remove(mesh);
+  }
+ }
+ for(const [material,geometries] of batches){
+  const merged=mergeGeometries(geometries),mesh=new THREE.Mesh(merged,material);
+  mesh.name='pitFrontage';mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);
+  for(const geometry of geometries)geometry.dispose();
  }
  // Pit lane is TWO genuinely separate paved channels: an unobstructed
  // FAST LANE on the racetrack side, plus the garage-side SERVICE APRON.
@@ -155,5 +169,5 @@ export function addPitComplex(THREE,scene,PIT,bays){
  // Obsolete free-standing pit fence removed: it projected through the
  // asphalt and duplicated the main straight's continuous glass safety wall.
  // The dedicated track-edge glass barrier owns the straight protection.
- return {pitBuilding:true,bays:bays.length};
+ return {pitBuilding:true,bays:bays.length,buildings};
 }

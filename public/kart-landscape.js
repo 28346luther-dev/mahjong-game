@@ -34,7 +34,8 @@ export function addRoadAtlantaLandscape(THREE,scene){
  add(38,.8,7,0,7.4,0);for(const side of [-1,1]){add(1.2,7.4,6,side*15,3.7,0);add(38,1.1,.2,0,8.3,side*3.35);}
  const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=128;const ctx=canvas.getContext('2d');ctx.fillStyle='#153760';ctx.fillRect(0,0,1024,128);ctx.fillStyle='#f4d351';ctx.fillRect(0,112,1024,16);ctx.fillStyle='#fff';ctx.font='bold 66px sans-serif';ctx.textAlign='center';ctx.fillText('ROAD ATLANTA',512,86);
  const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
- const banner=new THREE.Mesh(new THREE.PlaneGeometry(27,2.6),new THREE.MeshStandardMaterial({map:tex,side:THREE.DoubleSide}));banner.position.set(0,7.7,-3.6);group.add(banner);
+ const banner=new THREE.Mesh(new THREE.PlaneGeometry(27,2.6),new THREE.MeshStandardMaterial({map:tex,side:THREE.DoubleSide}));banner.position.set(0,7.7,-3.6);banner.rotation.y=Math.PI;group.add(banner);
+ const reverseBanner=banner.clone();reverseBanner.position.z=3.6;reverseBanner.rotation.y=0;group.add(reverseBanner);
  // Broadleaf canopy and tall pine stands in deterministic clusters.
  let seed=2601;const rand=()=>((seed=Math.imul(seed,1664525)+1013904223>>>0)/4294967296);
  const trees=[];

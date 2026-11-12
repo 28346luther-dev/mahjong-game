@@ -18,6 +18,38 @@ Centreline interpolation uses centripetal Catmull–Rom followed by 800 equally 
 
 The user's image is used as a camera, lighting, surface and HUD reference, not as Road Atlanta geographic evidence (it depicts the Le Mans Dunlop bridge). Kerbs now use blue and yellow paint.
 
-Detailed car: Ferrari 458 Italia by **vicent091036**, distributed in the Three.js r160 examples, https://sketchfab.com/models/57bf6cc56931426e87494f554df1dab6 and https://github.com/mrdoob/three.js/blob/r160/examples/models/gltf/ferrari.glb . Local copy `public/assets/gt-coupe.glb`; modifications are material/paint changes and added wing, closed roof, splitter, skirts and diffuser. This is a modified road-car asset, not a homologated Ferrari GT3 or the Porsche shown in the reference. The original procedural car remains a fallback constructor. Author attribution appears in the driving view.
+Detailed car: Ferrari 458 Italia by **vicent091036**, distributed in the Three.js r160 examples, https://sketchfab.com/models/57bf6cc56931426e87494f554df1dab6 and https://github.com/mrdoob/three.js/blob/r160/examples/models/gltf/ferrari.glb . Local copy `public/assets/gt-coupe.glb`; modifications are material/paint changes and added wing, splitter, skirts and diffuser. This is a modified road-car asset, not a homologated Ferrari GT3 or the Porsche shown in the reference. The original procedural car remains a fallback constructor. Author attribution appears in the driving view.
 
 Additional Three.js r160 example assets: `textures/equirectangular/venice_sunset_1k.hdr` (original HDR Haven/Poly Haven environment), `textures/terrain/grasslight-big.jpg`. Their source URLs are under https://github.com/mrdoob/three.js/tree/r160/examples . Loaders are from Three.js 0.160.1, MIT; Draco decoder retains the Apache 2.0 licence in its directory. Assets and decoder are served locally with no runtime third-party requests. Foliage silhouettes are generated locally.
+
+## Driving and final-sector correction
+
+The first-person camera now sits above the bonnet, ahead of the cabin, with only
+the car nose in view. Imported wheel transforms are retained beneath independent
+steering pivots and axle rotation. The artificial intersecting roof cap was
+removed. Road-relative suspension, individual tyre contact adjustment and direct
+heading alignment keep the chassis and wheels consistent on elevation changes.
+
+The previous single pit building was nearly 200 m long: its straight footprint
+crossed the curved final sector. Twelve short garage sections now follow the pit
+frontage. Their complete footprints are checked against both the entire racing
+loop and pit lane, with at least 6 m beyond the racing half-width and 3 m beyond
+the pit half-width. Static frontage meshes are batched by material. These are
+procedural building approximations, not downloaded or surveyed Road Atlanta 3D
+models. The existing mapped centreline and terrain sources remain unchanged.
+
+Blue/yellow kerbs, textured asphalt, HDR reflections and antialiasing are retained.
+The sky includes procedural scattered clouds; shadow depth range is tightened,
+shadow updates are limited to 30 Hz, the minimap redraws at 10 Hz, and rendering
+can lower pixel ratio when CPU rendering cost is high.
+
+The requested video reference is https://www.youtube.com/watch?v=qRf-7GWJIWk .
+The environment denied YouTube access during this pass; no claim is made that
+this reconstruction matches unseen footage or uses an exact venue model.
+
+Validation: `npm test` includes suspension elevation/steering response and pit
+footprint regressions. With a local Wrangler server and Playwright installed,
+`NODE_PATH=/workspace/browser-tools/node_modules node scripts/verify-driving-browser.cjs`
+checks the loaded, Draco-decoded car, front/rear wheel steering and axle axes,
+heading alignment and 160 tyre contacts around the circuit. It also writes chase,
+bonnet, bridge, final-corner and pit-frontage screenshots to `/tmp`.

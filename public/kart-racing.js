@@ -1,9 +1,11 @@
 import {RGBELoader} from './vendor/loaders/RGBELoader.js';
-import {GTDynamics} from './kart-vehicle-dynamics.js';
+import {GTDynamics,wheelSurface} from './kart-vehicle-dynamics.js';
 import {addRoadAtlantaLandscape,terrainHeight} from './kart-landscape.js';
 const dynamics=new GTDynamics();
 let carVisual=null,miniMap=null;
+let mapDrawAt=0,shadowDrawAt=0,frameCost=16;
 function drawTrackMap(){
+ const now=performance.now();if(now-mapDrawAt<100)return;mapDrawAt=now;
  if(!miniMap){
   const canvas=document.createElement('canvas');canvas.width=280;canvas.height=360;canvas.style.cssText='position:absolute;right:22px;top:20px;width:140px;height:180px;pointer-events:none';canvas.setAttribute('aria-label','Road Atlanta circuit map');document.getElementById('kartCanvas').parentElement.append(canvas);
   const ps=ROAD.samples,b=ps.reduce((b,p)=>({x:Math.min(b.x,p.x),z:Math.min(b.z,p.z),X:Math.max(b.X,p.x),Z:Math.max(b.Z,p.z)}),{x:Infinity,z:Infinity,X:-Infinity,Z:-Infinity});
@@ -204,7 +206,7 @@ function setCameraMode(mode){
  cameraMode=mode;
  for(const mesh of cockpitOccluders)mesh.visible=mode!=="cockpit";
  const label=document.getElementById("kartCameraLabel");
- if(label)label.textContent=mode==="cockpit"?"HELMET / FIRST PERSON":"CHASE / THIRD PERSON";
+ if(label)label.textContent=mode==="cockpit"?"BONNET / FIRST PERSON":"CHASE / THIRD PERSON";
  const button=document.getElementById("kartCameraToggle");
  if(button){
   button.textContent=mode==="cockpit"?"🎥 Third-person view":"⛑ First-person view";
@@ -212,7 +214,7 @@ function setCameraMode(mode){
  }
  const caption=document.getElementById("kartCameraHelp");
  if(caption)caption.textContent=mode==="cockpit"
-  ?"First-person helmet camera · press C to switch back"
+  ?"First-person bonnet camera · press C to switch back"
   :"Chase camera · press C for a driver's-eye view";
 }
 const keys=new Set(),touch=new Set(),down=k=>keys.has(k)||touch.has(k);
@@ -425,7 +427,7 @@ function construct(){
  sun.shadow.radius=2;
  sun.shadow.camera.left=-75;sun.shadow.camera.right=75;
  sun.shadow.camera.top=75;sun.shadow.camera.bottom=-75;
- sun.shadow.camera.far=1800;sun.shadow.bias=-.0002;
+ sun.shadow.camera.near=10;sun.shadow.camera.far=260;sun.shadow.bias=-.0002;
  sun.name="circuitSun";scene.add(sun);scene.add(sun.target);
  // A tall sky dome uses a physically inspired horizon-to-zenith gradient.
  const skyMaterial=new THREE.ShaderMaterial({
@@ -433,7 +435,23 @@ function construct(){
   uniforms:{topColor:{value:new THREE.Color(0x558fc7)},horizonColor:{value:new THREE.Color(0xdcebf0)},
     bottomColor:{value:new THREE.Color(0xb2c9b9)}},
   vertexShader:"varying vec3 vWorld; void main(){ vec4 w=modelMatrix*vec4(position,1.);vWorld=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}",
-  fragmentShader:"varying vec3 vWorld;uniform vec3 topColor;uniform vec3 horizonColor;uniform vec3 bottomColor;void main(){float t=normalize(vWorld).y;vec3 col=t>0.?mix(horizonColor,topColor,pow(clamp(t,0.,1.),.48)):mix(horizonColor,bottomColor,clamp(-t*1.6,0.,1.));gl_FragColor=vec4(col,1.);}"
+  fragmentShader:`
+   varying vec3 vWorld;uniform vec3 topColor;uniform vec3 horizonColor;uniform vec3 bottomColor;
+   float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+   float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+    return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+   void main(){
+    vec3 direction=normalize(vWorld);float t=direction.y;
+    vec3 col=t>0.?mix(horizonColor,topColor,pow(clamp(t,0.,1.),.48)):mix(horizonColor,bottomColor,clamp(-t*1.6,0.,1.));
+    if(t>.025){
+     vec2 p=direction.xz/(t+.18)*3.5;
+     float cloud=noise(p)*.60+noise(p*2.03)*.27+noise(p*4.07)*.13;
+     float cover=smoothstep(.53,.73,cloud)*smoothstep(.025,.22,t);
+     col=mix(col,mix(vec3(.72,.79,.83),vec3(.98,.97,.93),smoothstep(.53,.80,cloud)),cover*.86);
+    }
+    gl_FragColor=vec4(col,1.);
+   }`
+
  });
  scene.add(new THREE.Mesh(new THREE.SphereGeometry(3200,48,24),skyMaterial));
  const environment=new THREE.Scene();environment.add(new THREE.Mesh(new THREE.SphereGeometry(50,32,16),skyMaterial.clone()));
@@ -552,8 +570,21 @@ function updateRideHeightAndBank(dt){
  const bankQuat=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),up);
  const yawQuat=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),yaw+Math.PI);
  const suspension=new THREE.Quaternion().setFromEuler(new THREE.Euler(dynamics.pitch,0,dynamics.roll));
- kart.quaternion.slerp(bankQuat.multiply(yawQuat).multiply(suspension),Math.min(1,dt*11));
- kart.position.set(pos.x,pos.y+dynamics.heave,pos.z);
+ kart.quaternion.copy(bankQuat.multiply(yawQuat).multiply(suspension));
+ kart.position.set(pos.x,pos.y+.044+dynamics.heave,pos.z);
+ kart.updateMatrixWorld(true);
+ // Wheels follow individual road contacts; chassis roll must not lift a tyre.
+ const inverse=kart.quaternion.clone().invert();
+ for(const wheel of carVisual?.wheels||[]){
+  if(wheel.restY===undefined)continue;
+  const contact=wheel.group.position.clone();contact.y=wheel.restY;
+  contact.applyQuaternion(kart.quaternion).add(kart.position);
+  const height=projected.isPit?projected.y:wheelSurface(contact.x,contact.z).height;
+  contact.y=height+.044+.358;
+  contact.sub(kart.position).applyQuaternion(inverse);
+  wheel.group.position.y=contact.y;
+ }
+
 }
 function update(dt){
  if(!playing)return;
@@ -623,32 +654,41 @@ function update(dt){
 function frame(){
  requestAnimationFrame(frame);
  if(!active||!renderer)return;
- const dt=Math.min(.05,clock.getDelta());update(dt);
+ const frameStart=performance.now();
+ const dt=Math.min(.1,clock.getDelta());
+ // Retain elapsed time on slower frames without a giant physics step.
+ for(let remaining=dt;remaining>1e-8;){const step=Math.min(1/60,remaining);update(step);remaining-=step;}
  const w=$("kartCanvas").clientWidth||100,h=$("kartCanvas").clientHeight||100,dpr=renderer.getPixelRatio();
  if(renderer.domElement.width!==Math.round(w*dpr)||renderer.domElement.height!==Math.round(h*dpr)){
   renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
  }
  if(cameraMode==="cockpit"){
-  // The body points along local -Z, hence the helmet view follows the
-  // world-space vehicle heading (yaw) without inverting steering.
-  // Lock cockpit to a point FORWARD of the driver's helmet. Never smooth
-  // behind the kart: chase-style interpolation exposed the driver's head
-  // whenever acceleration caused the vehicle to pull ahead of the camera.
-  const forwardX=Math.sin(yaw),forwardZ=Math.cos(yaw);
-  camera.position.set(pos.x+forwardX*.40,pos.y+1.27+dynamics.heave*.55,pos.z+forwardZ*.40);
-  camera.lookAt(pos.x+forwardX*28,pos.y+1.42,pos.z+forwardZ*28);
-  // Fixed FOV: the tapered Formula Vee nose and front wheels remain visible.
+  // Bonnet camera sits ahead of the cabin: only the car nose frames the road.
+  const eye=new THREE.Vector3(0,1.08,-1.05).applyQuaternion(kart.quaternion).add(kart.position);
+  const ahead=new THREE.Vector3(0,1.14,-31).applyQuaternion(kart.quaternion).add(kart.position);
+  camera.position.copy(eye);camera.up.set(0,1,0).applyQuaternion(kart.quaternion);camera.lookAt(ahead);
+  // Fixed bonnet FOV avoids speed-dependent zoom.
   if(camera.fov!==73){camera.fov=73;camera.updateProjectionMatrix();}
  }else{
+  camera.up.set(0,1,0);
   const target=new THREE.Vector3(pos.x-Math.sin(yaw)*7.2,pos.y+2.9,pos.z-Math.cos(yaw)*7.2);
-  camera.position.lerp(target,Math.min(1,dt*4.5));
+  camera.position.lerp(target,1-Math.exp(-dt*12));
   camera.lookAt(pos.x+Math.sin(yaw)*8,pos.y+.85,pos.z+Math.cos(yaw)*8);
   if(camera.fov!==58){camera.fov=58;camera.updateProjectionMatrix();}
  }
  animateRivals(dt);drawTrackMap();
  const sun=scene.getObjectByName('circuitSun');
  if(sun){sun.position.set(pos.x-65,pos.y+120,pos.z+45);sun.target.position.set(pos.x,pos.y,pos.z);sun.target.updateMatrixWorld();}
+ // Keep moving shadows, but avoid redrawing the complete shadow atlas at
+ // display refresh rate. The main pass still renders every input frame.
+ renderer.shadowMap.autoUpdate=false;
+ if(frameStart-shadowDrawAt>33){renderer.shadowMap.needsUpdate=true;shadowDrawAt=frameStart;}
  renderer.render(scene,camera);
+ frameCost+=(performance.now()-frameStart-frameCost)*.05;
+ // Retain antialiasing and detailed materials; reduce fill rate on slow GPUs.
+ const desiredRatio=frameCost>25?1:Math.min(window.devicePixelRatio||1,2);
+ if(renderer.getPixelRatio()!==desiredRatio&&Math.abs(frameCost-25)>5)renderer.setPixelRatio(desiredRatio);
+
  window.KartMeetings?.tick?.();
  if(performance.now()-lastLeaderboardRefresh>15000){lastLeaderboardRefresh=performance.now();leaderboard();}
  $("kartSpeed").textContent=Math.round(Math.abs(speed)*3.6)+" km/h";
