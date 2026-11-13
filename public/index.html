@@ -5,6 +5,7 @@
 <title>Mahjong Club</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/premium-table.css"><link rel="stylesheet" href="/clubhouse.css"><link rel="stylesheet" href="/first-person.css"><link rel="stylesheet" href="/club-social.css"><link rel="stylesheet" href="/club-velvet.css"><link rel="stylesheet" href="/reaction-camera.css"><link rel="stylesheet" href="/mahjong-screen-fit.css"><link rel="stylesheet" href="/reaction-clip.css"><link rel="stylesheet" href="/mahjong-spectator.css"><link rel="stylesheet" href="/salon-games.css"><link rel="stylesheet" href="/kart-racing.css"><link rel="stylesheet" href="/kart-meetings.css">
 </head>
 <body>
+<section class="race-announcement" data-race-announcement hidden role="status" aria-live="polite"><span data-race-message></span><button type="button" data-join-race>Join race lobby</button><button type="button" data-dismiss-race aria-label="Dismiss race announcement">×</button></section>
 <div class="app">
   <header><div class="mark">麻</div><div><h1>Mahjong Club</h1><p>Private tables · Hong Kong-style rules</p></div><span class="online">● LIVE ROOMS</span></header>
   <main>
@@ -33,7 +34,7 @@
         <div class="club-crosshair" aria-hidden="true">+</div>
         <div class="club-hud">
           <span id="clubZone">MAIN HALL</span>
-          <span id="clubPlayerCount">1 online</span><span id="sanaBalance" aria-live="polite">🪙 500 Sana Coins</span>
+          <span id="clubPlayerCount">1 online</span><span data-kart-player-counts>Loading racing player counts…</span><span id="sanaBalance" aria-live="polite">🪙 500 Sana Coins</span>
           <span title="The original generated music has been removed">♫ Quiet lounge</span>
         </div>
         <button id="clubChatToggle" class="club-chat-toggle" type="button" aria-expanded="false">💬 Chat</button>
@@ -82,6 +83,7 @@
       </div>
       <section class="kart-club-board" aria-label="Go-kart global leaderboard">
         <div class="kart-club-board-head"><strong>🏆 VELVET CIRCUIT · GLOBAL TOP 10</strong><span>Shared across all racers</span></div>
+        <p data-next-race-count>Loading next race…</p>
         <ol id="kartClubLeaderboard" aria-live="polite"><li>Loading fastest laps…</li></ol>
       </section>
       <div class="club-footer">
@@ -92,6 +94,7 @@
     </section>
     <section id="kartGame" class="kart-modal hidden" role="dialog" aria-modal="true" aria-labelledby="kartTitle">
       <div class="kart-sheet">
+        <section class="race-announcement" data-race-announcement hidden role="status" aria-live="polite"><span data-race-message></span><button type="button" data-join-race>Join race lobby</button><button type="button" data-dismiss-race aria-label="Dismiss race announcement">×</button></section>
         <header class="kart-header">
           <div><div class="kart-eyebrow">THE GAMES CLUB · GO-KART TIME TRIAL</div><h2 id="kartTitle">VELVET CIRCUIT</h2>
             <p>Unlimited laps · High-detail racing circuit · Global fastest-lap rankings</p></div>
@@ -105,6 +108,7 @@
         <section id="kartModeHub" class="kart-mode-hub" aria-label="Select a race mode">
           <div class="kart-mode-hero"><span>VELVET MOTORSPORT · RACE CONTROL</span>
             <h3>CHOOSE YOUR SESSION</h3><p>Choose a mode before entering the track. Set a fastest lap in Time Trial or register for the next multiplayer race.</p></div>
+          <p class="kart-population" data-kart-player-counts>Loading player counts…</p><p data-next-race-count>Loading next race…</p>
           <div class="kart-mode-options">
             <button type="button" class="kart-mode-card" data-kart-mode="timetrial"><span>⏱</span><strong>TIME TRIAL</strong><small>One complete lap at a time · global fastest lap board</small><em>START TIME TRIAL</em></button>
             <button type="button" class="kart-mode-card" data-kart-mode="races"><span>🏎</span><strong>UPCOMING RACES</strong><small>10-minute meetings · 2-minute qualifying · 3 laps</small><em>OPEN REGISTRATIONS</em></button>
@@ -119,6 +123,7 @@
             <button id="kartRaceModesBack" type="button" class="kart-modes-back">‹ All racing modes</button>
             <div><h3>🏁 Championship race meetings</h3>
               <p>Every 10 minutes · 2-minute qualifying · grid from qualifying · 3-lap race · mandatory 10-second pit service</p></div>
+            <p class="kart-population" data-kart-player-counts>Loading player counts…</p><p id="kartRaceLobbyCount">Loading race entries…</p>
             <span class="kart-live" id="kartMeetingClock">Updating race timetable…</span>
           </div>
           <div class="kart-event-list" id="kartEventList" aria-live="polite">Loading race meetings…</div>
@@ -145,7 +150,7 @@
                 <div><small>LAP</small><strong id="kartLap">1</strong></div><div><small>CURRENT LAP</small><strong id="kartTime">00:00.000</strong></div>
                 <div><small>LAP PROGRESS</small><strong id="kartProgress">0%</strong></div>
                 <div><small>SPEED</small><strong id="kartSpeed">0 km/h</strong></div>
-                <div><small>SESSION</small><strong id="kartRacePhase">PRACTICE</strong></div>
+                <div><small>SESSION</small><strong id="kartRacePhase">TIME TRIAL</strong></div>
                 <div><small>CAMERA</small><strong id="kartCameraLabel">CHASE / THIRD PERSON</strong></div>
                 <div><small>PIT LANE</small><strong id="kartPitStatus">PIT LIMITER OFF</strong></div>
                 <div><small>CURRENT SECTOR</small><strong id="kartSectorLive">SECTOR 1</strong></div>
@@ -156,8 +161,8 @@
               <div><span>SECTOR 3</span><strong id="kartSector3">--:--.---</strong></div>
             </div>
               <div id="kartStartLights" class="kart-start-lights hidden" aria-live="assertive"><div class="light-rack"><div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div></div><strong id="kartLightsText">FIVE RED LIGHTS</strong></div>
-              <aside class="kart-time-board" aria-label="Live time trial leaderboard"><strong>GLOBAL TIME TRIAL</strong><small>FASTEST LAPS · LIVE</small><ol id="kartLiveLeaderboard" aria-live="polite"><li>Loading times…</li></ol></aside>
-              <div class="kart-live-positions" id="kartLivePositions" aria-live="polite"><strong>LIVE POSITIONS</strong><ol id="kartTrackPositions"><li>Time Trial</li></ol></div>
+              <aside class="kart-time-board" aria-label="Live time trial leaderboard"><strong>GLOBAL TIME TRIAL</strong><small>FASTEST LAPS · LIVE</small><small data-kart-player-counts>Loading player counts…</small><ol id="kartLiveLeaderboard" aria-live="polite"><li>Loading times…</li></ol></aside>
+              <div class="kart-live-positions" id="kartLivePositions" aria-live="polite"><strong>LIVE POSITIONS</strong><small data-kart-player-counts>Loading player counts…</small><ol id="kartTrackPositions"><li>Time Trial</li></ol></div>
               <div class="kart-service-overlay hidden" id="kartServiceOverlay" aria-live="assertive">
                 <div class="kart-service-card"><span>PIT SERVICE · DO NOT MOVE</span>
                   <strong id="kartServiceCountdown">10.0</strong><p>Mandatory stop being completed</p></div>
@@ -301,5 +306,6 @@
 <script type="module" src="/kart-global-board.js"></script>
 <script type="module" src="/kart-meetings.js"></script>
 <script type="module" src="/kart-racing.js"></script>
+<script type="module" src="/kart-announcements.js"></script>
 <script type="module" src="/clubhouse.js"></script>
 </body></html>

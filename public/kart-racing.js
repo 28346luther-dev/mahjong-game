@@ -731,7 +731,9 @@ async function begin(){
  if(busy)return;busy=true;$("kartStart").disabled=true;message("Loading circuit and car…");
  try{
   await init();
+  if(!active||selectorVisible||selectedMode!=="timetrial")return;
   const result=await api("start",{});
+  if(!active||selectorVisible||selectedMode!=="timetrial")return;
   raceId=result.raceId;reset();resetSectors();lapCount=1;started=performance.now();sendAt=performance.now();playing=true;
   $("kartLap").textContent="1";$("kartLast").textContent="LAST --:--.---";
   $("kartTime").textContent="00:00.000";
@@ -767,6 +769,7 @@ function backToSelector(){
  window.KartMeetings?.refresh?.();
 }
 function showRaceMeetings(){
+ if(!selectorVisible)backToSelector();
  selectorVisible=true;$("kartGame").classList.add("kart-selector","kart-races-hub");
  $("kartGame").classList.remove("kart-driving");
  window.KartMeetings?.refresh?.();
@@ -824,6 +827,12 @@ for(const card of document.querySelectorAll("[data-kart-mode]")){
  });
 }
 $("kartRefresh").addEventListener("click",leaderboard);
-window.KartRacing={open,close,isOpen:()=>active,setCameraMode,meetingSectorUpdate,
+function getActivity(){
+ if(!active)return "preLobby";
+ if(selectorVisible)return $("kartGame").classList.contains("kart-races-hub")?"raceLobby":"preLobby";
+ if(driveMode==="meeting")return playing&&["qualifying","race"].includes(meetingPhase)?"racing":"raceLobby";
+ return "timeTrial";
+}
+window.KartRacing={open,close,showRaceMeetings,getActivity,isOpen:()=>active,setCameraMode,meetingSectorUpdate,
  beginMeetingStage,clearMeetingStage,finishMeetingStage,meetingLapUpdate,updateRivals,
  getPose,pitBays:()=>PIT_BAYS,beginPractice:()=>enterTrack("timetrial"),enterTrack,backToSelector,mayAutoJoinMeeting,getLocalPitRemaining,resetLocalPit};

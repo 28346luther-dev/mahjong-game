@@ -187,3 +187,16 @@ body.kart-open{overflow:hidden}
 .kart-time-trial .kart-live-positions{display:none}
 .kart-mode-options{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(max-width:600px){.kart-mode-options{grid-template-columns:1fr}.kart-driving.kart-time-trial .kart-time-board{right:10px;top:90px;width:205px;max-height:180px}}
+
+[data-kart-player-counts], [data-next-race-count]{font:11px/1.6 system-ui;color:#b9e8db;overflow-wrap:anywhere}
+.kart-population{padding:8px 10px;background:#122b38;border-radius:5px}
+.kart-live-positions [data-kart-player-counts]{display:block;font-size:9px;margin-top:5px}
+.kart-time-board [data-kart-player-counts]{font-size:9px;letter-spacing:0;line-height:1.7}
+.race-announcement{position:fixed;top:78px;left:50%;transform:translateX(-50%);z-index:10000;width:min(760px,calc(100vw - 24px));display:flex;gap:10px;align-items:center;padding:14px 16px;background:#122735f5;color:#fff;border:1px solid #e2bd65;border-left:4px solid #e2bd65;box-shadow:0 8px 28px #0006;font:13px/1.5 system-ui;border-radius:7px}
+.race-announcement[hidden]{display:none!important}
+.race-announcement [data-race-message]{flex:1}
+.race-announcement button{background:#e2bd65;color:#172531;border:0;border-radius:4px;padding:9px 11px;font:700 12px system-ui;cursor:pointer;white-space:nowrap}
+.race-announcement [data-dismiss-race]{background:transparent;color:white;font-size:24px;padding:0 4px}
+@media(max-width:600px){.race-announcement{top:10px;flex-wrap:wrap;padding:10px;font-size:12px}.race-announcement [data-race-message]{flex-basis:calc(100% - 40px)}.race-announcement [data-dismiss-race]{position:absolute;top:8px;right:10px}}
+.kart-driving .race-announcement{width:min(500px,calc(100vw - clamp(220px,25vw,320px) - clamp(220px,25vw,320px) - 60px));align-items:flex-start}
+@media(max-width:800px){.kart-driving .race-announcement{width:calc(100vw - 24px);top:auto;bottom:110px}}

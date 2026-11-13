@@ -106,3 +106,27 @@ times, updates immediately from completed-lap results and polls every five
 seconds. It is visible in fullscreen; the minimap sits below it. Empty boards
 invite a first recorded lap instead of inventing times. The browser check uses
 explicit fixture records to verify formatting, placement and live refresh.
+
+## Race announcements and player presence
+
+A one-minute warning uses the next meeting's server-side lights-out time, not
+the beginning of qualifying. While registration remains open, it says:
+“Next race is starting in 1 Minute, there are N players racing right now. Join
+the race lobby to race.” The number is active race drivers plus Time Trial
+players. The button opens that meeting's lobby; registration remains explicit.
+Warnings are deduplicated per race/tab, can be dismissed and expire when joining
+is no longer available. A banner inside the kart root also works in fullscreen.
+
+Authenticated presence heartbeats run every five seconds while visible. Leases
+expire after 25 seconds, and multiple tabs from one account count as one player,
+with active driving taking precedence over a lobby tab. Counts distinguish
+pre-lobby, race lobby, racing and Time Trial, and appear in the clubhouse, session
+selector, race lobby and driving HUDs. Upcoming registered entries are shown
+separately from current active players. Unavailable counts are labelled as such;
+the public activity response contains aggregate counts and schedule metadata,
+without player identities.
+
+`verify-race-announcements-browser.cjs` uses controlled server clock snapshots
+for the warning boundary, real account login and the actual lobby/Time Trial
+views. Presence deduplication/expiry also have Node tests and were exercised
+against the local Worker with two authenticated accounts.

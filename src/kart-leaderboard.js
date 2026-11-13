@@ -1,3 +1,4 @@
+import {handleKartPresence} from './kart-presence.js';
 import {handleRaceEvent} from "./kart-race-events.js";
 import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,TRACK_NAME,projectToRoute,raceStart} from "../public/kart-track.js";
 
@@ -42,6 +43,8 @@ export class KartLeaderboard {
  async read(){return await this.storage.get("road-atlanta-mapped-gt3-v2")||{};}
  async fetch(request){
   const url=new URL(request.url);
+  if(url.pathname==="/presence"||url.pathname==="/activity")
+   return this.storage.transaction(tx=>handleKartPresence(request.clone(),tx));
   // Concurrent drivers must not overwrite each other's meeting snapshots.
   // Clone per attempt because the transaction can retry after reading the body.
   if(url.pathname==="/events"||url.pathname.startsWith("/event/"))

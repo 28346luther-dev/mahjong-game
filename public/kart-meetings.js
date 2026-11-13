@@ -99,6 +99,7 @@ function renderSchedule(){
 function stateUpdate(data){
  if(snapshot?.id===data.id&&data.serverNow<snapshot.serverNow)return;
  snapshot=data;
+ const count=document.getElementById("kartRaceLobbyCount");if(count)count.textContent=(data.registered??data.racers?.length??0)+" players registered for this race";
  serverOffset=data.serverNow-Date.now();
  renderRoster(data);timeRemaining();
  const phaseLabel=$("kartRacePhase");if(phaseLabel&&data.you)phaseLabel.textContent=data.phase.toUpperCase();
@@ -205,7 +206,7 @@ function stop(){
 $("kartMeetingRegister").addEventListener("click",register);
 $("kartPitService").addEventListener("click",service);
 $("kartPractice").addEventListener("click",()=>window.KartRacing?.enterTrack?.("timetrial"));
-window.KartMeetings={open:start,close:stop,getState:()=>snapshot,
+window.KartMeetings={open:start,viewEvent:choose,close:stop,getState:()=>snapshot,
  getActiveId:()=>raceIdentity,sendTelemetry,serviceUntil:()=>Math.max(0,serviceUntil-Date.now()-serverOffset),
  canDrive:()=>snapshot?.phase!=="grid"&&serviceUntil<=Date.now()+serverOffset&&!snapshot?.racers?.find(p=>p.id===snapshot.you)?.finishedAt,
  tick:timeRemaining,refresh:refreshState};

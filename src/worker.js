@@ -191,6 +191,10 @@ export default {
       }
       return new Response("Not found",{status:404});
     }
+    if(url.pathname==="/api/kart/activity"&&request.method==="GET"){
+      return env.KART.get(env.KART.idFromName("velvet-circuit-global"))
+        .fetch("https://kart/activity",{method:"GET"});
+    }
     // Public event timetable and entry lists are readable by the clubhouse.
     if(url.pathname==="/api/kart/events"&&request.method==="GET"){
       return env.KART.get(env.KART.idFromName("velvet-circuit-global"))
@@ -208,7 +212,7 @@ export default {
         if(request.method!=="GET"&&request.method!=="POST")
           return Response.json({error:"Method not allowed"},{status:405});
         const action=url.pathname.slice("/api/kart".length);
-        if(!["/leaderboard","/start","/sample","/finish","/abort","/events","/event/register","/event/state","/event/sample","/event/pit","/event/leave"].includes(action))
+        if(!["/leaderboard","/start","/sample","/finish","/abort","/events","/event/register","/event/state","/event/sample","/event/pit","/event/leave","/presence"].includes(action))
           return Response.json({error:"Unknown kart endpoint"},{status:404});
         const origin=request.headers.get("origin");
         if(origin&&origin!==url.origin)return Response.json({error:"Invalid origin"},{status:403});
@@ -228,6 +232,7 @@ export default {
         if(Number(request.headers.get("content-length")||0)>2048)
           return Response.json({error:"Invalid kart request"},{status:413});
         let body={};try{body=await request.json();}catch{return Response.json({error:"Invalid JSON"},{status:400});}
+        if(!body||typeof body!=="object"||Array.isArray(body))return Response.json({error:"Invalid kart request"},{status:400});
         if(action==="/start"||action==="/event/register"){
           const profileRes=await authStub.fetch("https://auth/profile",{
             method:"POST",body:JSON.stringify({token})
@@ -238,7 +243,7 @@ export default {
         return stub.fetch("https://kart"+action,{
           method:"POST",body:JSON.stringify({user:userId,
             raceId:body.raceId,index:body.index,x:body.x,z:body.z,pit:body.pit===true,name:body.name,
-            eventId:body.eventId,yaw:body.yaw,speed:body.speed,bay:body.bay})
+            eventId:body.eventId,yaw:body.yaw,speed:body.speed,bay:body.bay,client:body.client,mode:body.mode})
         });
       }
       if(["/api/sana/wallet","/api/sana/spin","/api/blackjack/join"].includes(url.pathname)){

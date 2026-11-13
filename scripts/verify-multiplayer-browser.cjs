@@ -27,6 +27,21 @@ const assert = require("node:assert/strict");
     await page.route("**/api/kart/**", async (route) => {
       const url = new URL(route.request().url()),
         now = Date.now();
+      if (/\/(activity|presence)$/.test(url.pathname))
+        return route.fulfill({
+          json: {
+            serverNow: now,
+            counts: {
+              preLobby: 0,
+              raceLobby: 0,
+              racing: 0,
+              timeTrial: 0,
+              driving: 0,
+              total: 0,
+            },
+            nextRace: null,
+          },
+        });
       if (url.pathname.endsWith("/events"))
         return route.fulfill({
           json: {
