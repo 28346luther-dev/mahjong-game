@@ -802,7 +802,18 @@ window.addEventListener("keydown",e=>{
  if(k==="c"){setCameraMode(cameraMode==="chase"?"cockpit":"chase");e.preventDefault();}
  if(k==="p"){togglePitLimiter();e.preventDefault();}
  if(k==="f"&&!selectorVisible){toggleFullscreen();e.preventDefault();}
- if(k==="r"&&!selectorVisible){reset();playing=false;message("Kart reset. Start a new timed lap to record a result.");}
+ if(k==="r"&&!selectorVisible){
+  e.preventDefault();
+  if(e.repeat||busy)return;
+  if(driveMode==="timetrial"){
+   // A reset needs a fresh server session too, or the next sample looks like
+   // a shortcut/teleport and the old lap can invalidate the new attempt.
+   playing=false;raceId=null;keys.clear();touch.clear();reset();resetSectors();
+   begin();
+  }else{
+   reset();playing=false;message("Kart reset. Start a new timed lap to record a result.");
+  }
+ }
  if(k==="escape"){e.preventDefault();if(!selectorVisible)backToSelector();else close();}
 });
 window.addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));
