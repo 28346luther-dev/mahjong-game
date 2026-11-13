@@ -1,3 +1,4 @@
+import {authDiagnostic} from './auth-diagnostics.js';
 import {AuthStore,sessionCookieName,emptySessionCookie} from "./auth.js";
 export {AuthStore};
 export {ClubSocial} from "./club-social.js";
@@ -137,11 +138,13 @@ export default {
     if(url.pathname==="/api/auth/status"){
       try{
         const response=await authStub.fetch("https://auth/health",{method:"POST",body:"{}"});
-        if(!response.ok)return Response.json({ok:false,component:"account-storage",code:"AUTH_STORAGE_CHECK_FAILED"},{status:503,headers:{"cache-control":"no-store"}});
+        if(!response.ok)return Response.json({ok:false,component:"account-storage",code:"AUTH_STORAGE_CHECK_FAILED",upstreamStatus:response.status},{status:503,headers:{"cache-control":"no-store"}});
         return Response.json({ok:true,component:"account-storage"},{headers:{"cache-control":"no-store"}});
       }catch(error){
-        console.error("Auth storage health check failed",error?.name,error?.message);
-        return Response.json({ok:false,component:"account-storage",code:"AUTH_STORAGE_UNAVAILABLE"},{status:503,headers:{"cache-control":"no-store"}});
+        const requestId=crypto.randomUUID();
+        console.error("Auth storage health check failed",requestId,error?.name,error?.message);
+        const diagnostic=authDiagnostic(error);
+        return Response.json({ok:false,component:"account-storage",code:"AUTH_STORAGE_UNAVAILABLE",reason:diagnostic.reason,message:diagnostic.message,requestId},{status:503,headers:{"cache-control":"no-store"}});
       }
     }
     if(url.pathname==="/api/profile"&&(request.method==="GET"||request.method==="POST")){
@@ -186,7 +189,8 @@ export default {
         }catch(error){
           // Don't log credentials or other request payloads.
           console.error("Auth Durable Object error",action,requestId,error?.name,error?.message);
-          return Response.json({error:"The account service could not complete your request. Please report the reference code.",code:"AUTH_BACKEND_FAILURE",requestId},{status:503,headers:{"cache-control":"no-store"}});
+          const diagnostic=authDiagnostic(error);
+          return Response.json({error:diagnostic.message,code:"AUTH_BACKEND_FAILURE",reason:diagnostic.reason,requestId},{status:503,headers:{"cache-control":"no-store"}});
         }
       }
       return new Response("Not found",{status:404});

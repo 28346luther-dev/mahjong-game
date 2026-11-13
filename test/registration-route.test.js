@@ -29,3 +29,24 @@ test("registration rejects non-JSON backend responses",async()=>{
  assert.equal(response.status,502);
  assert.equal((await response.json()).code,"AUTH_UPSTREAM_FORMAT");
 });
+test('account health exposes safe failure categories without leaking provider error contents',async()=>{
+ const cases=[
+  ['Daily request quota exceeded for account secret-account-id','AUTH_STORAGE_LIMIT_REACHED'],
+  ['Durable Object class AuthStore is not exported','AUTH_BINDING_MISMATCH'],
+  ['Durable Object namespace requires migration','AUTH_MIGRATION_REQUIRED'],
+  ['Worker exceeded CPU time limit','AUTH_CPU_LIMIT'],
+  ['This namespace requires a paid plan','AUTH_STORAGE_PLAN_REQUIRED'],
+  ['Durable Object is overloaded','AUTH_STORAGE_BUSY'],
+  ['Unexpected provider error secret-password-or-token','AUTH_STORAGE_UNAVAILABLE']
+ ];
+ for(const [message,reason] of cases){
+  const response=await worker.fetch(new Request('https://example.test/api/auth/status'),envWithStub(async()=>{throw Error(message);}));
+  const body=await response.json();
+  assert.equal(response.status,503);assert.equal(body.reason,reason);assert.match(body.requestId,/^[a-f0-9-]{36}$/);
+  assert.equal(JSON.stringify(body).includes('secret-'),false);
+ }
+});
+test('registration reports a recognized account quota failure',async()=>{
+ const response=await worker.fetch(registerRequest(),envWithStub(async()=>{throw Error('Daily request quota exceeded');}));
+ const body=await response.json();assert.equal(body.reason,'AUTH_STORAGE_LIMIT_REACHED');assert.match(body.error,/quota/);
+});
