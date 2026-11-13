@@ -79,7 +79,8 @@ test("selector, start lights, fullscreen HUD and navigation exist",()=>{
  const meetings=readFileSync("public/kart-meetings.js","utf8");
  for(const id of ["kartModeHub","kartStartLights","kartTrackPositions","kartBackSelector","kartRaceModesBack","kartHubLeaderboard"])
   assert.ok(html.includes('id="'+id+'"'));
- assert.match(html,/data-kart-mode="practice"/);
+ assert.doesNotMatch(html,/data-kart-mode="practice"/);
+ assert.match(html,/id="kartLiveLeaderboard"/);
  assert.match(html,/data-kart-mode="timetrial"/);
  assert.match(html,/data-kart-mode="races"/);
  assert.match(racing,/function backToSelector\(\)/);

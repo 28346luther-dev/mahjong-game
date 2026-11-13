@@ -1,13 +1,13 @@
 /* Scheduled multiplayer Velvet Circuit race meetings.
  * Every 10 minutes a new two-minute qualifying session begins, followed by a
- * ten-lap race. Events are independent; overlapping race meetings do not erase
+ * three-lap race. Events are independent; overlapping race meetings do not erase
  * one another. All registered positions, lap times, pit service and results are
  * held in the existing KartLeaderboard Durable Object.
  */
 import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,PIT_BAYS,PIT_BAY_TOLERANCE,projectToRoute,sampleAt} from "../public/kart-track.js";
 export const EVENT_INTERVAL_MS=600_000;
 export const QUALIFY_MS=120_000;
-export const RACE_LAPS=10;
+export const RACE_LAPS=3;
 export const START_LIGHTS_MS=8000;
 export const START_LIGHT_INTERVAL_MS=1000;
 export const PIT_SERVICE_MS=10_000;
@@ -36,7 +36,7 @@ function driverView(p){return {
  sectorTimes:p.sectorTimes||[],sectorColors:p.sectorColors||[],
  pitComplete:!!p.pitComplete,pitUntil:p.pitUntil||0,pitBay:p.pitBay??null,
  pitMode:!!p.pitMode,disqualified:!!p.disqualified,
- x:p.x,z:p.z,yaw:p.yaw||0,lastAt:p.lastAt||0,
+ x:p.x,z:p.z,yaw:p.yaw||0,speed:p.speed||0,lastAt:p.lastAt||0,
  position:p.position||null
 };}
 function rankPlayers(players){
@@ -87,7 +87,7 @@ function advance(meeting,now){
   for(let i=0;i<order.length;i++){
    const p=order[i],grid=gridPosition(i),proj=projectToRoute(grid.x,grid.z);
    Object.assign(p,grid,{progress:proj.progress,travel:0,lastAt:now,
-    lapStarted:meeting.id+QUALIFY_MS+START_LIGHTS_MS,lap:0,finishedAt:null,finishedMs:null,
+    lapStarted:meeting.id+QUALIFY_MS+START_LIGHTS_MS,lap:0,speed:0,finishedAt:null,finishedMs:null,
     pitComplete:false,pitUntil:0,pitBay:null,pitMode:false,disqualified:false,startedDriving:false,
     sectorTimes:[],sectorColors:[],sectorIndex:0,sectorLastAt:now});
   }
@@ -210,6 +210,8 @@ export async function handleRaceEvent(request,storage){
  }
   const movement=sampleMovement(player,x,z,now,pit);
  if(movement.error)return Response.json({error:movement.error},{status:422});
+ player.yaw=Number.isFinite(body.yaw)?body.yaw:player.yaw;
+ player.speed=Number.isFinite(speed)?Math.max(-4,Math.min(MAX_STEP_MPS,speed)):0;
  if(pit){
   player.pitMode=true;player.progress=projectToRoute(x,z,ROAD).progress;
   player.travel=0;player.x=x;player.z=z;player.lastAt=now;
@@ -246,7 +248,6 @@ export async function handleRaceEvent(request,storage){
  const crossed=player.progress>.94&&movement.progress<.06&&movement.delta>=0;
  player.travel+=Math.max(0,movement.delta);
  player.progress=movement.progress;player.x=x;player.z=z;player.lastAt=now;
- player.yaw=Number.isFinite(body.yaw)?body.yaw:player.yaw;
  player.startedDriving=true;
  let lapUpdate=null;
  if(crossed&&player.travel>.89){

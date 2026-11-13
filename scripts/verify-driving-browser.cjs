@@ -22,7 +22,7 @@ const { chromium } = require("playwright");
       response: res,
       body:
         (await res.text()) +
-        `\nwindow.driveTest={state:()=>({pos:{...pos},yaw,speed,playing,inPitLane,pitLimiter,steer:dynamics.steer,roll:dynamics.roll,heave:dynamics.heave,rotation:kart?.rotation.toArray(),calls:renderer?.info.render.calls,triangles:renderer?.info.render.triangles}), objects:()=>({kart,camera,scene,renderer,carVisual}), step:update, run:(input,dt)=>{playing=true;keys.clear();for(const key of input)keys.add(key);update(dt);updateRideHeightAndBank(dt);playing=false;keys.clear();}, reset, pose:(p)=>{pos={x:p.x,y:p.y,z:p.z};
+        `\nwindow.driveTest={state:()=>({pos:{...pos},yaw,speed,playing,inPitLane,pitLimiter,steer:dynamics.steer,roll:dynamics.roll,heave:dynamics.heave,rotation:kart?.rotation.toArray(),calls:renderer?.info.render.calls,triangles:renderer?.info.render.triangles}), objects:()=>({kart,camera,scene,renderer,carVisual}), step:update, animateRivals, rivals:()=>remoteKarts, run:(input,dt)=>{playing=true;keys.clear();for(const key of input)keys.add(key);update(dt);updateRideHeightAndBank(dt);playing=false;keys.clear();}, reset, pose:(p)=>{pos={x:p.x,y:p.y,z:p.z};
 yaw=p.yaw;bonnetYaw=yaw;playing=false;raceId=null;pitLimiter=!!p.pit;inPitLane=!!p.pit;
 dynamics.reset(p.y);
 speed=p.speed||0;
@@ -31,6 +31,21 @@ updateRideHeightAndBank(1);
 `,
     });
   });
+  let boardVersion = 0;
+  await p.route("**/api/kart/leaderboard", (route) =>
+    route.fulfill({
+      json: {
+        entries: [
+          {
+            rank: 1,
+            name: "Leaderboard fixture",
+            bestMs: boardVersion ? 80123 : 81234,
+          },
+          { rank: 2, name: "Second fixture", bestMs: 83456 },
+        ],
+      },
+    }),
+  );
   await p.goto(process.env.DRIVING_TEST_URL || "http://127.0.0.1:8787");
   await p.waitForFunction(() => window.KartRacing);
   await p.evaluate(async () => {
@@ -51,6 +66,26 @@ updateRideHeightAndBank(1);
     timeout: 60000,
   });
   await p.waitForTimeout(4000);
+  await p.waitForFunction(() =>
+    document
+      .querySelector("#kartLiveLeaderboard")
+      ?.textContent.includes("01:21.234"),
+  );
+  const board = await p.locator(".kart-time-board").boundingBox();
+  if (!board || board.x < 500 || board.y > 80)
+    throw Error("Time-trial board must be visible at top right");
+  if (await p.locator('[data-kart-mode="practice"]').count())
+    throw Error("Free Practice must be removed");
+  boardVersion = 1;
+  await p.waitForFunction(
+    () =>
+      document
+        .querySelector("#kartLiveLeaderboard")
+        ?.textContent.includes("01:20.123"),
+    null,
+    { timeout: 15000 },
+  );
+  console.log("Time Trial: visible top-right formatted lap times refresh live");
   console.log(await p.evaluate(() => window.driveTest.state()));
   await p.screenshot({ path: "/tmp/driving-chase.png" });
   await p.evaluate(() => window.KartRacing.setCameraMode("cockpit"));
@@ -213,15 +248,13 @@ updateRideHeightAndBank(1);
             point.y +
             " hits " +
             JSON.stringify(
-              hits
-                .slice(0, 5)
-                .map((h) => ({
-                  name: h.object.name,
-                  color: h.object.material.color?.getHexString(),
-                  geo: h.object.geometry.type,
-                  y: h.point.y,
-                  paved: h.object.userData.paved,
-                })),
+              hits.slice(0, 5).map((h) => ({
+                name: h.object.name,
+                color: h.object.material.color?.getHexString(),
+                geo: h.object.geometry.type,
+                y: h.point.y,
+                paved: h.object.userData.paved,
+              })),
             ),
         );
         pitChecks++;
@@ -298,10 +331,74 @@ updateRideHeightAndBank(1);
       "measured tyre radii",
       carVisual.wheels.map((w) => w.radius),
     );
+    const brakeStart = sampleAt(0.01),
+      brakeNext = sampleAt(0.0101);
+    window.driveTest.pose({
+      ...brakeStart,
+      yaw: Math.atan2(brakeNext.x - brakeStart.x, brakeNext.z - brakeStart.z),
+      speed: 100 / 3.6,
+    });
+    for (
+      let i = 0;
+      i < 240 && Math.abs(window.driveTest.state().speed) > 0.001;
+      i++
+    )
+      window.driveTest.run(["w", "s"], 1 / 120);
+    const stopped = window.driveTest.state();
+    const stoppingDistance = Math.hypot(
+      stopped.pos.x - brakeStart.x,
+      stopped.pos.z - brakeStart.z,
+    );
+    assert(
+      Math.abs(stopped.speed) < 0.001 && stoppingDistance < 21,
+      "100km/h browser braking stop",
+    );
+    const epoch = Date.now(),
+      rivalId = "b".repeat(64),
+      myId = "a".repeat(64);
+    for (let i = 0; i <= 10; i++)
+      window.KartRacing.updateRivals(
+        [
+          {
+            id: rivalId,
+            name: "Remote driver",
+            x: brakeStart.x + Math.sin(heading) * i * 2,
+            z: brakeStart.z + Math.cos(heading) * i * 2,
+            yaw: heading,
+            speed: 20,
+            lastAt: epoch + i * 100,
+          },
+        ],
+        myId,
+        epoch + i * 100,
+      );
+    let previous = null,
+      maxRivalStep = 0;
+    for (let t = 0; t <= 1000; t += 1000 / 60) {
+      window.driveTest.animateRivals(1 / 60, epoch + t + 150);
+      const rival = window.driveTest.rivals().get(rivalId);
+      if (previous)
+        maxRivalStep = Math.max(
+          maxRivalStep,
+          rival.position.distanceTo(previous),
+        );
+      previous = rival.position.clone();
+    }
+    assert(
+      maxRivalStep < 0.35,
+      "rendered rivals move smoothly between 10Hz snapshots",
+    );
+    window.KartRacing.updateRivals([], myId, epoch + 1100);
+    assert(
+      window.driveTest.rivals().size === 0,
+      "finished/removed rivals cannot remain as ghosts",
+    );
     window.driveTest.reset();
 
     return {
       routeSamples: 40,
+      stoppingDistance,
+      maxRivalStep,
       pitChecks,
       pitProgress,
       maximumPitError,

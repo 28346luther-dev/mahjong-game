@@ -174,3 +174,16 @@ body.kart-open{overflow:hidden}
 .kart-driving #kartStatus{position:absolute;bottom:4px;left:28%;right:22%;z-index:15;background:#10202c70;border:0;border-radius:0;padding:3px 6px;font:10px sans-serif;color:#e8edf2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kart-driving .kart-touch{display:none}
 @media(pointer:coarse){.kart-driving .kart-touch{display:flex;position:absolute;bottom:5px;left:20%;right:20%;z-index:35}.kart-driving .kart-overlay>div:nth-child(4){bottom:75px}.kart-driving #kartStatus{display:none}}
+
+/* Live time-trial times stay visible in the driving view and fullscreen. */
+.kart-time-board{display:none}
+.kart-driving.kart-time-trial .kart-time-board{display:block;position:absolute;right:20px;top:20px;z-index:12;width:clamp(220px,25vw,320px);max-height:220px;overflow:auto;padding:12px;background:#10202ddd;border-left:3px solid #e8c36b;color:#fff}
+.kart-time-board>strong,.kart-time-board>small{display:block;font:700 11px system-ui;letter-spacing:.06em}
+.kart-time-board>small{margin-top:5px;color:#9ee6cf;font-size:9px}
+.kart-time-board ol{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:5px}
+.kart-time-board li{display:flex;gap:8px;align-items:center;padding:4px 0;font:12px system-ui}
+.kart-time-board li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kart-time-board li b{font-variant-numeric:tabular-nums;color:#f6dc99}
+.kart-time-trial .kart-live-positions{display:none}
+.kart-mode-options{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:600px){.kart-mode-options{grid-template-columns:1fr}.kart-driving.kart-time-trial .kart-time-board{right:10px;top:90px;width:205px;max-height:180px}}

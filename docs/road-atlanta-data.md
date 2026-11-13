@@ -76,3 +76,33 @@ This supplements the Node regression suite; it is not vehicle telemetry validati
 Project Chrono was assessed through its official repository README: its documented
 native C++/Python/C# interfaces do not provide a drop-in JavaScript replacement.
 This pass retains the existing browser runtime and Cannon suspension integration.
+
+## Three-lap multiplayer and assisted handling
+
+Scheduled races now finish after three verified laps; qualifying and the
+mandatory ten-second pit stop remain. Every race HUD and roster uses three laps.
+Gameplay tyre grip is 1.85, steering range is increased, and braking preserves
+96% of cornering grip rather than 72%. Grip averages all four contacts so touching
+an apex kerb does not impose one tyre's low grip on the whole chassis. Braking
+uses 20 m/s² game tuning with a zero-speed clamp; these are accessibility settings,
+not measured GT3 specifications.
+
+Driving telemetry and race-state polling target 100 ms intervals, subject to
+network response time. Opponents use timestamped interpolation with a 150 ms
+playback buffer, shortest-angle headings and at most 150 ms extrapolation across
+missing packets. Older packets are discarded, clock corrections are bounded,
+and finished/removed rivals are removed. Speed is included in server snapshots
+for animated wheels. Meeting storage updates use a transaction to prevent
+concurrent drivers overwriting one another's state.
+
+`verify-multiplayer-browser.cjs` exercises two clients with delayed/out-of-order
+HTTP responses and a contact response. The driving browser check also verifies
+a 100 km/h braking stop and opponent movement between 10 Hz snapshots. Node tests
+cover lap-three completion, steering while braking, kerb grip and packet playback.
+
+Free Practice has been removed from the selector; its legacy entry point redirects
+to Time Trial. Time Trial's top-right driving HUD displays real ranked best-lap
+times, updates immediately from completed-lap results and polls every five
+seconds. It is visible in fullscreen; the minimap sits below it. Empty boards
+invite a first recorded lap instead of inventing times. The browser check uses
+explicit fixture records to verify formatting, placement and live refresh.

@@ -11,7 +11,10 @@ async function call(path,body=null){
  const r=await fetch("/api/kart/"+path,{method:body?"POST":"GET",credentials:"same-origin",
   headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store"});
  const payload=await r.json();
- if(!r.ok)throw Error(payload.error||"Race server unavailable");
+ if(!r.ok){
+  if(payload.collision&&payload.id===selected)stateUpdate(payload);
+  throw Error(payload.error||"Race server unavailable");
+ }
  return payload;
 }
 const status=s=>{if($("kartMeetingStatus"))$("kartMeetingStatus").textContent=s;};
@@ -29,7 +32,7 @@ function timeRemaining(){
  if(snapshot.phase==="registration")el.textContent=countdown(snapshot.qualifyingAt-now)+"s until qualifying";
  else if(snapshot.phase==="qualifying")el.textContent=countdown(snapshot.raceAt-now)+"s until grid start";
  else if(snapshot.phase==="grid")el.textContent="GRID · FIVE RED LIGHTS";
- else if(snapshot.phase==="race")el.textContent="10-LAP RACE IN PROGRESS";
+ else if(snapshot.phase==="race")el.textContent="3-LAP RACE IN PROGRESS";
  else el.textContent="SESSION COMPLETE";
  const lights=$("kartStartLights");
  const isGrid=snapshot.phase==="grid"&&!!snapshot.you;
@@ -68,7 +71,7 @@ function renderRoster(state){
     (p.finishedAt?(p.disqualified?" · DQ":" · FINISHED"):p.pitComplete?" · PIT ✓":p.pitUntil?" · SERVICING":"");
   const value=document.createElement("b");
   value.textContent=state.phase==="qualifying"||state.phase==="registration"?fmt(p.qualifiedMs):
-   p.finishedAt?fmt(p.finishedMs):"LAP "+Math.min(p.lap+1,10)+"/10";
+   p.finishedAt?fmt(p.finishedMs):"LAP "+Math.min(p.lap+1,3)+"/3";
   const split=document.createElement("span");split.className="timing-mini-sectors";
   for(let j=0;j<3;j++){
    const cell=document.createElement("i");
@@ -94,6 +97,7 @@ function renderSchedule(){
  }
 }
 function stateUpdate(data){
+ if(snapshot?.id===data.id&&data.serverNow<snapshot.serverNow)return;
  snapshot=data;
  serverOffset=data.serverNow-Date.now();
  renderRoster(data);timeRemaining();
@@ -110,18 +114,18 @@ function stateUpdate(data){
   data.phase==="race"?mine.finishedAt?
    mine.disqualified?"Race complete: disqualified for missing the mandatory pit stop.":
    "Finished! Final race position P"+mine.position:
-   "10 laps · grid P"+mine.grid+" · "+(mine.pitComplete?"pit stop ✓":"mandatory pit stop needed"):
+   "3 laps · grid P"+mine.grid+" · "+(mine.pitComplete?"pit stop ✓":"mandatory pit stop needed"):
    "This meeting is complete.":
   data.phase==="race"?"Race in progress. You can watch results and register for the next meeting.":
-  "Register to race. Two-minute qualifying precedes a ten-lap race.";
+  "Register to race. Two-minute qualifying precedes a three-lap race.";
  status(details);
  const identity=String(selected)+":"+data.phase;
  if(data.you&&window.KartRacing?.mayAutoJoinMeeting?.()&&["qualifying","grid","race"].includes(data.phase)&&phaseEntered!==identity){
   phaseEntered=identity;raceIdentity=selected;
   window.KartRacing?.beginMeetingStage?.(data.phase,mine,data);
  }
- if(data.you&&["grid","race"].includes(data.phase)){
-  window.KartRacing?.updateRivals?.(data.racers,data.you);
+ if(data.you&&["qualifying","grid","race"].includes(data.phase)){
+  window.KartRacing?.updateRivals?.(data.racers,data.you,data.serverNow);
  }
  if(mine?.pitUntil)serviceUntil=mine.pitUntil;
  if(mine?.finishedAt)window.KartRacing?.finishMeetingStage?.(mine);
@@ -191,16 +195,16 @@ function start(){
  refreshSchedule().then(refreshState);
  poller=setInterval(()=>{
   timeRemaining();
-  refreshState();
-  if(Date.now()%18000<2300)refreshSchedule();
- },650);
+  if(!sending)refreshState();
+  if(Date.now()%18000<100)refreshSchedule();
+ },100);
 }
 function stop(){
  open=false;clearInterval(poller);poller=null;
 }
 $("kartMeetingRegister").addEventListener("click",register);
 $("kartPitService").addEventListener("click",service);
-$("kartPractice").addEventListener("click",()=>window.KartRacing?.beginPractice?.());
+$("kartPractice").addEventListener("click",()=>window.KartRacing?.enterTrack?.("timetrial"));
 window.KartMeetings={open:start,close:stop,getState:()=>snapshot,
  getActiveId:()=>raceIdentity,sendTelemetry,serviceUntil:()=>Math.max(0,serviceUntil-Date.now()-serverOffset),
  canDrive:()=>snapshot?.phase!=="grid"&&serviceUntil<=Date.now()+serverOffset&&!snapshot?.racers?.find(p=>p.id===snapshot.you)?.finishedAt,

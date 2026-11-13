@@ -13,7 +13,7 @@ test('GT3 suspension settles, steering saturates and turns right for D input',()
  for(let i=0;i<240;i++)d.step(1/120,{...p,y:p.y,speed:0,steer:0,brake:false,isPit:true});
  assert.ok(Math.abs(d.heave)<.01);assert.ok(Math.abs(d.roll)<.01);
  let yaw=0;for(let i=0;i<120;i++)yaw+=d.step(1/120,{...p,speed:70,steer:1,brake:false,isPit:true}).yawDelta;
- assert.ok(yaw<0&&yaw>-.25,'lateral acceleration limited at high speed');
+ assert.ok(yaw<0&&yaw>-.30,'lateral acceleration limited at high speed');
  assert.ok(Number.isFinite(d.heave+d.roll+d.pitch));
 });
 test('kerb wheel contact is raised and lower grip than tarmac',()=>{
@@ -65,4 +65,29 @@ test('saturated steering rotates the nose without inventing sideways drift',()=>
   assert.ok(Math.abs(side)<.001,'cannot skate sideways instead of turning');
   assert.ok(Math.abs(d.heave)<=.025&&Math.abs(d.roll)<=.045);
  }
+});
+test('assisted cornering turns tighter at medium speed and retains grip under braking',()=>{
+ const turn=brake=>{
+  const d=new GTDynamics();d.reset(0);let yaw=0;
+  for(let i=0;i<120;i++)yaw+=d.step(1/120,{x:0,z:0,y:0,yaw,speed:30,steer:1,brake,isPit:true}).yawDelta;
+  return Math.abs(yaw);
+ };
+ assert.ok(turn(false)>.5,'90-degree corners should not need huge radii at 108km/h');
+ assert.ok(turn(true)/turn(false)>.94,'braking must retain steering authority');
+});
+test('strong brakes shorten 100km/h stops and never reverse the car',async()=>{
+ const {brakeSpeed}=await import('../public/kart-vehicle-dynamics.js');
+ let speed=100/3.6,distance=0,time=0;
+ while(speed>0){speed=brakeSpeed(speed,1/120);distance+=speed/120;time+=1/120;}
+ assert.ok(time<1.5&&distance<20);
+ assert.equal(brakeSpeed(.1,1/60),0);assert.equal(brakeSpeed(-.1,1/60),0);
+});
+test('clipping an apex kerb retains cornering grip instead of sudden whole-car understeer',()=>{
+ const p=sampleAt(.35),q=sampleAt(.351),projection=projectToRoute(p.x,p.z),yaw=Math.atan2(q.x-p.x,q.z-p.z);
+ const turn=lateral=>{
+  const d=new GTDynamics();d.reset(p.y);let angle=0;
+  for(let i=0;i<120;i++)angle+=d.step(1/120,{x:p.x+projection.normalX*lateral,z:p.z+projection.normalZ*lateral,y:p.y,yaw,speed:30,steer:1,brake:false,isPit:false}).yawDelta;
+  return Math.abs(angle);
+ };
+ assert.ok(turn(ROAD_HALF_WIDTH-.4)/turn(0)>.9);
 });

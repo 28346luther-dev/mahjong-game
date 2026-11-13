@@ -43,7 +43,7 @@ test("online GT car rendering and high-speed movement use full-size track settin
  assert.match(racing,/pitLimiter\?PIT_LIMIT_MS:82/);
  assert.match(model,/export function createGTCar/);
  assert.match(racing,/animateRivals\(dt\)/);
- assert.match(meetings,/},650\)/);
+ assert.match(meetings,/},100\)/);
  assert.match(leader,/2500/);
  assert.match(events,/MAX_STEP_MPS=105/);
  assert.match(leader,/road-atlanta-mapped-gt3-v2/);

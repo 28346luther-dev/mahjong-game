@@ -104,33 +104,32 @@
         </header>
         <section id="kartModeHub" class="kart-mode-hub" aria-label="Select a race mode">
           <div class="kart-mode-hero"><span>VELVET MOTORSPORT · RACE CONTROL</span>
-            <h3>CHOOSE YOUR SESSION</h3><p>Choose a mode before entering the track. Practice freely, set a fastest lap, or register for the next multiplayer race.</p></div>
+            <h3>CHOOSE YOUR SESSION</h3><p>Choose a mode before entering the track. Set a fastest lap in Time Trial or register for the next multiplayer race.</p></div>
           <div class="kart-mode-options">
-            <button type="button" class="kart-mode-card" data-kart-mode="practice"><span>🔧</span><strong>FREE PRACTICE</strong><small>Unlimited laps · explore the track and pit lane</small><em>ENTER PRACTICE</em></button>
             <button type="button" class="kart-mode-card" data-kart-mode="timetrial"><span>⏱</span><strong>TIME TRIAL</strong><small>One complete lap at a time · global fastest lap board</small><em>START TIME TRIAL</em></button>
-            <button type="button" class="kart-mode-card" data-kart-mode="races"><span>🏎</span><strong>UPCOMING RACES</strong><small>10-minute meetings · 2-minute qualifying · 10 laps</small><em>OPEN REGISTRATIONS</em></button>
+            <button type="button" class="kart-mode-card" data-kart-mode="races"><span>🏎</span><strong>UPCOMING RACES</strong><small>10-minute meetings · 2-minute qualifying · 3 laps</small><em>OPEN REGISTRATIONS</em></button>
           </div>
           <div class="kart-hub-standings"><strong>🏆 GLOBAL FASTEST FULL LAPS</strong>
             <ol id="kartHubLeaderboard" aria-live="polite"><li>Loading current records…</li></ol>
           </div>
         </section>
-        <div id="kartSelectorBar" class="kart-selector-bar"><button id="kartBackSelector" type="button">‹ Back to Race Selector</button><span id="kartDrivingMode">FREE PRACTICE</span></div>
+        <div id="kartSelectorBar" class="kart-selector-bar"><button id="kartBackSelector" type="button">‹ Back to Race Selector</button><span id="kartDrivingMode">TIME TRIAL</span></div>
                 <section class="kart-meetings" aria-label="Multiplayer race timetable and registrations">
           <div class="kart-meeting-head">
             <button id="kartRaceModesBack" type="button" class="kart-modes-back">‹ All racing modes</button>
             <div><h3>🏁 Championship race meetings</h3>
-              <p>Every 10 minutes · 2-minute qualifying · grid from qualifying · 10-lap race · mandatory 10-second pit service</p></div>
+              <p>Every 10 minutes · 2-minute qualifying · grid from qualifying · 3-lap race · mandatory 10-second pit service</p></div>
             <span class="kart-live" id="kartMeetingClock">Updating race timetable…</span>
           </div>
           <div class="kart-event-list" id="kartEventList" aria-live="polite">Loading race meetings…</div>
           <div class="kart-meeting-main">
             <div class="kart-meeting-status">
               <strong id="kartMeetingTitle">Choose a scheduled race</strong>
-              <p id="kartMeetingStatus">Register for the next race or run solo laps in Free Practice below.</p>
+              <p id="kartMeetingStatus">Register for the next race or run solo laps in Time Trial below.</p>
               <div class="kart-meeting-count" id="kartMeetingCountdown">--:--</div>
               <div class="kart-events-actions">
                 <button id="kartMeetingRegister" type="button">Register for selected race</button>
-                <button id="kartPractice" type="button">Free Practice</button>
+                <button id="kartPractice" type="button">Time Trial</button>
                 <button id="kartPitService" type="button" disabled>Stop in pit bay · 10 sec</button>
               </div>
               <p class="kart-grid-notice" id="kartGridMessage">Grid order follows each driver's best qualifying lap; spectators can follow the live results.</p>
@@ -157,7 +156,8 @@
               <div><span>SECTOR 3</span><strong id="kartSector3">--:--.---</strong></div>
             </div>
               <div id="kartStartLights" class="kart-start-lights hidden" aria-live="assertive"><div class="light-rack"><div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div><div class="light-bulb"></div></div><strong id="kartLightsText">FIVE RED LIGHTS</strong></div>
-              <div class="kart-live-positions" id="kartLivePositions" aria-live="polite"><strong>LIVE POSITIONS</strong><ol id="kartTrackPositions"><li>Free Practice</li></ol></div>
+              <aside class="kart-time-board" aria-label="Live time trial leaderboard"><strong>GLOBAL TIME TRIAL</strong><small>FASTEST LAPS · LIVE</small><ol id="kartLiveLeaderboard" aria-live="polite"><li>Loading times…</li></ol></aside>
+              <div class="kart-live-positions" id="kartLivePositions" aria-live="polite"><strong>LIVE POSITIONS</strong><ol id="kartTrackPositions"><li>Time Trial</li></ol></div>
               <div class="kart-service-overlay hidden" id="kartServiceOverlay" aria-live="assertive">
                 <div class="kart-service-card"><span>PIT SERVICE · DO NOT MOVE</span>
                   <strong id="kartServiceCountdown">10.0</strong><p>Mandatory stop being completed</p></div>
@@ -178,10 +178,10 @@
           </div>
           <aside class="kart-leaderboard">
             <div class="kart-board-head"><h3>🏆 FASTEST LAPS</h3><button id="kartRefresh" type="button">Refresh</button></div>
-            <p>Global live ranking · updates every 15 seconds · fastest lap per player.</p>
+            <p>Global live ranking · updates every 5 seconds · fastest lap per player.</p>
             <ol id="kartLeaderboard" aria-live="polite"></ol>
             <div class="kart-rules"><strong>HOW TO RACE</strong>
-              <p>Join a scheduled multiplayer race for 2-minute qualifying and a 10-lap sprint with a mandatory 10-second pit stop. Free Practice still offers unlimited laps. Apex kerbs are red and white, with bright green paint and gravel runoff on the outside. Cross the chequered finish line to log each lap and immediately continue into the next. Engage the 40 km/h limiter with P before PIT IN. Keep it on until you rejoin the circuit at PIT OUT; your timed lap restarts after pitting. The long right-hand corner is banked for speed, and your S1/S2/S3 splits appear in the sector display. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
+              <p>Join a scheduled multiplayer race for 2-minute qualifying and a 3-lap sprint with a mandatory 10-second pit stop. Time Trial still offers unlimited laps. Apex kerbs are blue and yellow, with bright green paint and gravel runoff on the outside. Cross the chequered finish line to log each lap and immediately continue into the next. Engage the 40 km/h limiter with P before PIT IN. Keep it on until you rejoin the circuit at PIT OUT; your timed lap restarts after pitting. Your S1/S2/S3 splits appear in the sector display. Use W to accelerate, A/D to steer, S or Space to brake. R resets your kart, but you'll need to restart for a valid lap.</p>
             </div>
           </aside>
         </div>

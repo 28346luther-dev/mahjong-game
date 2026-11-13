@@ -1,6 +1,7 @@
 import {clearPitGrass} from './kart-road-contact.js';
 import {RGBELoader} from './vendor/loaders/RGBELoader.js';
-import {GTDynamics,wheelSurface} from './kart-vehicle-dynamics.js';
+import {RivalMotion} from './kart-network-motion.js';
+import {GTDynamics,wheelSurface,brakeSpeed} from './kart-vehicle-dynamics.js';
 import {addRoadAtlantaLandscape,terrainHeight} from './kart-landscape.js';
 const dynamics=new GTDynamics();
 let carVisual=null,miniMap=null;
@@ -12,7 +13,10 @@ function drawTrackMap(){
   const ps=ROAD.samples,b=ps.reduce((b,p)=>({x:Math.min(b.x,p.x),z:Math.min(b.z,p.z),X:Math.max(b.X,p.x),Z:Math.max(b.Z,p.z)}),{x:Infinity,z:Infinity,X:-Infinity,Z:-Infinity});
   miniMap={canvas,b,scale:Math.min(230/(b.X-b.x),300/(b.Z-b.z))};
  }
- const {canvas,b,scale}=miniMap,ctx=canvas.getContext('2d'),px=x=>25+(x-b.x)*scale,pz=z=>25+(z-b.z)*scale;
+ const {canvas,b,scale}=miniMap;
+ const liveBoard=document.querySelector(".kart-time-board");
+ canvas.style.top=($("kartGame").classList.contains("kart-time-trial")?(liveBoard?.offsetTop||20)+(liveBoard?.offsetHeight||180)+15:20)+"px";
+ const ctx=canvas.getContext('2d'),px=x=>25+(x-b.x)*scale,pz=z=>25+(z-b.z)*scale;
  ctx.clearRect(0,0,280,360);ctx.beginPath();ROAD.samples.forEach((p,i)=>i?ctx.lineTo(px(p.x),pz(p.z)):ctx.moveTo(px(p.x),pz(p.z)));ctx.closePath();ctx.strokeStyle='#162533b0';ctx.lineWidth=8;ctx.stroke();ctx.strokeStyle='#f4f5f0';ctx.lineWidth=3;ctx.stroke();
  ctx.save();ctx.translate(px(pos.x),pz(pos.z));ctx.rotate(-yaw);ctx.beginPath();ctx.moveTo(0,8);ctx.lineTo(-5,-5);ctx.lineTo(5,-5);ctx.closePath();ctx.fillStyle='#ff6436';ctx.fill();ctx.restore();
 }
@@ -30,11 +34,11 @@ const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
 let speed=0,yaw=0,pos={x:0,y:0,z:0},started=0,progress=0,sendAt=0,telemetryPending=false,lastStatusAt=0;
 let lapCount=1,lapToastTimeout=null,lastLeaderboardRefresh=0,boardRequest=null;
-let bonnetYaw=0;
+let bonnetYaw=0,rivalClockOffset=null;
 let cameraMode="chase",cockpitOccluders=[],previousCameraMode="chase";
-let driveMode="practice",meetingPhase=null,remoteKarts=new Map();
+let driveMode="timetrial",meetingPhase=null,remoteKarts=new Map();
 const rivalTargets=new Map();
-let selectedMode="practice",timeTrial=false,selectorVisible=true;
+let selectedMode="timetrial",timeTrial=true,selectorVisible=true;
 let localPitUntil=0,localPitBay=null,localPitDone=false;
 function getLocalPitRemaining(){return Math.max(0,localPitUntil-Date.now());}
 function resetLocalPit(){localPitUntil=0;localPitBay=null;localPitDone=false;}
@@ -52,15 +56,17 @@ function createRival(p){
  const palette=[0xb33749,0x2a739d,0x3f8a6b,0xd2ac51,0x805b98,0xdc7b39];
  const index=parseInt(p.id.slice(0,7),16)%palette.length;
  const model=createGTCar(THREE,{color:palette[index],number:index+1});
- scene.add(model.group);return model.group;
+ model.group.userData.vehicle=model;scene.add(model.group);return model.group;
 }
-function updateRivals(racers,myId){
+function updateRivals(racers,myId,serverNow=Date.now()){
+ const offset=serverNow-performance.now();
+ rivalClockOffset=rivalClockOffset===null?offset:rivalClockOffset+Math.max(-2,Math.min(2,offset-rivalClockOffset));
  const list=$("kartTrackPositions");
  if(list){
   list.replaceChildren();
   for(const [index,p] of (racers||[]).entries()){
    const li=document.createElement("li");
-   li.textContent="P"+(p.position||index+1)+" "+p.name+(p.id===myId?" · YOU":"")+" L"+(p.lap||0)+"/10";
+   li.textContent="P"+(p.position||index+1)+" "+p.name+(p.id===myId?" · YOU":"")+" L"+(p.lap||0)+"/3";
    if(p.id===myId)li.className="my-position";
    list.append(li);
   }
@@ -76,39 +82,35 @@ function updateRivals(racers,myId){
    group.position.set(driver.x,projectToRoute(driver.x,driver.z,ROAD).y,driver.z);
    group.rotation.y=(driver.yaw||0)+Math.PI;
   }
-  // Never snap remote karts to sporadic HTTP snapshots. Interpolate
-  // positions and shortest-angle headings every animation frame.
-  const road=projectToRoute(driver.x,driver.z,ROAD);
-  const pit=projectToRoute(driver.x,driver.z,PIT);
-  rivalTargets.set(driver.id,{x:driver.x,z:driver.z,yaw:driver.yaw||0,
-   y:pit.distance<road.distance?pit.y:road.y,
-   speed:driver.speed||0,lastAt:now});
+  let target=rivalTargets.get(driver.id);
+  if(!target){target={motion:new RivalMotion(),lastAt:now};rivalTargets.set(driver.id,target);}
+  target.lastAt=now;target.motion.push({x:driver.x,z:driver.z,yaw:driver.yaw||0,speed:driver.speed||0,pit:driver.pitMode,t:driver.lastAt||serverNow});
+
  }
  for(const [id,group] of remoteKarts){
   const target=rivalTargets.get(id);
-  if(!target||now-target.lastAt>7500){
+  if(!target||now-target.lastAt>7500||!(racers||[]).some(p=>p.id===id&&!p.finishedAt)){
    scene.remove(group);remoteKarts.delete(id);rivalTargets.delete(id);
   }
  }
 }
-function animateRivals(dt){
- const now=performance.now();
+function animateRivals(dt,serverTime=performance.now()+rivalClockOffset){
  for(const [id,group] of remoteKarts){
   const target=rivalTargets.get(id);if(!target)continue;
-  const alpha=1-Math.exp(-Math.min(.05,dt)*9);
-  group.position.x+=(target.x-group.position.x)*alpha;
-  group.position.z+=(target.z-group.position.z)*alpha;
-  group.position.y+=(target.y-group.position.y)*Math.min(1,dt*7);
-  const targetYaw=target.yaw+Math.PI;
-  const delta=Math.atan2(Math.sin(targetYaw-group.rotation.y),Math.cos(targetYaw-group.rotation.y));
-  group.rotation.y+=delta*alpha;
+  const pose=target.motion.sample(serverTime-150);if(!pose)continue;
+  const road=projectToRoute(pose.x,pose.z,pose.pit?PIT:ROAD);
+  group.position.set(pose.x,wheelSurface(pose.x,pose.z).height+.044,pose.z);
+  const up=surfaceNormal(pose.pit?PIT:ROAD,road,0,THREE);
+  group.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),up).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),pose.yaw+Math.PI));
+  group.userData.vehicle?.animate(pose.speed,0,dt);
+
  }
 }
 async function beginMeetingStage(phase,mine){
  if(driveMode==="meeting"&&meetingPhase==="grid"&&phase==="race"){
   meetingPhase="race";playing=true;speed=0;started=performance.now();
   $("kartRacePhase").textContent="RACE";
-  message("LIGHTS OUT! GO! Complete 10 laps and the mandatory pit stop.");
+  message("LIGHTS OUT! GO! Complete 3 laps and the mandatory pit stop.");
   return;
  }
  enterTrack("races");
@@ -128,11 +130,11 @@ async function beginMeetingStage(phase,mine){
   $("kartLap").textContent="1";$("kartProgress").textContent="0%";
   message(phase==="qualifying"?"QUALIFYING: Set your best full lap before the race starts.":
     phase==="grid"?"GRID P"+mine.grid+" · stay stationary until the red lights go out.":
-    "LIGHTS OUT! Grid P"+mine.grid+" · ten laps · mandatory pit service.");
+    "LIGHTS OUT! Grid P"+mine.grid+" · three laps · mandatory pit service.");
  }catch(error){message("Could not start multiplayer session: "+error.message);}
 }
 function clearMeetingStage(){
- if(driveMode==="meeting"){playing=false;driveMode="practice";meetingPhase=null;speed=0;}
+ if(driveMode==="meeting"){playing=false;driveMode="timetrial";meetingPhase=null;speed=0;}
  for(const group of remoteKarts.values())scene?.remove(group);
  remoteKarts.clear();rivalTargets.clear();
 }
@@ -141,7 +143,7 @@ function finishMeetingStage(mine){
  playing=false;speed=0;
  message(mine.disqualified?
   "Race completed but disqualified: mandatory pit stop not completed.":
-  "CHEQUERED FLAG! You finished P"+mine.position+" of the 10-lap race.");
+  "CHEQUERED FLAG! You finished P"+mine.position+" of the 3-lap race.");
 }
 function meetingSectorUpdate(data){
  if(driveMode!=="meeting"||!data)return;
@@ -156,8 +158,8 @@ function meetingLapUpdate(data){
   message("Qualifying: "+format(data.timeMs)+" · best "+format(data.bestMs));
  }else if(data.type==="race"){
   $("kartLast").textContent="LAST "+format(data.timeMs);
-  $("kartLap").textContent=String(Math.min(10,data.lap+1));
-  message("RACE LAP "+data.lap+"/10 · "+format(data.timeMs));
+  $("kartLap").textContent=String(Math.min(3,data.lap+1));
+  message("RACE LAP "+data.lap+"/3 · "+format(data.timeMs));
  }
  started=performance.now();
 }
@@ -259,10 +261,11 @@ document.addEventListener("fullscreenchange",syncFullscreen);
 function message(t){$("kartStatus").textContent=t;}
 function standings(records){
  const list=$("kartLeaderboard");list.replaceChildren();
- const selectorList=$("kartHubLeaderboard");
+ const selectorList=$("kartHubLeaderboard"),liveList=$("kartLiveLeaderboard");
+ liveList?.replaceChildren();
  if(selectorList)selectorList.replaceChildren();
  if(!records?.length){
-  for(const parent of [list,selectorList].filter(Boolean)){
+  for(const parent of [list,selectorList,liveList].filter(Boolean)){
    const li=document.createElement("li");li.textContent="No recorded laps yet — set the first full lap!";
    parent.append(li);
   }
@@ -272,6 +275,7 @@ function standings(records){
   const li=document.createElement("li"),rank=document.createElement("strong"),name=document.createElement("span"),time=document.createElement("b");
   rank.textContent="#"+p.rank;name.textContent=p.name;time.textContent=format(p.bestMs);
   li.append(rank,name,time);list.append(li);
+  liveList?.append(li.cloneNode(true));
   if(selectorList){
    const row=document.createElement("li");
    row.textContent="#"+p.rank+"  "+p.name+"  —  "+format(p.bestMs);
@@ -619,15 +623,15 @@ function update(dt){
  }
  if(driveMode==="meeting"&&!window.KartMeetings?.canDrive?.()){
   speed=0;updateRideHeightAndBank(dt);
-  if(performance.now()-sendAt>480){sendAt=performance.now();transmit();}
+  if(performance.now()-sendAt>(driveMode==="meeting"?100:480)){sendAt=performance.now();transmit();}
   return;
  }
  const accelerate=down("w")||down("arrowup");
  const brake=down("s")||down("arrowdown")||down(" ");
  const steer=Number(down("d")||down("arrowright"))-Number(down("a")||down("arrowleft"));
- speed+=Number(accelerate)*Math.min(8.8,330000/(1320*Math.max(12,Math.abs(speed))))*dt;
+ speed+=Number(accelerate&&!brake)*Math.min(8.8,330000/(1320*Math.max(12,Math.abs(speed))))*dt;
  speed-=Math.sign(speed)*(.16+.00065*speed*speed)*dt;
- if(brake)speed-=Math.sign(speed||1)*Math.min(Math.abs(speed)/Math.max(dt,.001),13)*dt;
+ if(brake)speed=brakeSpeed(speed,dt);
  speed=Math.max(-4,Math.min(pitLimiter?PIT_LIMIT_MS:82,speed));
  if(pitLimiter&&speed>PIT_LIMIT_MS)speed=PIT_LIMIT_MS;
  if(!accelerate&&!brake&&Math.abs(speed)<.15)speed=0;
@@ -668,7 +672,7 @@ function update(dt){
   speed*=.23; // Outside barrier prevents off-track shortcut.
  }
  localPitService();
- if(performance.now()-sendAt>320&&!telemetryPending){sendAt=performance.now();transmit();}
+ if(performance.now()-sendAt>(driveMode==="meeting"?100:320)&&!telemetryPending){sendAt=performance.now();transmit();}
  // Sector times are display-only and never reset this lap clock.
  if(driveMode!=="meeting")$("kartTime").textContent=format(performance.now()-started);
  else if(meetingPhase==="qualifying"||meetingPhase==="race")$("kartTime").textContent=format(performance.now()-started);
@@ -718,12 +722,12 @@ function frame(){
  if(renderer.getPixelRatio()!==desiredRatio&&Math.abs(frameCost-25)>5)renderer.setPixelRatio(desiredRatio);
 
  window.KartMeetings?.tick?.();
- if(performance.now()-lastLeaderboardRefresh>15000){lastLeaderboardRefresh=performance.now();leaderboard();}
+ if(performance.now()-lastLeaderboardRefresh>5000){lastLeaderboardRefresh=performance.now();leaderboard();}
  $("kartSpeed").textContent=Math.round(Math.abs(speed)*3.6)+" km/h";
 }
 async function begin(){
  if(driveMode==="meeting")clearMeetingStage();
- driveMode="practice";
+ driveMode="timetrial";
  if(busy)return;busy=true;$("kartStart").disabled=true;message("Loading circuit and car…");
  try{
   await init();
@@ -734,22 +738,24 @@ async function begin(){
   $("kartProgress").textContent="0%";
   $("kartStart").textContent="Restart session";
   if(result.bestMs)$("kartBest").textContent="BEST "+format(result.bestMs);
-  $("kartRacePhase").textContent=timeTrial?"TIME TRIAL":"FREE PRACTICE";
+  $("kartRacePhase").textContent="TIME TRIAL";
   message("GO! Hit the apex kerbs, keep clear of the gravel, and stay out for unlimited timed laps.");
  }catch(error){message(error.message);}
  finally{busy=false;$("kartStart").disabled=false;}
 }
-function enterTrack(mode="practice"){
+function enterTrack(mode="timetrial"){
+ if(mode==="practice")mode="timetrial";
  selectedMode=mode;timeTrial=mode==="timetrial";selectorVisible=false;
  $("kartGame").classList.add("kart-driving");
+ $("kartGame").classList.toggle("kart-time-trial",mode==="timetrial");
  $("kartGame").classList.remove("kart-selector");
- $("kartDrivingMode").textContent=mode==="timetrial"?"TIME TRIAL":mode==="races"?"CHAMPIONSHIP":"FREE PRACTICE";
+ $("kartDrivingMode").textContent=mode==="timetrial"?"TIME TRIAL":mode==="races"?"CHAMPIONSHIP":"TIME TRIAL";
  $("kartTrackPositions").replaceChildren();
  if(mode!=="races"){
-  const item=document.createElement("li");item.textContent=mode==="timetrial"?"GLOBAL TIME TRIAL":"SOLO PRACTICE";
+  const item=document.createElement("li");item.textContent="GLOBAL TIME TRIAL";
   $("kartTrackPositions").append(item);
  }
- if(mode==="practice"||mode==="timetrial"){begin();}
+ if(mode==="timetrial"){leaderboard();begin();}
  else message("Race meeting selected. Qualifying begins at the scheduled time.");
 }
 function backToSelector(){
@@ -820,4 +826,4 @@ for(const card of document.querySelectorAll("[data-kart-mode]")){
 $("kartRefresh").addEventListener("click",leaderboard);
 window.KartRacing={open,close,isOpen:()=>active,setCameraMode,meetingSectorUpdate,
  beginMeetingStage,clearMeetingStage,finishMeetingStage,meetingLapUpdate,updateRivals,
- getPose,pitBays:()=>PIT_BAYS,beginPractice:()=>enterTrack("practice"),enterTrack,backToSelector,mayAutoJoinMeeting,getLocalPitRemaining,resetLocalPit};
+ getPose,pitBays:()=>PIT_BAYS,beginPractice:()=>enterTrack("timetrial"),enterTrack,backToSelector,mayAutoJoinMeeting,getLocalPitRemaining,resetLocalPit};

@@ -3,7 +3,7 @@
  * not a manufacturer's homologation or telemetry data. */
 import {World,Body,Vec3,Box} from './vendor/cannon-es.js';
 import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,projectToRoute,bankRise} from './kart-track.js';
-export const GT={mass:1320,wheelbase:2.68,track:1.94,cgHeight:.48,spring:72000,damper:6100,mu:1.35};
+export const GT={mass:1320,wheelbase:2.68,track:1.94,cgHeight:.48,spring:72000,damper:6100,mu:1.85,brakeDeceleration:20};
 export function wheelSurface(x,z,isPit=false){
  const p=projectToRoute(x,z),lat=(x-p.x)*p.normalX+(z-p.z)*p.normalZ;
  const pit=projectToRoute(x,z,PIT);
@@ -16,7 +16,7 @@ export function wheelSurface(x,z,isPit=false){
  const kerb=!isPit&&edge>-.12&&edge<1.65;
  const crown=kerb?Math.sin(Math.PI*Math.max(0,(edge+.12)/1.77)):.0;
  const height=kerb?crown*(.035+.018*(1-Math.cos(p.progress*ROAD.length/0.65*Math.PI*2))):0;
- return {height:p.y+bankRise(p.progress,lat)+height,baseHeight:p.y+bankRise(p.progress,lat),kerb,mu:edge>2.35?.55:kerb?1.08:GT.mu};
+ return {height:p.y+bankRise(p.progress,lat)+height,baseHeight:p.y+bankRise(p.progress,lat),kerb,mu:edge>2.35?.55:kerb?GT.mu*.94:GT.mu};
 }
 export class GTDynamics{
  constructor(){
@@ -41,10 +41,10 @@ export class GTDynamics{
   let yawDelta=0,sideDistance=0;
   while(this.accumulator>=h){
    this.accumulator-=h;
-   this.steer+=(steer*.48/(1+Math.abs(speed)/38)-this.steer)*(1-Math.exp(-h*24));
-   let grip=GT.mu;this.kerb=false;
+   this.steer+=(steer*.62/(1+Math.abs(speed)/55)-this.steer)*(1-Math.exp(-h*24));
+   let grip=0;this.kerb=false;
    for(const {localX,localZ,surface} of contacts){
-    this.kerb ||= surface.kerb;grip=Math.min(grip,surface.mu);
+    this.kerb ||= surface.kerb;grip+=surface.mu/contacts.length;
     const r=this.body.quaternion.vmult(new Vec3(localX,0,localZ));
     const verticalVelocity=this.body.velocity.y+this.body.angularVelocity.z*r.x-this.body.angularVelocity.x*r.z;
     const roadInput=isPit?y:y+surface.height-surface.baseHeight;
@@ -52,7 +52,7 @@ export class GTDynamics{
     const force=Math.max(0,Math.min(18000,GT.mass*9.81/4+GT.spring*compression-GT.damper*verticalVelocity));
     this.body.applyForce(new Vec3(0,force,0),r);
    }
-   const v=Math.abs(speed),limit=grip*9.81*(brake?.72:1);
+   const v=Math.abs(speed),limit=grip*9.81*(brake?.96:1);
    const target=-Math.tan(this.steer)*speed/GT.wheelbase;
    const saturated=Math.max(-limit/Math.max(v,2),Math.min(limit/Math.max(v,2),target));
    this.yawRate+=(saturated-this.yawRate)*(1-Math.exp(-h*18));
@@ -70,3 +70,5 @@ export class GTDynamics{
   return {yawDelta,sideDistance,heave:this.heave,roll:this.roll,pitch:this.pitch,kerb:this.kerb};
  }
 }
+
+export function brakeSpeed(speed,dt){const remaining=Math.max(0,Math.abs(speed)-GT.brakeDeceleration*Math.max(0,dt));return remaining===0?0:Math.sign(speed)*remaining;}

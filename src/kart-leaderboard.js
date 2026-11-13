@@ -42,7 +42,10 @@ export class KartLeaderboard {
  async read(){return await this.storage.get("road-atlanta-mapped-gt3-v2")||{};}
  async fetch(request){
   const url=new URL(request.url);
-  if(url.pathname==="/events"||url.pathname.startsWith("/event/"))return handleRaceEvent(request,this.storage);
+  // Concurrent drivers must not overwrite each other's meeting snapshots.
+  // Clone per attempt because the transaction can retry after reading the body.
+  if(url.pathname==="/events"||url.pathname.startsWith("/event/"))
+   return this.storage.transaction(tx=>handleRaceEvent(request.clone(),tx));
   if(request.method==="GET"&&url.pathname==="/leaderboard"){
    const records=await this.read();
    return Response.json({track:TRACK_NAME,laps:"unlimited",entries:leaderboardEntries(records)},

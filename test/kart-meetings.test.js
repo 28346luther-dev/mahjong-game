@@ -21,10 +21,10 @@ async function request(storage,path,body={}){
  return {status:response.status,result:await response.json()};
 }
 const user=(c)=>c.repeat(64);
-test("meetings launch every ten minutes with two-minute qualification and ten-lap racing",()=>{
+test("meetings launch every ten minutes with two-minute qualification and three-lap racing",()=>{
  const origin=activeEventId(1790000000000);
  assert.equal(EVENT_INTERVAL_MS,600000);assert.equal(QUALIFY_MS,120000);
- assert.equal(PIT_SERVICE_MS,10000);assert.equal(RACE_LAPS,10);
+ assert.equal(PIT_SERVICE_MS,10000);assert.equal(RACE_LAPS,3);
  assert.equal(eventPhase(origin,origin-10),"registration");
  assert.equal(eventPhase(origin,origin+119999),"qualifying");
  assert.equal(eventPhase(origin,origin+120000),"grid");
@@ -136,4 +136,21 @@ test("all new racing source parses",()=>{
   "public/kart-formula-vee.js","public/kart-pit-complex.js","public/kart-track.js",
   "public/kart-racing.js","public/kart-meetings.js"])
   execFileSync(process.execPath,["--check",path]);
+});
+test('third verified race lap finishes the race and snapshots include live motion',async()=>{
+ const {storage,data}=fixture(),original=Date.now,base=activeEventId(original())+EVENT_INTERVAL_MS,id=user('e');
+ try{
+  Date.now=()=>base-1000;
+  await request(storage,'/event/register',{eventId:base,user:id,name:'Three laps'});
+  Date.now=()=>base+QUALIFY_MS+100000;
+  await request(storage,'/event/state',{eventId:base,user:id});
+  const meeting=data.get('meeting:'+base),driver=meeting.players[0],point=sampleAt(.99);
+  Object.assign(driver,{x:point.x,z:point.z,progress:.99,travel:.95,lap:2,lapStarted:Date.now()-80000,lastAt:Date.now()-1000,pitComplete:true});
+  data.set('meeting:'+base,meeting);
+  const finish=sampleAt(.005),response=await request(storage,'/event/sample',{eventId:base,user:id,...finish,yaw:1.2,speed:40});
+  assert.equal(response.status,200,JSON.stringify(response.result));
+  assert.equal(response.result.laps,3);
+  const racer=response.result.racers.find(p=>p.id===id);
+  assert.equal(racer.lap,3);assert.ok(racer.finishedAt);assert.equal(racer.speed,40);assert.equal(racer.yaw,1.2);
+ }finally{Date.now=original;}
 });
