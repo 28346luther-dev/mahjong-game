@@ -35,3 +35,8 @@ new_sqlite_classes = ["KartLeaderboard"]
 directory = "./public"
 binding = "ASSETS"
 run_worker_first = true
+
+# Keep production account-service exceptions visible in Workers Logs.
+[observability.logs]
+enabled = true
+invocation_logs = true
