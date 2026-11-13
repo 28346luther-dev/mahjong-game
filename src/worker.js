@@ -1,4 +1,4 @@
-import {authDiagnostic} from './auth-diagnostics.js';
+import {authDiagnostic,storageProbeDetail} from './auth-diagnostics.js';
 import {AuthStore,sessionCookieName,emptySessionCookie} from "./auth.js";
 export {AuthStore};
 export {ClubSocial} from "./club-social.js";
@@ -144,7 +144,7 @@ export default {
         const requestId=crypto.randomUUID();
         console.error("Auth storage health check failed",requestId,error?.name,error?.message);
         const diagnostic=authDiagnostic(error);
-        return Response.json({ok:false,component:"account-storage",code:"AUTH_STORAGE_UNAVAILABLE",reason:diagnostic.reason,message:diagnostic.message,requestId},{status:503,headers:{"cache-control":"no-store"}});
+        return Response.json({ok:false,component:"account-storage",code:"AUTH_STORAGE_UNAVAILABLE",reason:diagnostic.reason,message:diagnostic.message,detail:storageProbeDetail(error),requestId},{status:503,headers:{"cache-control":"no-store"}});
       }
     }
     if(url.pathname==="/api/profile"&&(request.method==="GET"||request.method==="POST")){

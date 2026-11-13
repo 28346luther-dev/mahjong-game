@@ -50,3 +50,13 @@ test('registration reports a recognized account quota failure',async()=>{
  const response=await worker.fetch(registerRequest(),envWithStub(async()=>{throw Error('Daily request quota exceeded');}));
  const body=await response.json();assert.equal(body.reason,'AUTH_STORAGE_LIMIT_REACHED');assert.match(body.error,/quota/);
 });
+test('storage probe retains the underlying error but redacts credentials and identifiers',async()=>{
+ const error=Object.assign(Error('Storage request failed: code XYZ; token="test-private-value" user=player@example.test https://provider.test/private?key=hidden abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789\nprivate stack trace'),{retryable:true,remote:true});
+ const response=await worker.fetch(new Request('https://example.test/api/auth/status'),envWithStub(async()=>{throw error;}));
+ const body=await response.json(),detail=JSON.stringify(body.detail);
+ assert.match(body.detail.message,/Storage request failed: code XYZ/);
+ for(const value of ['test-private-value','player@example.test','provider.test','abcdef0123456789','private stack trace'])assert.equal(detail.includes(value),false);
+ assert.equal(body.detail.retryable,true);assert.equal(body.detail.remote,true);
+ const registration=await worker.fetch(registerRequest(),envWithStub(async()=>{throw error;}));
+ assert.equal((await registration.json()).detail,undefined,'credential-bearing operations never expose provider detail');
+});
