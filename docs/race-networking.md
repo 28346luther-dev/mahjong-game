@@ -22,3 +22,13 @@ drivers remain. Expired meetings are removed from the memory cache.
 This reduces multiplayer HTTP/authentication requests and pose storage writes;
 it does not make Durable Objects unlimited or restore an exhausted allowance.
 Time Trial, presence and leaderboard HTTP endpoints retain their existing cadence.
+
+The race leader opens the chequered flag on their third verified lap. All other
+drivers finish on their next forward crossing of the track or pit-lane timing
+line; lapped cars do not have to complete three laps. Results sort by completed
+laps, then finish order; the mandatory pit-stop rule still applies. Flag state
+is checkpointed immediately and race elapsed time starts at lights out.
+
+Garage choices are original closed-roof GT-style designs with equal handling.
+The server validates and locks the car ID at race registration and includes it
+in rival snapshots. Local selection is remembered for the next session.

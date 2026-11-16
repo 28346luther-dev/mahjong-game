@@ -1,3 +1,4 @@
+import {normalizeCarId} from '../public/kart-cars.js';
 /* Scheduled multiplayer Velvet Circuit race meetings.
  * Every 10 minutes a new two-minute qualifying session begins, followed by a
  * three-lap race. Events are independent; overlapping race meetings do not erase
@@ -31,12 +32,12 @@ export function scheduledEvents(now=Date.now()){
   .sort((a,b)=>a.id-b.id);
 }
 function driverView(p){return {
- id:p.id,name:p.name,qualifiedMs:p.qualifiedMs,grid:p.grid||null,
+ id:p.id,name:p.name,carId:normalizeCarId(p.carId),qualifiedMs:p.qualifiedMs,grid:p.grid||null,
  lap:p.lap||0,finishedMs:p.finishedMs||null,finishedAt:p.finishedAt||null,
  sectorTimes:p.sectorTimes||[],sectorColors:p.sectorColors||[],
  pitComplete:!!p.pitComplete,pitUntil:p.pitUntil||0,pitBay:p.pitBay??null,
  pitMode:!!p.pitMode,disqualified:!!p.disqualified,
- x:p.x,z:p.z,yaw:p.yaw||0,speed:p.speed||0,lastAt:p.lastAt||0,
+ startedDriving:!!p.startedDriving,x:p.x,z:p.z,yaw:p.yaw||0,speed:p.speed||0,lastAt:p.lastAt||0,
  position:p.position||null
 };}
 function rankPlayers(players){
@@ -46,6 +47,10 @@ function rankPlayers(players){
 }
 function raceStanding(players){
  return [...players].sort((a,b)=>{
+  if(Boolean(a.disqualified)!==Boolean(b.disqualified))return a.disqualified?1:-1;
+  // A lapped finisher stays behind drivers who have covered more laps,
+  // even if they cross the line later under the chequered flag.
+  if((a.lap||0)!==(b.lap||0))return (b.lap||0)-(a.lap||0);
   if(Boolean(a.finishedAt)!==Boolean(b.finishedAt))return a.finishedAt?-1:1;
   if(a.finishedAt&&b.finishedAt)return a.finishedAt-b.finishedAt;
   // Grid positions remain stable until the race actually gets underway.
@@ -66,6 +71,7 @@ export function eventSnapshot(meeting,now=Date.now(),user=null){
   phaseRemainingMs:phase==="registration"?Math.max(0,meeting.id-now):
    phase==="qualifying"?Math.max(0,meeting.id+QUALIFY_MS-now):null,
   laps:RACE_LAPS,pitServiceMs:PIT_SERVICE_MS,
+  chequeredAt:meeting.chequeredAt||null,chequeredBy:meeting.chequeredBy||null,
   racers:ordered.map((p,i)=>({...driverView(p),position:i+1})),
   registered:racers.length,sessionSectors:meeting.sessionSectors||[null,null,null],
   you:racers.some(p=>p.id===user)?user:null,
@@ -82,6 +88,11 @@ function gridPosition(index){
 }
 function advance(meeting,now){
  const phase=eventPhase(meeting.id,now);
+ // Preserve the flag when loading a meeting completed by the older rules.
+ if(!meeting.chequeredAt){
+  const leader=meeting.players.filter(p=>p.finishedAt&&p.lap>=RACE_LAPS).sort((a,b)=>a.finishedAt-b.finishedAt)[0];
+  if(leader){meeting.chequeredAt=leader.finishedAt;meeting.chequeredBy=leader.id;}
+ }
  if((phase==="grid"||phase==="race")&&!meeting.gridStarted){
   const order=rankPlayers(meeting.players);
   for(let i=0;i<order.length;i++){
@@ -108,13 +119,18 @@ function sampleMovement(p,x,z,now,allowPit=false){
   if(delta>.10||delta<-.09)return {error:"Invalid lap progression"};}
  return {...projected,delta};
 }
-function makeDriver(user,name,now){
+function makeDriver(user,name,now,carId){
  const start=ROAD.samples[0],next=ROAD.samples[3];
- return {id:user,name:String(name||"Racer").replace(/[^\p{L}\p{N} _.-]/gu,"").trim().slice(0,22)||"Racer",
+ return {id:user,carId:normalizeCarId(carId),name:String(name||"Racer").replace(/[^\p{L}\p{N} _.-]/gu,"").trim().slice(0,22)||"Racer",
   joined:now,qualifiedMs:null,qualStart:now,grid:null,lap:0,travel:0,progress:0,
   x:start.x,z:start.z,yaw:Math.atan2(next.x-start.x,next.z-start.z),
   lastAt:now,lapStarted:now,pitComplete:false,pitUntil:0,pitBay:null,pitMode:false,
   sectorTimes:[],sectorColors:[],sectorBest:[null,null,null],sectorIndex:0,sectorLastAt:now};
+}
+function finishAtFlag(meeting,player,now){
+ player.finishedAt=now;
+ player.finishedMs=now-(meeting.id+QUALIFY_MS+START_LIGHTS_MS);
+ player.disqualified=!player.pitComplete;
 }
 function pitAtBay(x,z,index){
  const box=PIT_BAYS[index];
@@ -155,7 +171,7 @@ export async function handleRaceEvent(request,storage){
    return Response.json({error:"Registration for this race has closed."},{status:409});
   if(!meeting.players.some(p=>p.id===user)){
    if(meeting.players.length>=16)return Response.json({error:"This event is full (16 karts)."},{status:409});
-   meeting.players.push(makeDriver(user,body.name,now));
+   meeting.players.push(makeDriver(user,body.name,now,body.carId));
   }
   await storage.put(key,meeting);
   return Response.json({ok:true,...eventSnapshot(meeting,now,user)});
@@ -204,7 +220,12 @@ export async function handleRaceEvent(request,storage){
  player.yaw=Number.isFinite(body.yaw)?body.yaw:player.yaw;
  player.speed=Number.isFinite(speed)?Math.max(-4,Math.min(MAX_STEP_MPS,speed)):0;
  if(pit){
-  player.pitMode=true;player.progress=projectToRoute(x,z,ROAD).progress;
+  const roadProgress=projectToRoute(x,z,ROAD).progress;
+  // The timing line also crosses the parallel pit lane: a driver taking
+  // the flag here must not have to rejoin and drive another circuit.
+  if(phase==="race"&&meeting.chequeredAt&&player.progress>.94&&roadProgress<.06)
+   finishAtFlag(meeting,player,now);
+  player.pitMode=true;player.progress=roadProgress;
   player.travel=0;player.x=x;player.z=z;player.lastAt=now;
   player.sectorIndex=0;player.sectorTimes=[];player.sectorColors=[];player.sectorLastAt=now;
   await storage.put(key,meeting);
@@ -260,9 +281,8 @@ export async function handleRaceEvent(request,storage){
    }else{
     player.lap++;
     lapUpdate={type:"race",lap:player.lap,timeMs:elapsed};
-    if(player.lap>=RACE_LAPS){
-     player.finishedAt=now;player.finishedMs=now-(meeting.id+QUALIFY_MS);
-     player.disqualified=!player.pitComplete;
+    if(player.lap>=RACE_LAPS&&!meeting.chequeredAt){
+     meeting.chequeredAt=now;meeting.chequeredBy=user;
     }
    }
    if(player.sectorTimes.length===2){
@@ -280,6 +300,12 @@ export async function handleRaceEvent(request,storage){
    player.travel=0;player.lapStarted=now;
    player.sectorIndex=0;player.sectorTimes=[];player.sectorColors=[];player.sectorLastAt=now;
   }
+ }
+ // Once the leader completes three verified laps, every subsequent forward
+ // line crossing finishes that driver, including lapped cars and drivers whose
+ // current lap was interrupted by a pit visit. No extra full lap is required.
+ if(phase==="race"&&crossed&&meeting.chequeredAt){
+  finishAtFlag(meeting,player,now);
  }
  await storage.put(key,meeting);
  return Response.json({ok:true,lapUpdate,sectorUpdate,...eventSnapshot(meeting,now,user)});

@@ -331,6 +331,23 @@ updateRideHeightAndBank(1);
       "measured tyre radii",
       carVisual.wheels.map((w) => w.radius),
     );
+    // Coast along a real straight grass shoulder: the full update loop must
+    // keep useful forward speed, and rejoining must remove runoff resistance.
+    const grassStart=sampleAt(.01),grassRoad=projectToRoute(grassStart.x,grassStart.z),grassNext=sampleAt(.0101);
+    const grassYaw=Math.atan2(grassNext.x-grassStart.x,grassNext.z-grassStart.z);
+    window.driveTest.pose({...grassStart,x:grassStart.x-grassRoad.normalX*12,z:grassStart.z-grassRoad.normalZ*12,yaw:grassYaw,speed:30});
+    let previousSpeed=30;
+    for(let i=0;i<120;i++){
+      window.driveTest.run([],1/120);
+      const speed=window.driveTest.state().speed;
+      assert(speed>previousSpeed-.3,'grass must not cause a sudden stop');previousSpeed=speed;
+    }
+    const grassSpeed=window.driveTest.state().speed;
+    assert(grassSpeed>19&&grassSpeed<26,'grass slows progressively over one second');
+    window.driveTest.pose({...grassStart,yaw:grassYaw,speed:30});
+    for(let i=0;i<120;i++)window.driveTest.run([],1/120);
+    assert(window.driveTest.state().speed>grassSpeed+5,'tarmac retains more speed than grass');
+    console.log('grass coast retained',grassSpeed,'m/s from 30 m/s');
     const brakeStart = sampleAt(0.01),
       brakeNext = sampleAt(0.0101);
     window.driveTest.pose({
@@ -393,6 +410,12 @@ updateRideHeightAndBank(1);
       window.driveTest.rivals().size === 0,
       "finished/removed rivals cannot remain as ghosts",
     );
+    const staleDriver={id:rivalId,name:'Disconnected driver',x:brakeStart.x,z:brakeStart.z,yaw:heading,speed:0,lastAt:epoch,startedDriving:true};
+    window.KartRacing.updateRivals([staleDriver],myId,epoch+8000);
+    assert(window.driveTest.rivals().size===0,'stale disconnected rivals disappear despite repeated snapshots');
+    window.KartRacing.updateRivals([{...staleDriver,pitUntil:epoch+10000}],myId,epoch+8000);
+    assert(window.driveTest.rivals().size===1,'stationary rivals remain visible during mandatory service');
+    window.KartRacing.updateRivals([],myId,epoch+8100);
     window.driveTest.reset();
 
     return {

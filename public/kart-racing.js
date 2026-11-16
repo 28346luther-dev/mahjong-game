@@ -1,10 +1,13 @@
+import {GT_CARS,normalizeCarId} from './kart-cars.js';
 import {clearPitGrass} from './kart-road-contact.js';
 import {RGBELoader} from './vendor/loaders/RGBELoader.js';
 import {RivalMotion} from './kart-network-motion.js';
 import {GTDynamics,wheelSurface,brakeSpeed} from './kart-vehicle-dynamics.js';
 import {addRoadAtlantaLandscape,terrainHeight} from './kart-landscape.js';
 const dynamics=new GTDynamics();
-let carVisual=null,miniMap=null;
+let carVisual=null,miniMap=null,initPromise=null,meetingStageToken=0;
+let selectedCar='apex';
+try{selectedCar=normalizeCarId(localStorage.getItem('velvet-gt-car'));}catch{}
 let mapDrawAt=0,shadowDrawAt=0,frameCost=16;
 function drawTrackMap(){
  const now=performance.now();if(now-mapDrawAt<100)return;mapDrawAt=now;
@@ -25,7 +28,7 @@ import {ROAD,PIT,PIT_BAYS,ROAD_HALF_WIDTH,PIT_HALF_WIDTH,RUNOFF_WIDTH,TRACK_SCAL
 import {addCircuitGraphics} from "./kart-graphics.js";
 import {addKartSafety} from "./kart-safety.js";
 import {addPitComplex} from "./kart-pit-complex.js";
-import {createGTCar,prepareGTCar} from "./kart-gt-car.js";
+import {createGTCar,prepareGTCar,disposeGTCar} from "./kart-gt-car.js";
 import {addCircuitGrandstands} from "./kart-grandstands.js";
 import {addStraightGlassBarriers} from "./kart-straight-barriers.js";
 import {surfaceNormal,nearPitBay,gravityAlongRoad} from "./kart-physics.js";
@@ -53,9 +56,8 @@ function localPitService(){
 
 function getPose(){return {x:pos.x,z:pos.z,yaw,speed,pit:inPitLane};}
 function createRival(p){
- const palette=[0xb33749,0x2a739d,0x3f8a6b,0xd2ac51,0x805b98,0xdc7b39];
- const index=parseInt(p.id.slice(0,7),16)%palette.length;
- const model=createGTCar(THREE,{color:palette[index],number:index+1});
+ const index=parseInt(p.id.slice(0,7),16)%99;
+ const model=createGTCar(THREE,{carId:p.carId,number:index+1});
  model.group.userData.vehicle=model;scene.add(model.group);return model.group;
 }
 function updateRivals(racers,myId,serverNow=Date.now()){
@@ -72,9 +74,11 @@ function updateRivals(racers,myId,serverNow=Date.now()){
   }
  }
  if(!scene)return;
- const now=performance.now();
+ const now=performance.now(),visibleIds=new Set();
  for(const driver of racers||[]){
   if(driver.id===myId||driver.finishedAt||!Number.isFinite(driver.x)||!Number.isFinite(driver.z))continue;
+  if(driver.startedDriving&&serverNow-driver.lastAt>7500&&!(driver.pitUntil>serverNow))continue;
+  visibleIds.add(driver.id);
   let group=remoteKarts.get(driver.id);
   if(!group){
    group=createRival(driver);
@@ -89,8 +93,8 @@ function updateRivals(racers,myId,serverNow=Date.now()){
  }
  for(const [id,group] of remoteKarts){
   const target=rivalTargets.get(id);
-  if(!target||now-target.lastAt>7500||!(racers||[]).some(p=>p.id===id&&!p.finishedAt)){
-   scene.remove(group);remoteKarts.delete(id);rivalTargets.delete(id);
+  if(!target||now-target.lastAt>7500||!visibleIds.has(id)){
+   scene.remove(group);disposeGTCar(group.userData.vehicle);remoteKarts.delete(id);rivalTargets.delete(id);
   }
  }
 }
@@ -116,7 +120,10 @@ async function beginMeetingStage(phase,mine){
  enterTrack("races");
  if(!active)return;
  try{
-  await init();driveMode="meeting";meetingPhase=phase;personalSectorBests=[null,null,null];
+  const token=++meetingStageToken;
+  await init();
+  if(token!==meetingStageToken||!mayAutoJoinMeeting())return;
+  kartModel(mine?.carId);setCameraMode(cameraMode);driveMode="meeting";meetingPhase=phase;personalSectorBests=[null,null,null];
   playing=true;raceId=null;reportedFinish=false;
   reset();
   if(["grid","race"].includes(phase)&&Number.isFinite(mine?.x)){
@@ -134,8 +141,9 @@ async function beginMeetingStage(phase,mine){
  }catch(error){message("Could not start multiplayer session: "+error.message);}
 }
 function clearMeetingStage(){
+ meetingStageToken++;
  if(driveMode==="meeting"){playing=false;driveMode="timetrial";meetingPhase=null;speed=0;}
- for(const group of remoteKarts.values())scene?.remove(group);
+ for(const group of remoteKarts.values()){scene?.remove(group);disposeGTCar(group.userData.vehicle);}
  remoteKarts.clear();rivalTargets.clear();
 }
 function finishMeetingStage(mine){
@@ -231,13 +239,14 @@ async function api(path,body){
 }
 function gripForDistance(distance,isPit=false,progress=0){
  // Painted racing kerbs and adjoining green paint have full road grip.
- // Sand and grass alone drag the kart down.
+ // Runoff gradually scrubs speed: grass retains ~73% after a second of
+ // coasting, rather than the old ~4%. Gravel remains more resistant.
  // Apex kerbs extend 1.48 m beyond the edge; selected exits extend 2.46 m.
  // Keep the full painted exit strip driveable, not just the original narrow kerb.
  const kerbWidth=cornerKerbGripWidth(progress);
  if(isPit||distance<=ROAD_HALF_WIDTH+Math.max(3.6,kerbWidth))return {drag:0,surface:"kerb"};
- if(distance<=ROAD_HALF_WIDTH+5.2)return {drag:2.1,surface:"gravel"};
- if(distance<=ROAD_HALF_WIDTH+RUNOFF_WIDTH)return {drag:3.3,surface:"grass"};
+ if(distance<=ROAD_HALF_WIDTH+5.2)return {drag:.55,surface:"gravel"};
+ if(distance<=ROAD_HALF_WIDTH+RUNOFF_WIDTH)return {drag:.32,surface:"grass"};
  return {drag:7.5,surface:"barrier"};
 }
 async function toggleFullscreen(){
@@ -421,8 +430,12 @@ function track(){
  // Timing paint is retained; the invented front-straight gantry is removed.
  // Legacy track-specific tyre stacks removed from the new pit apron.
 }
-function kartModel(){
- const vee=createGTCar(THREE,{color:0xff4c0a,number:7});
+function kartModel(carId=selectedCar){
+ carId=normalizeCarId(carId);
+ if(carVisual?.carId===carId)return;
+ if(kart){scene.remove(kart);disposeGTCar(carVisual);}
+ cockpitOccluders=[];
+ const vee=createGTCar(THREE,{carId,number:7});
  carVisual=vee;kart=vee.group;scene.add(kart);
  cockpitOccluders.push(...vee.hiddenInCockpit);
 }
@@ -468,8 +481,11 @@ function construct(){
  const pmrem=new THREE.PMREMGenerator(renderer);const envTarget=pmrem.fromScene(environment,.04,1,100);scene.environment=envTarget.texture;pmrem.dispose();
  track();kartModel();setCameraMode(cameraMode);
 }
-async function init(){
- if(renderer)return;
+function init(){
+ if(!initPromise)initPromise=initialize().catch(error=>{renderer?.dispose();renderer=null;initPromise=null;throw error;});
+ return initPromise;
+}
+async function initialize(){
  THREE=await import("./vendor/three.module.js");
  renderer=new THREE.WebGLRenderer({canvas:$("kartCanvas"),antialias:true,powerPreference:"high-performance"});
  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
@@ -480,9 +496,11 @@ async function init(){
  camera=new THREE.PerspectiveCamera(64,1,.1,3500);clock=new THREE.Clock();
  await prepareGTCar();
  construct();
- const hdr=await new RGBELoader().loadAsync('/assets/daylight.hdr');
- hdr.mapping=THREE.EquirectangularReflectionMapping;
- scene.environment=hdr;
+ try{
+  const hdr=await new RGBELoader().loadAsync('/assets/daylight.hdr');
+  hdr.mapping=THREE.EquirectangularReflectionMapping;
+  scene.environment=hdr;
+ }catch{ /* The generated sky environment remains usable if HDR loading fails. */ }
  reset();requestAnimationFrame(frame);
 }
 function reset(){
@@ -729,6 +747,7 @@ async function begin(){
  try{
   await init();
   if(!active||selectorVisible||selectedMode!=="timetrial")return;
+  kartModel();setCameraMode(cameraMode);
   const result=await api("start",{});
   if(!active||selectorVisible||selectedMode!=="timetrial")return;
   raceId=result.raceId;reset();resetSectors();lapCount=1;started=performance.now();sendAt=performance.now();playing=true;
@@ -772,7 +791,7 @@ function showRaceMeetings(){
  window.KartMeetings?.refresh?.();
 }
 function mayAutoJoinMeeting(){
- return active&&(!selectorVisible||$("kartGame").classList.contains("kart-races-hub"));
+ return active&&((!selectorVisible&&selectedMode==="races")||$("kartGame").classList.contains("kart-races-hub"));
 }
 function open(){
  if(active)return;active=true;$("kartGame").classList.remove("hidden");
@@ -780,7 +799,7 @@ function open(){
  $("kartGame").classList.add("kart-selector");
  $("kartGame").classList.remove("kart-driving","kart-races-hub");
  selectorVisible=true;message("Choose your racing mode to begin.");
- if(!document.getElementById('circuitAttribution')){const a=document.createElement('a');a.id='circuitAttribution';a.href='/data/road-atlanta-source.json';a.target='_blank';a.rel='noopener';a.textContent='Map © OSM · Terrain: USGS/NOAA · Car: vicent091036 / three.js · modified GT-style';a.style.cssText='position:absolute;bottom:5px;left:8px;z-index:20;color:#ddd;font:10px sans-serif;background:#142129b0;padding:3px 5px';$('kartGame').append(a);}
+ if(!document.getElementById('circuitAttribution')){const a=document.createElement('a');a.id='circuitAttribution';a.href='/data/road-atlanta-source.json';a.target='_blank';a.rel='noopener';a.textContent='Map © OSM · Terrain: USGS/NOAA · Car: vicent091036 / three.js · modified GT-style';a.style.cssText='position:absolute;bottom:5px;left:8px;z-index:20;color:#ddd;font:10px sans-serif;background:#142129b0;padding:3px 5px';$('kartGame').querySelector('.kart-sheet').append(a);}
  leaderboard();lastLeaderboardRefresh=performance.now();
  window.KartMeetings?.open?.();
 }
@@ -791,8 +810,9 @@ function close(){
  $("kartGame").classList.add("hidden");$("kartGame").classList.remove("kart-driving","kart-selector","kart-races-hub");document.body.classList.remove("kart-open");
 }
 window.addEventListener("keydown",e=>{
- if(!active||["INPUT","TEXTAREA"].includes(document.activeElement?.tagName))return;
+ if(!active||["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName))return;
  const k=e.key.toLowerCase();
+ if(selectorVisible&&k!=="escape")return;
  if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)){
   keys.add(k);e.preventDefault();
  }
@@ -808,18 +828,38 @@ window.addEventListener("keydown",e=>{
    playing=false;raceId=null;keys.clear();touch.clear();reset();resetSectors();
    begin();
   }else{
-   reset();playing=false;message("Kart reset. Start a new timed lap to record a result.");
+   message("Reset is available in Time Trial. Your race continues from your current position.");
   }
  }
  if(k==="escape"){e.preventDefault();if(!selectorVisible)backToSelector();else close();}
 });
 window.addEventListener("keyup",e=>keys.delete(e.key.toLowerCase()));
-window.addEventListener("blur",()=>keys.clear());
+window.addEventListener("blur",()=>{keys.clear();touch.clear();});
 document.querySelectorAll("[data-kart-key]").forEach(button=>{
  const k=button.dataset.kartKey;
  button.addEventListener("pointerdown",e=>{e.preventDefault();touch.add(k);button.setPointerCapture?.(e.pointerId);});
  for(const event of ["pointerup","pointercancel","lostpointercapture"])button.addEventListener(event,()=>touch.delete(k));
 });
+function renderGarage(){
+ const host=$("kartCarChoices");if(!host)return;
+ host.replaceChildren();
+ for(const car of GT_CARS){
+  const button=document.createElement('button');button.type='button';button.className='kart-car-choice';button.dataset.carId=car.id;
+  button.setAttribute('aria-pressed',String(car.id===selectedCar));
+  const image=document.createElement('img');image.src='/assets/gt3-'+car.id+'.png';image.alt=car.name+' closed-roof GT3-style car';image.width=480;image.height=280;
+  const name=document.createElement('strong');name.textContent=car.name;
+  const layout=document.createElement('span');layout.textContent=car.layout;
+  const detail=document.createElement('small');detail.textContent=car.description;
+  button.append(image,name,layout,detail);
+  button.addEventListener('click',()=>{
+   if(!selectorVisible||busy||playing)return;
+   selectedCar=car.id;try{localStorage.setItem('velvet-gt-car',selectedCar);}catch{}
+   renderGarage();host.querySelector('[data-car-id="'+car.id+'"]')?.focus({preventScroll:true});message(car.name+' selected. All cars share balanced GT handling. Race entries keep the car chosen at registration.');
+  });
+  host.append(button);
+ }
+}
+renderGarage();
 $("kartCameraToggle").addEventListener("click",()=>setCameraMode(cameraMode==="chase"?"cockpit":"chase"));
 $("kartFullscreen").addEventListener("click",toggleFullscreen);
 $("kartPitLimiter").addEventListener("click",togglePitLimiter);
@@ -843,4 +883,4 @@ function getActivity(){
 }
 window.KartRacing={open,close,showRaceMeetings,getActivity,isOpen:()=>active,setCameraMode,meetingSectorUpdate,
  beginMeetingStage,clearMeetingStage,finishMeetingStage,meetingLapUpdate,updateRivals,
- getPose,pitBays:()=>PIT_BAYS,beginPractice:()=>enterTrack("timetrial"),enterTrack,backToSelector,mayAutoJoinMeeting,getLocalPitRemaining,resetLocalPit};
+ getCarId:()=>selectedCar,getPose,pitBays:()=>PIT_BAYS,beginPractice:()=>enterTrack("timetrial"),enterTrack,backToSelector,mayAutoJoinMeeting,getLocalPitRemaining,resetLocalPit};

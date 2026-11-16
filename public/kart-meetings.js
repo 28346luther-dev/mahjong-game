@@ -32,7 +32,7 @@ function timeRemaining(){
  if(snapshot.phase==="registration")el.textContent=countdown(snapshot.qualifyingAt-now)+"s until qualifying";
  else if(snapshot.phase==="qualifying")el.textContent=countdown(snapshot.raceAt-now)+"s until grid start";
  else if(snapshot.phase==="grid")el.textContent="GRID · FIVE RED LIGHTS";
- else if(snapshot.phase==="race")el.textContent="3-LAP RACE IN PROGRESS";
+ else if(snapshot.phase==="race")el.textContent=snapshot.chequeredAt?"CHEQUERED FLAG · FINISH AT THE LINE":"3-LAP RACE IN PROGRESS";
  else el.textContent="SESSION COMPLETE";
  const lights=$("kartStartLights");
  const isGrid=snapshot.phase==="grid"&&!!snapshot.you;
@@ -41,7 +41,8 @@ function timeRemaining(){
  [...lights.querySelectorAll(".light-bulb")].forEach((bulb,i)=>bulb.classList.toggle("on",i<amount));
  $("kartLightsText").textContent=amount===5?"HOLD FOR LIGHTS OUT":"FIVE RED LIGHTS";
  const you=snapshot.racers?.find(p=>p.id===snapshot.you);
- const serverRemaining=Math.max(0,(you?.pitUntil||serviceUntil)-now);
+ const inMeeting=window.KartRacing?.getActivity?.()!=="timeTrial";
+ const serverRemaining=!inMeeting?0:Math.max(0,(you?.pitUntil||serviceUntil)-now);
  const seconds=Math.max(localRemaining,serverRemaining)/1000;
  const servicing=seconds>0;
  $("kartServiceOverlay").classList.toggle("hidden",!servicing);
@@ -49,7 +50,7 @@ function timeRemaining(){
  const pose=window.KartRacing?.getPose?.();
  const bays=window.KartRacing?.pitBays?.()||[];
  const nearby=bays.find(b=>pose&&Math.hypot(pose.x-b.x,pose.z-b.z)<(b.radius||3.65));
- const ready=snapshot.phase==="race"&&you&&!you.pitComplete&&!you.finishedAt
+ const ready=inMeeting&&snapshot.phase==="race"&&you&&!you.pitComplete&&!you.finishedAt
   &&you.pitMode&&nearby&&Math.abs(pose?.speed||0)<.65&&!servicing;
  if(ready&&!serviceRequested){serviceRequested=true;service();}
  if(you?.pitComplete||!you?.pitMode)serviceRequested=false;
@@ -115,6 +116,7 @@ function stateUpdate(data){
   data.phase==="race"?mine.finishedAt?
    mine.disqualified?"Race complete: disqualified for missing the mandatory pit stop.":
    "Finished! Final race position P"+mine.position:
+   data.chequeredAt?"CHEQUERED FLAG · finish at your next crossing of the line.":
    "3 laps · grid P"+mine.grid+" · "+(mine.pitComplete?"pit stop ✓":"mandatory pit stop needed"):
    "This meeting is complete.":
   data.phase==="race"?"Race in progress. You can watch results and register for the next meeting.":
@@ -129,9 +131,9 @@ function stateUpdate(data){
   window.KartRacing?.updateRivals?.(data.racers,data.you,data.serverNow);
  }
  if(mine?.pitUntil)serviceUntil=mine.pitUntil;
- if(mine?.finishedAt)window.KartRacing?.finishMeetingStage?.(mine);
  if(data.lapUpdate)window.KartRacing?.meetingLapUpdate?.(data.lapUpdate);
  if(data.sectorUpdate)window.KartRacing?.meetingSectorUpdate?.(data.sectorUpdate);
+ if(mine?.finishedAt)window.KartRacing?.finishMeetingStage?.(mine);
 }
 async function refreshSchedule(){
  if(!open)return;
@@ -185,7 +187,7 @@ function choose(id){
 async function register(){
  if(!selected)return;
  try{
-  const data=await call("event/register",{eventId:selected});
+  const data=await call("event/register",{eventId:selected,carId:window.KartRacing?.getCarId?.()});
   stateUpdate(data);await refreshSchedule();
  }catch(error){status(error.message);}
 }
@@ -222,5 +224,5 @@ $("kartPitService").addEventListener("click",service);
 $("kartPractice").addEventListener("click",()=>window.KartRacing?.enterTrack?.("timetrial"));
 window.KartMeetings={open:start,viewEvent:choose,close:stop,getState:()=>snapshot,
  getActiveId:()=>raceIdentity,sendTelemetry,serviceUntil:()=>Math.max(0,serviceUntil-Date.now()-serverOffset),
- canDrive:()=>snapshot?.phase!=="grid"&&serviceUntil<=Date.now()+serverOffset&&!snapshot?.racers?.find(p=>p.id===snapshot.you)?.finishedAt,
+ canDrive:()=>!!snapshot?.you&&["qualifying","race"].includes(snapshot.phase)&&serviceUntil<=Date.now()+serverOffset&&!snapshot?.racers?.find(p=>p.id===snapshot.you)?.finishedAt,
  tick:timeRemaining,refresh:refreshState};

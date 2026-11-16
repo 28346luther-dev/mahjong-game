@@ -254,7 +254,7 @@ export default {
         return stub.fetch("https://kart"+action,{
           method:"POST",body:JSON.stringify({user:userId,
             raceId:body.raceId,index:body.index,x:body.x,z:body.z,pit:body.pit===true,name:body.name,
-            eventId:body.eventId,yaw:body.yaw,speed:body.speed,bay:body.bay,client:body.client,mode:body.mode})
+            eventId:body.eventId,carId:body.carId,yaw:body.yaw,speed:body.speed,bay:body.bay,client:body.client,mode:body.mode})
         });
       }
       if(["/api/sana/wallet","/api/sana/spin","/api/blackjack/join"].includes(url.pathname)){

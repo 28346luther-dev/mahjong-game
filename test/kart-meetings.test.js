@@ -4,7 +4,7 @@ import {execFileSync} from "node:child_process";
 import {readFileSync} from "node:fs";
 import {activeEventId,eventPhase,scheduledEvents,eventSnapshot,handleRaceEvent,
  EVENT_INTERVAL_MS,QUALIFY_MS,RACE_LAPS,PIT_SERVICE_MS} from "../src/kart-race-events.js";
-import {PIT_BAYS,BANK_MAX_DEGREES,ROAD,projectToRoute,sampleAt} from "../public/kart-track.js";
+import {PIT_BAYS,BANK_MAX_DEGREES,ROAD,PIT,projectToRoute,sampleAt} from "../public/kart-track.js";
 function fixture(){
  const data=new Map(),storage={
   async get(key){return data.get(key);},
@@ -152,5 +152,68 @@ test('third verified race lap finishes the race and snapshots include live motio
   assert.equal(response.result.laps,3);
   const racer=response.result.racers.find(p=>p.id===id);
   assert.equal(racer.lap,3);assert.ok(racer.finishedAt);assert.equal(racer.speed,40);assert.equal(racer.yaw,1.2);
+ }finally{Date.now=original;}
+});
+test('leader opens the chequered flag; following crossings finish lapped cars in lap order',async()=>{
+ const {storage,data}=fixture(),original=Date.now,base=activeEventId(original())+EVENT_INTERVAL_MS;
+ const drivers=['a','b','c','d','e'].map(user);let clock=base+QUALIFY_MS+240000;
+ try{
+  Date.now=()=>base-1000;
+  for(const id of drivers)await request(storage,'/event/register',{eventId:base,user:id,name:id[0]});
+  Date.now=()=>clock;await request(storage,'/event/state',{eventId:base,user:drivers[0]});
+  function line(id,lap,travel=.95){
+   const m=data.get('meeting:'+base),p=m.players.find(p=>p.id===id),point=sampleAt(.99);
+   Object.assign(p,{...point,lap,progress:.99,travel,lapStarted:clock-80000,lastAt:clock-3000,pitComplete:true,startedDriving:true});
+   data.set('meeting:'+base,m);
+  }
+  async function cross(id){clock+=1000;return request(storage,'/event/sample',{eventId:base,user:id,...sampleAt(.005),speed:35});}
+  line(drivers[1],1);
+  let response=await cross(drivers[1]);
+  assert.equal(response.status,200);assert.equal(response.result.chequeredAt,null);
+  assert.equal(response.result.racers.find(p=>p.id===drivers[1]).finishedAt,null,'crossing before leader does not finish');
+  line(drivers[0],2);response=await cross(drivers[0]);
+  const flag=clock;assert.equal(response.result.chequeredAt,flag);assert.equal(response.result.chequeredBy,drivers[0]);
+  assert.equal(response.result.racers.find(p=>p.id===drivers[0]).finishedMs,flag-(base+QUALIFY_MS+8000),'race time begins at lights out');
+  line(drivers[2],0);response=await cross(drivers[2]);
+  assert.ok(response.result.racers.find(p=>p.id===drivers[2]).finishedAt,'lapped driver finishes at next crossing');
+  line(drivers[1],2);response=await cross(drivers[1]);
+  assert.deepEqual(response.result.racers.slice(0,3).map(p=>p.id),drivers.slice(0,3),'lapped finisher cannot beat the second driver on three laps');
+  line(drivers[3],0,.2);response=await cross(drivers[3]);
+  assert.ok(response.result.racers.find(p=>p.id===drivers[3]).finishedAt,'pit-interrupted lap still ends at the flag');
+  line(drivers[4],0);
+  response=await request(storage,'/event/sample',{eventId:base,user:drivers[4],...sampleAt(.995),speed:35});
+  assert.equal(response.result.racers.find(p=>p.id===drivers[4]).finishedAt,null,'flag does not stop a driver before crossing');
+  const m=data.get('meeting:'+base);m.players.find(p=>p.id===drivers[4]).pitComplete=false;data.set('meeting:'+base,m);
+  response=await cross(drivers[4]);assert.equal(response.result.racers.at(-1).disqualified,true,'mandatory pit rule still applies');
+  assert.equal(response.result.chequeredAt,flag,'the original flag time remains fixed');
+ }finally{Date.now=original;}
+});
+test('race entries store an allowed car choice and duplicate registration cannot change it',async()=>{
+ const {storage}=fixture(),original=Date.now,base=activeEventId(original())+EVENT_INTERVAL_MS;
+ try{
+  Date.now=()=>base-1000;
+  let response=await request(storage,'/event/register',{eventId:base,user:user('a'),carId:'nova'});
+  assert.equal(response.result.racers[0].carId,'nova');
+  response=await request(storage,'/event/register',{eventId:base,user:user('a'),carId:'falcon'});
+  assert.equal(response.result.racers[0].carId,'nova');
+  response=await request(storage,'/event/register',{eventId:base,user:user('b'),carId:'../../bad'});
+  assert.equal(response.result.racers.find(p=>p.id===user('b')).carId,'apex');
+  Date.now=()=>base+QUALIFY_MS+9000;
+  response=await request(storage,'/event/state',{eventId:base,user:user('a')});
+  assert.equal(response.result.racers.find(p=>p.id===user('a')).carId,'nova');
+ }finally{Date.now=original;}
+});
+
+test('a driver crossing the pit-lane timing line after the leader also finishes',async()=>{
+ const {storage,data}=fixture(),original=Date.now,base=activeEventId(original())+EVENT_INTERVAL_MS,id=user('a');
+ try{
+  Date.now=()=>base-1000;await request(storage,'/event/register',{eventId:base,user:id});
+  Date.now=()=>base+QUALIFY_MS+240000;await request(storage,'/event/state',{eventId:base,user:id});
+  const meeting=data.get('meeting:'+base),before=sampleAt(.55,PIT),after=sampleAt(.57,PIT);
+  meeting.chequeredAt=Date.now()-1000;meeting.chequeredBy=user('b');
+  Object.assign(meeting.players[0],{...before,pitMode:true,pitComplete:true,lap:1,lastAt:Date.now()-3000,progress:projectToRoute(before.x,before.z).progress});
+  data.set('meeting:'+base,meeting);
+  const response=await request(storage,'/event/sample',{eventId:base,user:id,...after,pit:true,speed:10});
+  assert.equal(response.status,200);assert.ok(response.result.racers[0].finishedAt);assert.equal(response.result.racers[0].disqualified,false);
  }finally{Date.now=original;}
 });

@@ -9,7 +9,7 @@ export class KartLive {
  async put(key,value){
   if(!key.startsWith("meeting:"))return this.ctx.storage.put(key,value);
   const previous=this.cache.get(key);
-  const milestones=m=>JSON.stringify([m?.gridStarted,m?.players?.map(p=>[p.id,p.lap,p.pitUntil,p.pitComplete,p.finishedAt])]);
+  const milestones=m=>JSON.stringify([m?.gridStarted,m?.chequeredAt,m?.players?.map(p=>[p.id,p.lap,p.pitUntil,p.pitComplete,p.finishedAt])]);
   if(milestones(previous)!==milestones(value))this.critical=true;
   this.cache.set(key,structuredClone(value));
  }

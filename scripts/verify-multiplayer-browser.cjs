@@ -19,6 +19,7 @@ const assert = require("node:assert/strict");
       lap: 0,
       lastAt: base,
     }));
+  let chequeredAt=null;
   const counts = [0, 0],
     pages = [], connections=[0,0];
   for (let i = 0; i < 2; i++) {
@@ -61,7 +62,7 @@ const assert = require("node:assert/strict");
     });
     await page.routeWebSocket("**/api/kart/event/socket*",ws=>{
       connections[i]++;
-      const send=()=>ws.send(JSON.stringify({id:base,serverNow:Date.now(),phase:"race",you:racers[i].id,laps:3,qualifyingAt:base,raceAt:base,racers:structuredClone(racers)}));
+      const send=()=>ws.send(JSON.stringify({id:base,serverNow:Date.now(),phase:"race",chequeredAt,you:racers[i].id,laps:3,qualifyingAt:base,raceAt:base,racers:structuredClone(racers)}));
       const timer=setInterval(send,100);
       ws.onMessage(message=>{
         const body=JSON.parse(message);assert.equal(body.type,"sample");counts[i]++;
@@ -103,6 +104,8 @@ const assert = require("node:assert/strict");
       { i, base },
     );
   }
+  for(const page of pages)assert.equal(await page.locator("#kartMeetingCountdown").textContent(),"3-LAP RACE IN PROGRESS");
+  chequeredAt=Date.now();
   await pages[0].waitForTimeout(2500);
   for (let i = 0; i < 2; i++) {
     const result = await pages[i].evaluate(() => {
@@ -128,7 +131,7 @@ const assert = require("node:assert/strict");
       result.frames.at(-1).drivers.every((driver) => driver.z > 20),
       "both cars advance on both viewers",
     );
-    assert.equal(result.text, "3-LAP RACE IN PROGRESS");
+    assert.equal(result.text, "CHEQUERED FLAG · FINISH AT THE LINE");
     console.log(
       "client",
       i,

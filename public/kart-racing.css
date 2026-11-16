@@ -200,3 +200,14 @@ body.kart-open{overflow:hidden}
 @media(max-width:600px){.race-announcement{top:10px;flex-wrap:wrap;padding:10px;font-size:12px}.race-announcement [data-race-message]{flex-basis:calc(100% - 40px)}.race-announcement [data-dismiss-race]{position:absolute;top:8px;right:10px}}
 .kart-driving .race-announcement{width:min(500px,calc(100vw - clamp(220px,25vw,320px) - clamp(220px,25vw,320px) - 60px));align-items:flex-start}
 @media(max-width:800px){.kart-driving .race-announcement{width:calc(100vw - 24px);top:auto;bottom:110px}}
+
+.kart-garage{margin:18px 0 24px}.kart-garage h4{margin:0 0 5px;color:#f6e1b6;letter-spacing:.1em}.kart-garage>p{font-size:12px;color:#bfd0d7}
+.kart-car-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.kart-car-choice{display:flex;flex-direction:column;gap:6px;text-align:left;padding:10px 12px 15px;border:2px solid #536b77;border-radius:10px;background:#182b38;color:#f4f0e5;cursor:pointer;min-width:0}
+.kart-car-choice[aria-pressed="true"]{border-color:#f7c66d;background:#273d48;box-shadow:0 0 0 1px #f7c66d}
+.kart-car-choice:focus-visible{outline:3px solid #cdeeff;outline-offset:3px}.kart-car-choice img{width:100%;height:auto;aspect-ratio:12/7;object-fit:contain;border-radius:5px}
+.kart-car-choice strong{font-size:17px}.kart-car-choice span{color:#e6c286;font-size:12px}.kart-car-choice small{color:#c2d1d7;font-size:11px;line-height:1.5}
+.kart-races-hub .kart-garage{display:none}
+@media(max-width:600px){.kart-car-choices{grid-template-columns:1fr}.kart-car-choice{display:grid;grid-template-columns:110px 1fr;column-gap:12px}.kart-car-choice img{grid-row:1/4;align-self:center}.kart-car-choice strong,.kart-car-choice span,.kart-car-choice small{grid-column:2}}
+
+.kart-selector #circuitAttribution{position:static!important;display:block;margin-top:12px}
