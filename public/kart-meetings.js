@@ -5,14 +5,14 @@
 const $=id=>document.getElementById(id);
 const when=id=>new Date(id).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
 const fmt=ms=>ms==null?"—":(Math.floor(ms/60000)+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(ms%1000).padStart(3,"0"));
-let open=false,selected=null,snapshot=null,list=[],poller=null,refreshing=false,sending=false;
+let open=false,selected=null,snapshot=null,list=[],poller=null;
+let socket=null,reconnect=null,retry=500,socketEvent=null;
 let phaseEntered=null,raceIdentity=null,serviceUntil=0,serviceRequested=false,serverOffset=0;
 async function call(path,body=null){
  const r=await fetch("/api/kart/"+path,{method:body?"POST":"GET",credentials:"same-origin",
   headers:body?{"content-type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store"});
  const payload=await r.json();
  if(!r.ok){
-  if(payload.collision&&payload.id===selected)stateUpdate(payload);
   throw Error(payload.error||"Race server unavailable");
  }
  return payload;
@@ -136,6 +136,7 @@ function stateUpdate(data){
 async function refreshSchedule(){
  if(!open)return;
  try{
+  const previous=selected;
   const data=await call("events");list=data.events||[];
   if(!selected||!list.some(item=>item.id===selected)){
    const now=Date.now();
@@ -143,16 +144,36 @@ async function refreshSchedule(){
     list.find(x=>x.phase==="qualifying")?.id||list.at(-1)?.id||null;
   }
   renderSchedule();
+  if(previous!==selected){
+   snapshot=null;phaseEntered=null;raceIdentity=null;serviceUntil=0;
+   window.KartRacing?.clearMeetingStage?.();refreshState();
+  }
  }catch(error){status("Could not load race timetable: "+error.message);}
 }
-async function refreshState(){
- if(!open||selected==null||refreshing)return;
- refreshing=true;
- try{
-  const data=await call("event/state?id="+selected);
-  if(open&&selected===data.id)stateUpdate(data);
- }catch(error){status("Race status unavailable: "+error.message);}
- finally{refreshing=false;}
+function disconnect(){
+ clearTimeout(reconnect);reconnect=null;
+ if(socket){const old=socket;socket=null;old.onclose=null;old.close();}
+ socketEvent=null;
+}
+function refreshState(){
+ if(!open||selected==null)return;
+ if(socket&&socketEvent===selected&&socket.readyState<2)return;
+ disconnect();
+ const id=selected;
+ socketEvent=id;
+ const ws=new WebSocket((location.protocol==="https:"?"wss:":"ws:")+"//"+location.host+"/api/kart/event/socket?id="+id);
+ socket=ws;
+ ws.onopen=()=>{retry=500;};
+ ws.onmessage=event=>{
+  if(socket!==ws||!open||selected!==id)return;
+  try{const data=JSON.parse(event.data);if(data.error)status(data.error);else if(data.id===id)stateUpdate(data);}catch{status("Invalid race server response");}
+ };
+ ws.onclose=()=>{
+  if(socket!==ws)return;
+  socket=null;status("Race connection lost · reconnecting…");
+  if(open){reconnect=setTimeout(refreshState,retry);retry=Math.min(10000,retry*2);}
+ };
+ ws.onerror=()=>status("Connecting to race server…");
 }
 function choose(id){
  if(selected!==id){
@@ -179,16 +200,10 @@ async function service(){
   timeRemaining();
  }catch(error){serviceRequested=false;status(error.message);}
 }
-async function sendTelemetry(pose){
- if(!open||!selected||!snapshot?.you||!["qualifying","race"].includes(snapshot.phase)||sending)return;
- if(serviceUntil>Date.now()+serverOffset)return;
- sending=true;
- try{
-  const data=await call("event/sample",{eventId:selected,x:pose.x,z:pose.z,yaw:pose.yaw,
-   speed:pose.speed,pit:pose.pit});
-  if(data.id===selected&&open)stateUpdate(data);
- }catch(error){status(error.message);}
- finally{sending=false;}
+function sendTelemetry(pose){
+ if(!open||snapshot?.id!==selected||!snapshot?.you||!["qualifying","race"].includes(snapshot.phase))return;
+ if(serviceUntil>Date.now()+serverOffset||socket?.readyState!==WebSocket.OPEN||socket.bufferedAmount>4096)return;
+ socket.send(JSON.stringify({type:"sample",x:pose.x,z:pose.z,yaw:pose.yaw,speed:pose.speed,pit:pose.pit}));
 }
 function start(){
  if(open)return;
@@ -196,12 +211,11 @@ function start(){
  refreshSchedule().then(refreshState);
  poller=setInterval(()=>{
   timeRemaining();
-  if(!sending)refreshState();
-  if(Date.now()%18000<100)refreshSchedule();
- },100);
+  if(Date.now()%18000<250)refreshSchedule();
+ },250);
 }
 function stop(){
- open=false;clearInterval(poller);poller=null;
+ open=false;disconnect();clearInterval(poller);poller=null;
 }
 $("kartMeetingRegister").addEventListener("click",register);
 $("kartPitService").addEventListener("click",service);

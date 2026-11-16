@@ -216,13 +216,20 @@ export default {
         if(request.method!=="GET"&&request.method!=="POST")
           return Response.json({error:"Method not allowed"},{status:405});
         const action=url.pathname.slice("/api/kart".length);
-        if(!["/leaderboard","/start","/sample","/finish","/abort","/events","/event/register","/event/state","/event/sample","/event/pit","/event/leave","/presence"].includes(action))
+        if(!["/leaderboard","/start","/sample","/finish","/abort","/events","/event/socket","/event/register","/event/state","/event/sample","/event/pit","/event/leave","/presence"].includes(action))
           return Response.json({error:"Unknown kart endpoint"},{status:404});
         const origin=request.headers.get("origin");
         if(origin&&origin!==url.origin)return Response.json({error:"Invalid origin"},{status:403});
         const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(viewer.email));
         const userId=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
         const stub=env.KART.get(env.KART.idFromName("velvet-circuit-global"));
+        if(action==="/event/socket"){
+          if(request.headers.get("upgrade")?.toLowerCase()!=="websocket"||origin!==url.origin)
+            return new Response("WebSocket upgrade and same origin required",{status:403});
+          return stub.fetch("https://kart/event/socket?id="+encodeURIComponent(url.searchParams.get("id")),{
+            headers:{upgrade:"websocket","x-kart-user":userId}
+          });
+        }
         if(action==="/leaderboard"||action==="/events"){
           return stub.fetch("https://kart"+action,{method:"GET"});
         }

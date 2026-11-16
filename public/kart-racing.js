@@ -28,7 +28,7 @@ import {addPitComplex} from "./kart-pit-complex.js";
 import {createGTCar,prepareGTCar} from "./kart-gt-car.js";
 import {addCircuitGrandstands} from "./kart-grandstands.js";
 import {addStraightGlassBarriers} from "./kart-straight-barriers.js";
-import {resolveKartCollision,surfaceNormal,nearPitBay,gravityAlongRoad} from "./kart-physics.js";
+import {surfaceNormal,nearPitBay,gravityAlongRoad} from "./kart-physics.js";
 const $=id=>document.getElementById(id);
 const format=ms=>ms==null?"--:--.---":String(Math.floor(ms/60000)).padStart(2,"0")+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(Math.floor(ms%1000)).padStart(3,"0");
 let THREE,renderer,scene,camera,clock,kart,active=false,playing=false,busy=false,raceId=null,reportedFinish=false;
@@ -648,10 +648,7 @@ function update(dt){
  const proposedX=pos.x+Math.sin(yaw)*speed*dt+Math.cos(yaw)*response.sideDistance;
  const proposedZ=pos.z+Math.cos(yaw)*speed*dt-Math.sin(yaw)*response.sideDistance;
  carVisual?.animate(speed,-dynamics.steer,dt);
- const collision=driveMode==="meeting"?resolveKartCollision(pos.x,pos.z,proposedX,proposedZ,
-   [...remoteKarts.values()].filter(g=>g.visible).map(g=>({x:g.position.x,z:g.position.z}))):null;
- const x=collision?.x??proposedX,z=collision?.z??proposedZ;
- if(collision?.hit){speed*=.22;message("CONTACT · Avoid the other GT cars.");}
+ const x=proposedX,z=proposedZ;
  const projected=positionOnTrack(x,z);
  const grip=gripForDistance(projected.distance,projected.isPit,projected.progress);
  // The pit branch is paved; entering it automatically engages the limiter.

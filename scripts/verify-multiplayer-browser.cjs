@@ -1,5 +1,5 @@
-// Requires local Wrangler and Playwright on NODE_PATH. Controlled packet delays
-// exercise both browser clients; authoritative race rules have separate tests.
+// Requires local Wrangler and Playwright on NODE_PATH. Two socket clients
+// exercise movement delivery; authoritative race rules have separate tests.
 const { chromium } = require("playwright");
 const assert = require("node:assert/strict");
 (async () => {
@@ -20,7 +20,7 @@ const assert = require("node:assert/strict");
       lastAt: base,
     }));
   const counts = [0, 0],
-    pages = [];
+    pages = [], connections=[0,0];
   for (let i = 0; i < 2; i++) {
     const page = await browser.newPage();
     pages.push(page);
@@ -56,37 +56,20 @@ const assert = require("node:assert/strict");
             ],
           },
         });
-      if (url.pathname.endsWith("/event/sample")) {
-        const body = route.request().postDataJSON();
-        counts[i]++;
-        Object.assign(racers[i], {
-          x: body.x,
-          z: body.z,
-          lastAt: now,
-          speed: body.speed,
-          yaw: body.yaw,
-        });
-      }
-      const data = {
-        id: base,
-        serverNow: now,
-        phase: "race",
-        you: racers[i].id,
-        laps: 3,
-        qualifyingAt: base,
-        raceAt: base,
-        racers: structuredClone(racers),
-      };
-      await new Promise((resolve) =>
-        setTimeout(resolve, url.pathname.endsWith("/event/state") ? 140 : 25),
-      );
-      const collision =
-        url.pathname.endsWith("/event/sample") && counts[i] === 7;
-      if (collision) {
-        data.collision = true;
-        data.error = "Contact with another car";
-      }
-      await route.fulfill({ json: data, status: collision ? 409 : 200 });
+      if(url.pathname.endsWith("/leaderboard"))return route.fulfill({json:{entries:[]}});
+      throw Error("Unexpected race HTTP polling: "+url.pathname);
+    });
+    await page.routeWebSocket("**/api/kart/event/socket*",ws=>{
+      connections[i]++;
+      const send=()=>ws.send(JSON.stringify({id:base,serverNow:Date.now(),phase:"race",you:racers[i].id,laps:3,qualifyingAt:base,raceAt:base,racers:structuredClone(racers)}));
+      const timer=setInterval(send,100);
+      ws.onMessage(message=>{
+        const body=JSON.parse(message);assert.equal(body.type,"sample");counts[i]++;
+        Object.assign(racers[i],{x:body.x,z:body.z,lastAt:Date.now(),speed:body.speed,yaw:body.yaw});
+        if(counts[i]===7){clearInterval(timer);ws.close({code:1012,reason:"Reconnect test"});}
+      });
+      ws.onClose(()=>clearInterval(timer));
+      send();
     });
     await page.goto("http://127.0.0.1:8787");
     await page.waitForFunction(() => window.KartMeetings);
@@ -130,6 +113,7 @@ const assert = require("node:assert/strict");
         text: document.getElementById("kartMeetingCountdown").textContent,
       };
     });
+    assert.ok(connections[i]>=2,"client reconnects after a server disconnect");
     assert.ok(counts[i] >= 15, "both drivers must send frequent telemetry");
     assert.ok(
       result.frames.length >= 15,
@@ -138,7 +122,7 @@ const assert = require("node:assert/strict");
     for (let n = 1; n < result.frames.length; n++)
       assert.ok(
         result.frames[n].time >= result.frames[n - 1].time,
-        "delayed polls cannot rewind race state",
+        "socket frames cannot rewind race state",
       );
     assert.ok(
       result.frames.at(-1).drivers.every((driver) => driver.z > 20),

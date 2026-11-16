@@ -198,16 +198,7 @@ export async function handleRaceEvent(request,storage){
  const speed=Number(body.speed||0);
  if(pit&&(!Number.isFinite(speed)||Math.abs(speed)>11.4))
   return Response.json({error:"Engage the 40 km/h pit limiter."},{status:422});
- // Server-side overlap validation protects competitive races from clients
- // which omit local car-to-car contact handling.
- if(phase==="race"&&!pit){
-  for(const rival of meeting.players){
-   if(rival.id===user||rival.finishedAt||!rival.startedDriving||now-rival.lastAt>3500)continue;
-   if(Math.hypot(x-rival.x,z-rival.z)<2.8)
-    return Response.json({error:"Contact with another car: leave a safe gap.",collision:true,
-     ...eventSnapshot(meeting,now,user)},{status:409});
-  }
- }
+ // Cars ghost through rivals; road and speed validation still apply.
   const movement=sampleMovement(player,x,z,now,pit);
  if(movement.error)return Response.json({error:movement.error},{status:422});
  player.yaw=Number.isFinite(body.yaw)?body.yaw:player.yaw;

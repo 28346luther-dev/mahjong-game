@@ -1,5 +1,5 @@
 import {handleKartPresence} from './kart-presence.js';
-import {handleRaceEvent} from "./kart-race-events.js";
+import {KartLive} from "./kart-live.js";
 import {ROAD,PIT,PIT_HALF_WIDTH,ROAD_HALF_WIDTH,RUNOFF_WIDTH,TRACK_NAME,projectToRoute,raceStart} from "../public/kart-track.js";
 
 // Continuous on-road progress verification. No checkpoint gates or checkpoints UI.
@@ -39,16 +39,22 @@ export function validateSample(session,x,z,now){
  return {progress:p,delta,complete:old>.94&&p<.06&&delta>=0};
 }
 export class KartLeaderboard {
- constructor(ctx){this.ctx=ctx;this.storage=ctx.storage;}
+ constructor(ctx){this.ctx=ctx;this.storage=ctx.storage;this.live=new KartLive(ctx);}
+ webSocketMessage(ws,message){return this.live.run(()=>this.live.message(ws,message));}
+ webSocketClose(){return this.live.run(()=>this.live.close());}
+ webSocketError(){return this.live.run(()=>this.live.close());}
+ alarm(){return this.live.run(()=>this.live.broadcast());}
  async read(){return await this.storage.get("road-atlanta-mapped-gt3-v2")||{};}
- async fetch(request){
+ async fetch(request){return this.live.run(()=>this.dispatch(request));}
+ async dispatch(request){
   const url=new URL(request.url);
+  if(url.pathname==="/event/socket")return this.live.connect(request);
   if(url.pathname==="/presence"||url.pathname==="/activity")
    return this.storage.transaction(tx=>handleKartPresence(request.clone(),tx));
-  // Concurrent drivers must not overwrite each other's meeting snapshots.
-  // Clone per attempt because the transaction can retry after reading the body.
+  // All kart requests share the socket queue, including Time Trial record
+  // writes, so a race lap cannot overwrite a simultaneous personal best.
   if(url.pathname==="/events"||url.pathname.startsWith("/event/"))
-   return this.storage.transaction(tx=>handleRaceEvent(request.clone(),tx));
+   {const response=await this.live.handle(request);this.live.schedule();return response;}
   if(request.method==="GET"&&url.pathname==="/leaderboard"){
    const records=await this.read();
    return Response.json({track:TRACK_NAME,laps:"unlimited",entries:leaderboardEntries(records)},
